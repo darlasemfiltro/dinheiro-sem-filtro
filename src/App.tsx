@@ -7,6 +7,7 @@ import { auth, onAuthStateChanged, firebaseSignOut, subscribeToUserFirestoreChan
 import { subscribeToAppwriteRealtime, getAppwriteUser, appwriteSignOut, appwriteDatabases as databases, appwriteClient as client } from './lib/appwrite';
 import { saveAppData, persistCurrentStateToAppwrite, loadFromCloud } from './lib/appwriteSync';
 import { calculateMonthSummary, calculateAccountBalances, usePrivacyMode } from './utils/finance';
+import { CustomAlertModal } from './components/CustomAlertModal';
 import { AuthScreen } from './components/AuthScreen';
 import { Header } from './components/Header';
 import { Navigation } from './components/Navigation';
@@ -67,6 +68,12 @@ export default function App() {
   const [featureLockTitle, setFeatureLockTitle] = useState('');
   const [featureLockDesc, setFeatureLockDesc] = useState('');
   const [editProfileInitialTab, setEditProfileInitialTab] = useState<'profile' | 'request_access' | 'give_access'>('profile');
+  const [globalAlert, setGlobalAlert] = useState<{
+    isOpen: boolean;
+    message: string;
+    title?: string;
+    type?: 'success' | 'error' | 'warning' | 'info' | 'confirm';
+  } | null>(null);
 
   // Month / Year Navigation
   const now = new Date();
@@ -710,7 +717,7 @@ export default function App() {
   // Read-Only Guard Helper
   const checkReadOnlyPermission = (): boolean => {
     if (currentUser && StorageService.isCurrentUserReadOnly(currentUser)) {
-      alert('🔒 Você está no Modo Leitura (Apenas Visualização) neste orçamento compartilhado e não tem permissão para fazer alterações.');
+      setGlobalAlert({ isOpen: true, message: '🔒 Você está no Modo Leitura (Apenas Visualização) neste orçamento compartilhado e não tem permissão para fazer alterações.', type: 'warning' });
       return true;
     }
     return false;
@@ -898,14 +905,14 @@ export default function App() {
         }
       );
       console.log('[Investimentos] Gravado com sucesso no Appwrite!');
-      alert('Transação de investimento salva no banco!');
+      setGlobalAlert({ isOpen: true, message: 'Transação de investimento salva no banco!', type: 'success' });
       window.dispatchEvent(new Event('portfolio_updated'));
       window.dispatchEvent(new Event('remote_data_updated'));
       window.dispatchEvent(new CustomEvent('financial_data_mutated'));
       return true;
     } catch (error: any) {
       console.error('Erro ao salvar no Appwrite:', error);
-      alert('Erro ao sincronizar investimento: ' + (error?.message || JSON.stringify(error)));
+      setGlobalAlert({ isOpen: true, message: 'Erro ao sincronizar investimento: ' + (error?.message || JSON.stringify(error)), type: 'error' });
       return false;
     }
   };
@@ -937,7 +944,7 @@ export default function App() {
           data: JSON.stringify(fullPayload)
         }
       );
-      alert('Transação de investimento excluída com sucesso!');
+      setGlobalAlert({ isOpen: true, message: 'Transação de investimento excluída com sucesso!', type: 'success' });
       window.dispatchEvent(new Event('portfolio_updated'));
       window.dispatchEvent(new Event('remote_data_updated'));
       window.dispatchEvent(new CustomEvent('financial_data_mutated'));
@@ -1483,6 +1490,14 @@ export default function App() {
           </div>
         </div>
       </footer>
+
+      <CustomAlertModal
+        isOpen={!!globalAlert?.isOpen}
+        message={globalAlert?.message || ''}
+        title={globalAlert?.title}
+        type={globalAlert?.type || 'info'}
+        onClose={() => setGlobalAlert(null)}
+      />
     </div>
   );
 }

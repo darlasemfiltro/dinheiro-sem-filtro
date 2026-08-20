@@ -3,6 +3,7 @@ import { X, Calendar, RefreshCw, Sparkles, Search, ChevronDown, ChevronUp, Check
 import { AssetCategory, InvestmentTransaction } from '../types';
 import { CATEGORY_LABELS, PortfolioStorageService } from '../services/portfolioStorage';
 import { formatNumberToPtBr, parsePtBrNumber } from '../utils/finance';
+import { CustomAlertModal } from './CustomAlertModal';
 
 interface AddAssetModalProps {
   isOpen: boolean;
@@ -680,6 +681,12 @@ export const AddAssetModal: React.FC<AddAssetModalProps> = ({
   const [isFetchingQuote, setIsFetchingQuote] = useState(false);
   const [autoQuoteFetched, setAutoQuoteFetched] = useState<string | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
+  const [alertModal, setAlertModal] = useState<{
+    isOpen: boolean;
+    message: string;
+    title?: string;
+    type?: 'success' | 'error' | 'warning' | 'info' | 'confirm';
+  } | null>(null);
 
   const datePickerRef = useRef<HTMLInputElement>(null);
   const categoryContainerRef = useRef<HTMLDivElement>(null);
@@ -882,13 +889,13 @@ export const AddAssetModal: React.FC<AddAssetModalProps> = ({
   const handleSave = (keepOpen: boolean): boolean => {
     const finalTicker = (assetTicker || tickerSearch).trim().toUpperCase();
     if (!finalTicker || !quantity || !unitPrice) {
-      alert('Por favor, preencha o código do ativo, quantidade e preço unitário.');
+      setAlertModal({ isOpen: true, message: 'Por favor, preencha o código do ativo, quantidade e preço unitário.', type: 'warning' });
       return false;
     }
 
     const parsedDate = ptBrToIso(dateText) || date;
     if (!parsedDate || !/^\d{4}-\d{2}-\d{2}$/.test(parsedDate)) {
-      alert('Por favor, informe uma data válida no formato DD/MM/AAAA.');
+      setAlertModal({ isOpen: true, message: 'Por favor, informe uma data válida no formato DD/MM/AAAA.', type: 'warning' });
       return false;
     }
 
@@ -896,7 +903,7 @@ export const AddAssetModal: React.FC<AddAssetModalProps> = ({
     const price = parsePtBrNumber(unitPrice);
 
     if (isNaN(qty) || qty <= 0 || isNaN(price) || price < 0) {
-      alert('Quantidade e preço devem ser números válidos maiores que zero.');
+      setAlertModal({ isOpen: true, message: 'Quantidade e preço devem ser números válidos maiores que zero.', type: 'warning' });
       return false;
     }
 
@@ -1337,6 +1344,14 @@ export const AddAssetModal: React.FC<AddAssetModalProps> = ({
           </div>
         </form>
       </div>
+
+      <CustomAlertModal
+        isOpen={!!alertModal?.isOpen}
+        message={alertModal?.message || ''}
+        title={alertModal?.title}
+        type={alertModal?.type || 'warning'}
+        onClose={() => setAlertModal(null)}
+      />
     </div>
   );
 };

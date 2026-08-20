@@ -2,6 +2,7 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { StorageService } from '../services/storage';
 import { usePrivacyMode } from '../utils/finance';
 import { appwriteDatabases as databases } from '../lib/appwrite';
+import { CustomAlertModal } from './CustomAlertModal';
 import {
   WalletCards,
   TrendingUp,
@@ -533,6 +534,12 @@ export const PortfolioView: React.FC<PortfolioViewProps> = ({
   // Delete Confirmation State
   const [deletingTxId, setDeletingTxId] = useState<string | null>(null);
   const [deletingGoalId, setDeletingGoalId] = useState<string | null>(null);
+  const [portfolioAlert, setPortfolioAlert] = useState<{
+    isOpen: boolean;
+    message: string;
+    title?: string;
+    type?: 'success' | 'error' | 'warning' | 'info' | 'confirm';
+  } | null>(null);
 
   // Category Collapsed/Expanded State (Hidden by default per Image 2 requirement)
   const [expandedCategories, setExpandedCategories] = useState<Record<string, boolean>>({});
@@ -790,14 +797,14 @@ export const PortfolioView: React.FC<PortfolioViewProps> = ({
         }
       );
 
-      alert('Transação de investimento salva no banco!');
+      setPortfolioAlert({ isOpen: true, message: 'Transação de investimento salva no banco!', type: 'success' });
     } catch (err: any) {
       console.error('Erro ao gravar investimento:', err);
       const isRateLimit = err?.message?.includes('Rate limit') || err?.code === 429 || err?.status === 429;
       if (isRateLimit) {
-        alert('Transação salva localmente com sucesso! (Limite de requisições temporário na nuvem atingido, a sincronização ocorrerá em breve).');
+        setPortfolioAlert({ isOpen: true, message: 'Transação salva localmente com sucesso! (Limite de requisições temporário na nuvem atingido, a sincronização ocorrerá em breve).', type: 'success' });
       } else {
-        alert('Erro ao gravar investimento: ' + (err?.message || JSON.stringify(err)));
+        setPortfolioAlert({ isOpen: true, message: 'Erro ao gravar investimento: ' + (err?.message || JSON.stringify(err)), type: 'error' });
       }
     }
 
@@ -1829,14 +1836,14 @@ export const PortfolioView: React.FC<PortfolioViewProps> = ({
         await onSaveInvestmentTransaction(formData);
       }
 
-      alert('Transação de investimento salva no banco!');
+      setPortfolioAlert({ isOpen: true, message: 'Transação de investimento salva no banco!', type: 'success' });
     } catch (err: any) {
       console.error('Erro ao gravar investimento:', err);
       const isRateLimit = err?.message?.includes('Rate limit') || err?.code === 429 || err?.status === 429;
       if (isRateLimit) {
-        alert('Transação salva localmente com sucesso! (Limite de requisições temporário na nuvem atingido, a sincronização ocorrerá em breve).');
+        setPortfolioAlert({ isOpen: true, message: 'Transação salva localmente com sucesso! (Limite de requisições temporário na nuvem atingido, a sincronização ocorrerá em breve).', type: 'success' });
       } else {
-        alert('Erro ao gravar investimento: ' + (err?.message || JSON.stringify(err)));
+        setPortfolioAlert({ isOpen: true, message: 'Erro ao gravar investimento: ' + (err?.message || JSON.stringify(err)), type: 'error' });
       }
     }
 
@@ -5403,6 +5410,14 @@ export const PortfolioView: React.FC<PortfolioViewProps> = ({
           </div>
         </div>
       )}
+
+      <CustomAlertModal
+        isOpen={!!portfolioAlert?.isOpen}
+        message={portfolioAlert?.message || ''}
+        title={portfolioAlert?.title}
+        type={portfolioAlert?.type || 'info'}
+        onClose={() => setPortfolioAlert(null)}
+      />
     </div>
   );
 };
