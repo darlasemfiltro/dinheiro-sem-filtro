@@ -3595,6 +3595,14 @@ export class StorageService {
     } catch (e) {}
   }
 
+  static setGoals(goals: Goal[]) {
+    this.initialize();
+    _inMemoryStore.goals = goals;
+    try {
+      localStorage.setItem(STORAGE_KEYS.GOALS, JSON.stringify(goals));
+    } catch (e) {}
+  }
+
   static deleteAccount(accountId: string) {
     const acc = _inMemoryStore.accounts.find((a) => a.id === accountId);
     _inMemoryStore.accounts = _inMemoryStore.accounts.filter((a) => a.id !== accountId);

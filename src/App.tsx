@@ -583,9 +583,19 @@ export default function App() {
           const budgetId = StorageService.getEffectiveBudgetId(currentUser);
           (PortfolioStorageService as any).saveToAllAliasKeys('darla_portfolio_assets', budgetId, remoteData.investorPortfolio);
         }
-        if (remoteData.goals) {
+        if (remoteData.goals && Array.isArray(remoteData.goals)) {
+          setGoals(remoteData.goals);
+          StorageService.setGoals(remoteData.goals);
           const budgetId = StorageService.getEffectiveBudgetId(currentUser);
           (PortfolioStorageService as any).saveToAllAliasKeys('darla_portfolio_goals', budgetId, remoteData.goals);
+        } else if (remoteData.familyBudget && Array.isArray(remoteData.familyBudget)) {
+          const goalsList = remoteData.familyBudget.filter((item: any) => item.targetAmount !== undefined || item.targetDate !== undefined);
+          if (goalsList.length > 0) {
+            setGoals(goalsList);
+            StorageService.setGoals(goalsList);
+            const budgetId = StorageService.getEffectiveBudgetId(currentUser);
+            (PortfolioStorageService as any).saveToAllAliasKeys('darla_portfolio_goals', budgetId, goalsList);
+          }
         }
       }
       refreshData(currentUser, false);
@@ -752,6 +762,7 @@ export default function App() {
       accounts: currentAccounts,
       investorPortfolio: investorPortfolio,
       investmentTransactions: investmentTransactions,
+      goals: currentGoals,
       updatedAt: new Date().toISOString()
     };
   };
@@ -981,6 +992,7 @@ export default function App() {
       familyBudget: familyBudget,
       investorPortfolio: investorPortfolio,
       investmentTransactions: investmentTransactionsToPersist,
+      goals: currentGoals,
       updatedAt: new Date().toISOString()
     };
 
