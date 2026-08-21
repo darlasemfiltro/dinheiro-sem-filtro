@@ -1730,8 +1730,8 @@ export const PortfolioView: React.FC<PortfolioViewProps> = ({
         accounts: PortfolioStorageService.getAssets(userId),
         investorPortfolio: PortfolioStorageService.getAssets(userId),
         investmentTransactions: PortfolioStorageService.getTransactions(userId),
-        goals: StorageService.getGoals(userId),
-        familyBudget: [...StorageService.getGoals(userId), ...StorageService.getFamilyMembers(userId)],
+        goals: PortfolioStorageService.getGoals(userId),
+        familyBudget: [...PortfolioStorageService.getGoals(userId), ...StorageService.getFamilyMembers(userId)],
       });
       await onDataChanged?.();
     } catch (err) {
@@ -1758,8 +1758,8 @@ export const PortfolioView: React.FC<PortfolioViewProps> = ({
           accounts: PortfolioStorageService.getAssets(userId),
           investorPortfolio: PortfolioStorageService.getAssets(userId),
           investmentTransactions: PortfolioStorageService.getTransactions(userId),
-          goals: StorageService.getGoals(userId),
-          familyBudget: [...StorageService.getGoals(userId), ...StorageService.getFamilyMembers(userId)],
+          goals: PortfolioStorageService.getGoals(userId),
+          familyBudget: [...PortfolioStorageService.getGoals(userId), ...StorageService.getFamilyMembers(userId)],
         });
         await onDataChanged?.();
       } catch (err) {

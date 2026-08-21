@@ -2007,11 +2007,11 @@ export class PortfolioStorageService {
     this.syncPortfolioWithRemote(userId);
   }
 
-  static addGoal(goal: Omit<PortfolioGoal, 'id'>, userId = 'default'): PortfolioGoal {
+  static addGoal(goal: Omit<PortfolioGoal, 'id'> & { id?: string }, userId = 'default'): PortfolioGoal {
     const goals = this.getGoals(userId);
     const newGoal: PortfolioGoal = {
       ...goal,
-      id: `goal_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
+      id: goal.id || `goal_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
       userId,
       updatedAt: new Date().toISOString(),
       _pendingSync: true,
