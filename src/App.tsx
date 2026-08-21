@@ -984,48 +984,68 @@ export default function App() {
       updatedAt: new Date().toISOString()
     };
 
-    try {
-      await databases.updateDocument(
-        '6a83aa8d0038331e040f',
-        'user_financials',
-        '6a849358002db9e638ce',
-        {
-          userId: '6a83b38ed065c08efa49',
-          data: JSON.stringify(fullPayload)
+    const maxRetries = 2;
+    for (let attempt = 0; attempt <= maxRetries; attempt++) {
+      try {
+        await databases.updateDocument(
+          '6a83aa8d0038331e040f',
+          'user_financials',
+          '6a849358002db9e638ce',
+          {
+            userId: '6a83b38ed065c08efa49',
+            data: JSON.stringify(fullPayload)
+          }
+        );
+        console.log('[Appwrite] Dados e transações sincronizados com sucesso na nuvem!');
+        setAccounts(accountsToPersist);
+        StorageService.setAccounts(accountsToPersist);
+        setTransactions(transactionsToPersist);
+        StorageService.setTransactions(transactionsToPersist);
+        return true;
+      } catch (error: any) {
+        const isRateLimit = error?.message?.includes('Rate limit') || error?.code === 429 || error?.status === 429;
+        if (isRateLimit && attempt < maxRetries) {
+          await new Promise(res => setTimeout(res, 1500 * (attempt + 1)));
+          continue;
         }
-      );
-      console.log('[Appwrite] Dados e transações sincronizados com sucesso na nuvem!');
-      setAccounts(accountsToPersist);
-      StorageService.setAccounts(accountsToPersist);
-      setTransactions(transactionsToPersist);
-      StorageService.setTransactions(transactionsToPersist);
-      return true;
-    } catch (error: any) {
-      if (error?.code === 404 || error?.message?.includes('not found') || error?.type === 'document_not_found') {
-        try {
-          await databases.createDocument(
-            '6a83aa8d0038331e040f',
-            'user_financials',
-            '6a849358002db9e638ce',
-            {
-              userId: '6a83b38ed065c08efa49',
-              data: JSON.stringify(fullPayload)
-            }
-          );
-          console.log('[Appwrite] Dados e transações criados com sucesso na nuvem!');
+
+        if (error?.code === 404 || error?.message?.includes('not found') || error?.type === 'document_not_found') {
+          try {
+            await databases.createDocument(
+              '6a83aa8d0038331e040f',
+              'user_financials',
+              '6a849358002db9e638ce',
+              {
+                userId: '6a83b38ed065c08efa49',
+                data: JSON.stringify(fullPayload)
+              }
+            );
+            console.log('[Appwrite] Dados e transações criados com sucesso na nuvem!');
+            setAccounts(accountsToPersist);
+            StorageService.setAccounts(accountsToPersist);
+            setTransactions(transactionsToPersist);
+            StorageService.setTransactions(transactionsToPersist);
+            return true;
+          } catch (createErr: any) {
+            console.error('[Appwrite Error ao criar documento de finanças]', createErr);
+          }
+        }
+
+        if (isRateLimit) {
+          console.warn('[Appwrite Rate Limit] Salvando localmente com sucesso. A nuvem sincronizará em instantes.');
           setAccounts(accountsToPersist);
           StorageService.setAccounts(accountsToPersist);
           setTransactions(transactionsToPersist);
           StorageService.setTransactions(transactionsToPersist);
           return true;
-        } catch (createErr) {
-          console.error('[Appwrite Error ao criar documento de finanças]', createErr);
         }
+
+        console.error('[Appwrite Error ao salvar transações]', error);
+        alert('Erro ao sincronizar transações na nuvem: ' + (error?.message || JSON.stringify(error)));
+        return false;
       }
-      console.error('[Appwrite Error ao salvar transações]', error);
-      alert('Erro ao sincronizar transações na nuvem: ' + JSON.stringify(error));
-      return false;
     }
+    return false;
   };
 
   const handleSaveAccount = async (acc: Account, updatedAccounts?: Account[]): Promise<boolean> => {
