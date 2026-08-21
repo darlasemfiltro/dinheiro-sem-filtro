@@ -1,0 +1,72 @@
+{
+  "darla.semfiltro@gmail.com": {
+    "assets": [],
+    "transactions": [],
+    "dividends": [],
+    "targetAllocations": [
+      {
+        "id": "tesouro_brl",
+        "categoryKey": "tesouro_brl",
+        "label": "Real - Tesouro Direto",
+        "targetPct": 10
+      },
+      {
+        "id": "fiis_brl",
+        "categoryKey": "fiis_brl",
+        "label": "Real - FIIs",
+        "targetPct": 10
+      },
+      {
+        "id": "fiagro_brl",
+        "categoryKey": "fiagro_brl",
+        "label": "Real - Fiagro",
+        "targetPct": 5
+      },
+      {
+        "id": "etf_brl",
+        "categoryKey": "etf_brl",
+        "label": "Real - ETFs",
+        "targetPct": 5
+      },
+      {
+        "id": "acoes_brl",
+        "categoryKey": "acoes_brl",
+        "label": "Real - Ações",
+        "targetPct": 10
+      },
+      {
+        "id": "etf_usd",
+        "categoryKey": "etf_usd",
+        "label": "Dólar - ETFs",
+        "targetPct": 15
+      },
+      {
+        "id": "acoes_usd",
+        "categoryKey": "acoes_usd",
+        "label": "Dólar - Ações",
+        "targetPct": 15
+      },
+      {
+        "id": "cripto_eth",
+        "categoryKey": "cripto_eth",
+        "label": "Criptomoedas - ETH",
+        "targetPct": 10
+      },
+      {
+        "id": "cripto_btc",
+        "categoryKey": "cripto_btc",
+        "label": "Criptomoedas - BTC",
+        "targetPct": 15
+      },
+      {
+        "id": "cripto_altcoins",
+        "categoryKey": "cripto_altcoins",
+        "label": "Criptomoedas - Altcoins",
+        "targetPct": 5
+      }
+    ],
+    "goals": [],
+    "deletedIds": [],
+    "updatedAt": "2026-08-21T22:12:44.660Z"
+  }
+}
