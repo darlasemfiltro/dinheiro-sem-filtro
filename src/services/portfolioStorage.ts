@@ -1089,6 +1089,17 @@ export class PortfolioStorageService {
       });
 
       if (res.ok) {
+        try {
+          const cleanAssets = this.getAssets(canonicalId).map(a => ({ ...a, _pendingSync: false }));
+          this.saveToAllAliasKeys(STORAGE_KEYS.ASSETS, canonicalId, cleanAssets);
+          const cleanTxs = this.getTransactions(canonicalId).map(t => ({ ...t, _pendingSync: false }));
+          this.saveToAllAliasKeys(STORAGE_KEYS.TRANSACTIONS, canonicalId, cleanTxs);
+          const cleanDivs = this.getDividends(canonicalId).map(d => ({ ...d, _pendingSync: false }));
+          this.saveToAllAliasKeys(STORAGE_KEYS.DIVIDENDS, canonicalId, cleanDivs);
+          const cleanGoals = this.getGoals(canonicalId).map(g => ({ ...g, _pendingSync: false }));
+          this.saveToAllAliasKeys(STORAGE_KEYS.GOALS, canonicalId, cleanGoals);
+        } catch {}
+
         // Load clean merged state back instead of blind overwrite
         await this.loadPortfolioFromRemote(canonicalId, true);
       } else {
@@ -1238,7 +1249,9 @@ export class PortfolioStorageService {
                 // Both exist. Check timestamps
                 const localTime = item.updatedAt ? new Date(item.updatedAt).getTime() : (item.createdAt ? new Date(item.createdAt).getTime() : 0);
                 const remoteTime = remoteItem.updatedAt ? new Date(remoteItem.updatedAt).getTime() : (remoteItem.createdAt ? new Date(remoteItem.createdAt).getTime() : 0);
-                if (item._pendingSync || localTime > remoteTime) {
+                if (remoteTime > localTime) {
+                  map.set(key, { ...item, ...remoteItem, _synced: true, _pendingSync: false });
+                } else if (item._pendingSync || localTime > remoteTime) {
                   map.set(key, { ...remoteItem, ...item, _synced: true });
                   needsPush = true;
                 } else {
