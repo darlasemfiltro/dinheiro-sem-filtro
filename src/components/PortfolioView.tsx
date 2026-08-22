@@ -1720,6 +1720,12 @@ export const PortfolioView: React.FC<PortfolioViewProps> = ({
         : [...goals, goalData];
 
       StorageService.saveGoal(goalData);
+      if (editingGoal) {
+        PortfolioStorageService.updateGoal(goalData, userId);
+      } else {
+        PortfolioStorageService.addGoal(goalData, userId);
+      }
+      
       setGoals(updatedGoals);
 
       await StorageService.syncUserMutationToServer(userId);
@@ -1747,6 +1753,7 @@ export const PortfolioView: React.FC<PortfolioViewProps> = ({
     if (deletingGoalId) {
       const updatedGoals = goals.filter((g: any) => g.id !== deletingGoalId);
       StorageService.deleteGoal(deletingGoalId);
+      PortfolioStorageService.deleteGoal(deletingGoalId, userId);
       setGoals(updatedGoals);
 
       setDeletingGoalId(null);
@@ -4691,7 +4698,10 @@ export const PortfolioView: React.FC<PortfolioViewProps> = ({
                           <Edit2 className="w-3.5 h-3.5" />
                         </button>
                         <button
-                          onClick={() => handleDeleteGoal(g.id)}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleDeleteGoal(g.id);
+                          }}
                           className="p-1.5 bg-red-500/20 hover:bg-red-500/30 text-red-400 border border-red-500/40 rounded-lg transition cursor-pointer"
                           title="Excluir Meta"
                         >

@@ -584,6 +584,10 @@ export default function App() {
           const budgetId = StorageService.getEffectiveBudgetId(currentUser);
           (PortfolioStorageService as any).saveToAllAliasKeys('darla_portfolio_assets', budgetId, remoteData.investorPortfolio);
         }
+        if (remoteData.goals) {
+          setGoals(remoteData.goals);
+          StorageService.setGoals(remoteData.goals);
+        }
       }
       refreshData(currentUser, false);
       window.dispatchEvent(new Event('portfolio_updated'));

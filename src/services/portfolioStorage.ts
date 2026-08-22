@@ -2155,6 +2155,7 @@ export class PortfolioStorageService {
 
   static deleteGoal(id: string, userId = 'default') {
     const goals = this.getGoals(userId).filter((g) => g.id !== id);
+    this.saveToAllAliasKeys(STORAGE_KEYS.GOALS, userId, goals);
     this.markPortfolioItemAsDeleted(id, 'goals', userId);
     deletePortfolioGoalFromFirestore(id);
     this.notifyUpdate();
