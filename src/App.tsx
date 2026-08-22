@@ -21,6 +21,7 @@ import { PlansAndPricingView } from './components/PlansAndPricingView';
 import { GamificationView } from './components/GamificationView';
 import { FinancialCalculatorView } from './components/FinancialCalculatorView';
 import { PortfolioView } from './components/PortfolioView';
+import { ErrorBoundary } from './components/ErrorBoundary';
 import { AiTipsView } from './components/AiTipsView';
 import { GamificationService } from './services/gamification';
 import { TransactionModal } from './components/TransactionModal';
@@ -1275,18 +1276,20 @@ export default function App() {
 
         {(activeTab === 'portfolio' || activeTab.startsWith('portfolio:')) && (
           StorageService.isFeatureAllowed(currentUser, 'portfolio') ? (
-            <PortfolioView
-              key={activeTab}
-              userId={effectiveBudgetId}
-              initialSubTab={activeTab.includes(':') ? (activeTab.split(':')[1] as any) : 'dashboard'}
-              onSubTabChange={(subTab) => handleTabChange(`portfolio:${subTab}`)}
-              investmentTransactions={investmentTransactions}
-              onSaveInvestmentTransaction={saveInvestmentTransaction}
-              onDeleteInvestmentTransaction={deleteInvestmentTransaction}
-              onDataChanged={async () => {
-                await persistAllData(accounts, transactions, investmentTransactions);
-              }}
-            />
+            <ErrorBoundary>
+              <PortfolioView
+                key={activeTab}
+                userId={effectiveBudgetId}
+                initialSubTab={activeTab.includes(':') ? (activeTab.split(':')[1] as any) : 'dashboard'}
+                onSubTabChange={(subTab) => handleTabChange(`portfolio:${subTab}`)}
+                investmentTransactions={investmentTransactions}
+                onSaveInvestmentTransaction={saveInvestmentTransaction}
+                onDeleteInvestmentTransaction={deleteInvestmentTransaction}
+                onDataChanged={async () => {
+                  await persistAllData(accounts, transactions, investmentTransactions);
+                }}
+              />
+            </ErrorBoundary>
           ) : (
             <div className="p-8 bg-[#18181B] border-2 border-[#D4AF37] rounded-3xl text-center space-y-4 my-8 shadow-2xl">
               <h2 className="text-xl font-black text-white font-serif">Recurso Bloqueado — Carteira do Investidor</h2>

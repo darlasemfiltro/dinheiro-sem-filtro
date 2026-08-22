@@ -1021,7 +1021,10 @@ export const DEFAULT_TARGET_ALLOCATIONS: TargetAllocation[] = [
 ];
 
 export function calculateLivePortfolio(transactions: any[], goals: any[] = []) {
-  if (!transactions || transactions.length === 0) {
+  const safeTransactions = Array.isArray(transactions) ? transactions : [];
+  const safeGoals = Array.isArray(goals) ? goals : [];
+
+  if (safeTransactions.length === 0) {
     return {
       positions: [],
       totalPortfolioValue: 0,
@@ -1030,20 +1033,21 @@ export function calculateLivePortfolio(transactions: any[], goals: any[] = []) {
       categoryAllocation: [],
       totalDividends: 0,
       provisionedDividends: 0,
-      calculatedGoals: goals.map(g => ({ ...g, currentAmount: 0, progressPercent: 0 }))
+      calculatedGoals: safeGoals.map(g => ({ ...g, currentAmount: 0, progressPercent: 0 }))
     };
   }
 
   const assetMap: Record<string, any> = {};
   let totalDividends = 0;
 
-  transactions.forEach((tx) => {
-    const type = (tx.type || '').toUpperCase();
+  safeTransactions.forEach((tx) => {
+    if (!tx) return;
+    const type = String(tx.type || '').toUpperCase().trim();
     const qty = Number(tx.quantity) || 0;
     const price = Number(tx.unitPrice || tx.price || 0) || 0;
-    const total = Number(tx.totalAmount || tx.totalValue) || (qty * price);
-    const ticker = (tx.assetTicker || tx.ticker || tx.asset || 'OUTRO').toUpperCase();
-    const category = tx.assetCategory || tx.category || 'Ações';
+    const total = Number(tx.totalAmount || tx.totalValue) || (qty * price) || 0;
+    const ticker = String(tx.assetTicker || tx.ticker || tx.asset || 'OUTRO').toUpperCase().trim();
+    const category = String(tx.assetCategory || tx.category || 'Ações').trim();
 
     if (!assetMap[ticker]) {
       assetMap[ticker] = {
@@ -1063,10 +1067,11 @@ export function calculateLivePortfolio(transactions: any[], goals: any[] = []) {
       assetMap[ticker].totalCost += total;
       assetMap[ticker].currentPrice = price > 0 ? price : assetMap[ticker].currentPrice;
     } else if (type === 'SELL' || type === 'VENDA') {
+      const avg = assetMap[ticker].avgPrice || 0;
       assetMap[ticker].quantity -= qty;
-      assetMap[ticker].totalCost -= (assetMap[ticker].avgPrice * qty);
+      assetMap[ticker].totalCost -= (avg * qty);
       assetMap[ticker].currentPrice = price > 0 ? price : assetMap[ticker].currentPrice;
-    } else if (type === 'PROVENTO' || type === 'DIVIDENDO' || type === 'DIVIDEND' || type === 'JCP') {
+    } else if (type.includes('PROVENTO') || type.includes('DIVIDEND') || type.includes('RENDIMENTO') || type.includes('JCP')) {
       totalDividends += total;
     }
 
@@ -1082,14 +1087,14 @@ export function calculateLivePortfolio(transactions: any[], goals: any[] = []) {
   });
 
   const activePositions = Object.values(assetMap).filter(a => a.quantity > 0);
-  const totalPortfolioValue = activePositions.reduce((acc, a) => acc + a.totalValue, 0);
-  const totalInvested = activePositions.reduce((acc, a) => acc + a.totalCost, 0);
+  const totalPortfolioValue = activePositions.reduce((acc, a) => acc + (Number(a.totalValue) || 0), 0);
+  const totalInvested = activePositions.reduce((acc, a) => acc + (Number(a.totalCost) || 0), 0);
   const totalProfitPercent = totalInvested > 0 ? ((totalPortfolioValue - totalInvested) / totalInvested) * 100 : 0;
 
   // Distribuição por Categoria
   const catTotals: Record<string, number> = {};
   activePositions.forEach(a => {
-    catTotals[a.category] = (catTotals[a.category] || 0) + a.totalValue;
+    catTotals[a.category] = (catTotals[a.category] || 0) + (Number(a.totalValue) || 0);
   });
 
   const categoryAllocation = Object.entries(catTotals).map(([cat, val]) => ({
@@ -1099,13 +1104,13 @@ export function calculateLivePortfolio(transactions: any[], goals: any[] = []) {
   }));
 
   // Metas Reais
-  const calculatedGoals = goals.map(g => {
-    const current = g.category === 'Patrimônio Total' ? totalPortfolioValue : (catTotals[g.category] || 0);
-    const target = Number(g.targetAmount) || 1;
+  const calculatedGoals = safeGoals.map(g => {
+    const current = g?.category === 'Patrimônio Total' ? totalPortfolioValue : (catTotals[g?.category] || 0);
+    const target = Number(g?.targetAmount) || 1;
     return {
       ...g,
       currentAmount: current,
-      progressPercent: Math.min(100, Math.round((current / target) * 100))
+      progressPercent: Math.min(100, Math.max(0, Math.round((current / target) * 100)))
     };
   });
 

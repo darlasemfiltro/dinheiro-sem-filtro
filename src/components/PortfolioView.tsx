@@ -2602,6 +2602,8 @@ export const PortfolioView: React.FC<PortfolioViewProps> = ({
         const perf = getPerformanceData();
         return (
           <div className="space-y-6 animate-in fade-in">
+            {assets && assets.length > 0 ? (
+              <>
             {/* PAINEL DE PERCENTUAL DESEJADO VS. ATUAL (REQ 7 - Primeiro Bloco Principal do Dashboard) */}
             <div className="bg-[#18181B] border border-white/10 rounded-2xl p-5 shadow-xl space-y-4">
               <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-white/10 pb-3">
@@ -2849,6 +2851,10 @@ export const PortfolioView: React.FC<PortfolioViewProps> = ({
               })}
             </div>
           </div>
+          </>
+            ) : (
+              <p className="text-center py-6 text-gray-400">Nenhum dado encontrado</p>
+            )}
         </div>
       );
       })()}
@@ -2858,6 +2864,8 @@ export const PortfolioView: React.FC<PortfolioViewProps> = ({
       {/* ========================================================================= */}
       {activeSubTab === 'patrimonio' && (
         <div className="space-y-6 animate-in fade-in">
+          {assets && assets.length > 0 ? (
+            <>
           {/* Unificado: Bloco único para Desempenho de patrimônio, Crescimento e Gráfico */}
           <div className="bg-[#18181B] border border-white/10 rounded-2xl p-5 sm:p-6 shadow-xl space-y-6">
             {/* Header Bar with Title & Filters */}
@@ -3287,6 +3295,10 @@ export const PortfolioView: React.FC<PortfolioViewProps> = ({
               )}
             </div>
           </div>
+          </>
+          ) : (
+            <p className="text-center py-6 text-gray-400">Nenhum dado encontrado</p>
+          )}
         </div>
       )}
 
@@ -3295,6 +3307,8 @@ export const PortfolioView: React.FC<PortfolioViewProps> = ({
       {/* ========================================================================= */}
       {activeSubTab === 'proventos' && (
         <div className="space-y-6">
+          {assets && assets.length > 0 ? (
+            <>
           {/* Proventos Global Period Filter Bar (Requirement: Em Proventos, Filtro de Proventos ajustar layout Imagem 1) */}
           <div className="bg-[#18181B] border border-white/10 p-5 rounded-2xl space-y-4 shadow-xl">
             <div>
@@ -3704,6 +3718,10 @@ export const PortfolioView: React.FC<PortfolioViewProps> = ({
               </div>
             )}
           </div>
+          </>
+          ) : (
+            <p className="text-center py-6 text-gray-400">Nenhum dado encontrado</p>
+          )}
         </div>
       )}
 
@@ -3712,6 +3730,8 @@ export const PortfolioView: React.FC<PortfolioViewProps> = ({
       {/* ========================================================================= */}
       {activeSubTab === 'rentabilidade' && (
         <div className="space-y-6">
+          {assets && assets.length > 0 ? (
+            <>
           {/* Unified Rentabilidade & Benchmarks Block (Requirement Imagem 3) */}
           <div className="bg-[#18181B] border border-white/10 rounded-2xl p-6 shadow-xl space-y-6">
             {/* Rentabilidade Control Bar with Period Selector */}
@@ -4083,6 +4103,10 @@ export const PortfolioView: React.FC<PortfolioViewProps> = ({
               </table>
             </div>
           </div>
+          </>
+          ) : (
+            <p className="text-center py-6 text-gray-400">Nenhum dado encontrado</p>
+          )}
         </div>
       )}
 
@@ -4091,6 +4115,8 @@ export const PortfolioView: React.FC<PortfolioViewProps> = ({
       {/* ========================================================================= */}
       {activeSubTab === 'composicao' && (
         <div className="space-y-6 animate-in fade-in">
+          {assets && assets.length > 0 ? (
+            <>
           {/* UNIFIED SINGLE BLOCK: Posição na Carteira & Alocação, Posição na Carteira, Detalhamento Percentual por Classe */}
           <div className="bg-[#18181B] border border-white/10 rounded-2xl p-6 shadow-xl space-y-6">
             {/* Block Header */}
@@ -4667,6 +4693,10 @@ export const PortfolioView: React.FC<PortfolioViewProps> = ({
               )}
             </div>
           </div>
+          </>
+          ) : (
+            <p className="text-center py-6 text-gray-400">Nenhum dado encontrado</p>
+          )}
         </div>
       )}
 
