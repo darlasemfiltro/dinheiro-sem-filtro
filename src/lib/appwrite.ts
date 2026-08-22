@@ -157,7 +157,7 @@ export async function appwriteGoogleOAuthLogin(successUrl?: string, failureUrl?:
  */
 export function subscribeToAppwriteRealtime(userId: string, onUpdate: (remoteData?: any) => void): () => void {
   const cfg = getAppwriteConfig();
-  if (!cfg.projectId || cfg.projectId === 'default-placeholder' || cfg.projectId === '6a83a2d30034f2dd2811') {
+  if (!cfg.projectId || cfg.projectId === 'default-placeholder') {
     return () => {};
   }
 

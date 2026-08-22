@@ -211,6 +211,17 @@ export interface LeaderboardCompetitor {
   division: LeagueDivision;
 }
 
+export interface GamificationProfile {
+  xp: number;
+  gems: number; // ou coins
+  weeklyStreak: number;
+  inventory: {
+    freezes: number;
+    doubleXpActiveUntil: string | null;
+  };
+  claimedMissions: string[];
+}
+
 export type UserProfileLevel = 'iniciante' | 'avancado';
 
 export interface WeeklyGamificationState {
@@ -224,12 +235,18 @@ export interface WeeklyGamificationState {
   weeklyXP: number; // XP acumulado na semana atual
   gems: number; // Gemas 💎
   streakFreezeCount: number; // Congelamentos de Ofensiva Semanal
+  inventory?: {
+    freezes: number;
+    doubleXpActiveUntil: string | null;
+  };
+  claimedMissions?: string[];
   currentDivision: LeagueDivision;
   divisionRankPosition: number;
   hasCompletedWeeklyCheckIn: boolean; // Se fez o check-in financeiro da semana
   weeklyQuests: WeeklyQuest[];
   achievements: AchievementBadge[];
   leaderboard: LeaderboardCompetitor[];
+  updatedAt?: string;
 }
 
 // --- CARTEIRA DO INVESTIDOR TYPES ---

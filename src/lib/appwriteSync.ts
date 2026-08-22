@@ -245,6 +245,9 @@ export async function saveAppData(updatedData: any): Promise<boolean> {
       investmentTransactions: updatedData.investmentTransactions || [],
       targetAllocations: updatedData.targetAllocations || [],
       budgetGoals: updatedData.budgetGoals || updatedData.budgetStrategy || { essentials: 50, lifestyle: 30, investment: 20 },
+      gamificationProfile: updatedData.gamificationProfile || null,
+      gamificationState: updatedData.gamificationState || updatedData.gamification || null,
+      gamification: updatedData.gamificationState || updatedData.gamification || null,
       goals: updatedData.goals || [],
       investorGoals: updatedData.investorGoals || updatedData.goals || [],
       updatedAt: new Date().toISOString()
@@ -1369,5 +1372,147 @@ export async function executeTransactionalBudgetGoals(
     return { success: false };
   }
 }
+
+// --- TRANSACTIONAL GAMIFICATION MANAGER (OPTIMISTIC UI WITH 0ms FEEDBACK & REALTIME) ---
+
+let pendingGamificationState: any = null;
+let pendingGamificationTimestamp = 0;
+const GAMIFICATION_PENDING_TTL_MS = 15000;
+
+export function recordPendingGamification(state: any) {
+  pendingGamificationState = state ? JSON.parse(JSON.stringify(state)) : null;
+  pendingGamificationTimestamp = Date.now();
+}
+
+export function clearPendingGamification() {
+  pendingGamificationState = null;
+  pendingGamificationTimestamp = 0;
+}
+
+export function mergeRemoteGamificationWithOptimistic(remoteGamif: any, userId?: string): any {
+  if (!remoteGamif || typeof remoteGamif !== 'object') {
+    if (pendingGamificationState && Date.now() - pendingGamificationTimestamp < GAMIFICATION_PENDING_TTL_MS) {
+      return pendingGamificationState;
+    }
+    return null;
+  }
+
+  // If we have a very recent pending local gamification action (e.g. check-in, shop buy, quest claim), prioritize optimistic state
+  if (pendingGamificationState && Date.now() - pendingGamificationTimestamp < GAMIFICATION_PENDING_TTL_MS) {
+    const remoteTime = remoteGamif.updatedAt ? new Date(remoteGamif.updatedAt).getTime() : 0;
+    if (remoteTime && remoteTime > pendingGamificationTimestamp) {
+      clearPendingGamification();
+      return remoteGamif;
+    }
+    return pendingGamificationState;
+  }
+
+  return remoteGamif;
+}
+
+/**
+ * Executes an atomic server transaction and direct cloud update for the entire Gamification ecosystem.
+ * Supports GamificationProfile (xp, gems, weeklyStreak, inventory, claimedMissions) and WeeklyGamificationState.
+ */
+export async function executeTransactionalGamification(
+  userId: string,
+  state: any,
+  profile?: any
+): Promise<{ success: boolean; state?: any; profile?: any }> {
+  if (!userId || (!state && !profile)) {
+    return { success: false };
+  }
+
+  const nowIso = new Date().toISOString();
+  const xpVal = Number(state?.xpTotal ?? profile?.xp) || 0;
+  const gemsVal = Number(state?.gems ?? profile?.gems) || 0;
+  const streakVal = Number(state?.weeklyStreakCount ?? profile?.weeklyStreak) || 0;
+  const freezesVal = Number(state?.streakFreezeCount ?? state?.inventory?.freezes ?? profile?.inventory?.freezes) || 0;
+  const doubleXpVal = state?.inventory?.doubleXpActiveUntil ?? profile?.inventory?.doubleXpActiveUntil ?? null;
+  const claimedMissionsVal = Array.isArray(state?.claimedMissions)
+    ? state.claimedMissions
+    : Array.isArray(profile?.claimedMissions)
+    ? profile.claimedMissions
+    : (state?.weeklyQuests || []).filter((q: any) => q.completed).map((q: any) => q.id);
+
+  const gamificationProfile = {
+    xp: xpVal,
+    gems: gemsVal,
+    weeklyStreak: streakVal,
+    inventory: {
+      freezes: freezesVal,
+      doubleXpActiveUntil: doubleXpVal,
+    },
+    claimedMissions: claimedMissionsVal,
+  };
+
+  const sanitizedState = {
+    ...(state || {}),
+    userId,
+    xpTotal: xpVal,
+    gems: gemsVal,
+    weeklyStreakCount: streakVal,
+    streakFreezeCount: freezesVal,
+    inventory: gamificationProfile.inventory,
+    claimedMissions: claimedMissionsVal,
+    updatedAt: nowIso,
+  };
+
+  recordPendingGamification(sanitizedState);
+
+  // 1. Primary: Server atomic transactional endpoint
+  try {
+    const response = await fetch('/api/financials/transactional-gamification', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        userId,
+        state: sanitizedState,
+        profile: gamificationProfile,
+      }),
+    });
+
+    if (response.ok) {
+      const resData = await response.json();
+      if (resData && resData.success) {
+        clearPendingGamification();
+        return {
+          success: true,
+          state: resData.state || sanitizedState,
+          profile: resData.profile || gamificationProfile,
+        };
+      }
+    }
+  } catch (err) {
+    console.warn('[Transactional Gamification Server Notice] Server unreachable, using direct cloud sync:', err);
+  }
+
+  // 2. Fallback: Direct Appwrite document update (Document ID: '6a849358002db9e638ce')
+  try {
+    const cloudDoc = await loadFromCloud();
+    const fullPayload = {
+      ...(cloudDoc || {}),
+      gamificationProfile: gamificationProfile,
+      gamificationState: sanitizedState,
+      gamification: sanitizedState,
+      updatedAt: nowIso,
+    };
+
+    const saved = await saveAppData(fullPayload);
+    if (saved) {
+      clearPendingGamification();
+      return {
+        success: true,
+        state: sanitizedState,
+        profile: gamificationProfile,
+      };
+    }
+    return { success: false };
+  } catch (err) {
+    console.error('[Direct Gamification Sync Error]', err);
+    return { success: false };
+  }
+}
+
 
 

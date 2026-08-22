@@ -1,6 +1,7 @@
-import { WeeklyGamificationState, LeagueDivision, WeeklyQuest, AchievementBadge, LeaderboardCompetitor } from '../types';
+import { WeeklyGamificationState, LeagueDivision, WeeklyQuest, AchievementBadge, LeaderboardCompetitor, GamificationProfile } from '../types';
 import { StorageService, getCanonicalUserId } from './storage';
 import { PortfolioStorageService } from './portfolioStorage';
+import { executeTransactionalGamification, recordPendingGamification, clearPendingGamification } from '../lib/appwriteSync';
 
 const STORAGE_KEY_PREFIX = 'darla_gamification_state_';
 
@@ -527,6 +528,87 @@ export class GamificationService {
     };
   }
 
+  static toGamificationProfile(state: WeeklyGamificationState): GamificationProfile {
+    return {
+      xp: state.xpTotal || 0,
+      gems: state.gems || 0,
+      weeklyStreak: state.weeklyStreakCount || 0,
+      inventory: {
+        freezes: state.streakFreezeCount ?? state.inventory?.freezes ?? 0,
+        doubleXpActiveUntil: state.inventory?.doubleXpActiveUntil ?? null,
+      },
+      claimedMissions: Array.isArray(state.claimedMissions)
+        ? state.claimedMissions
+        : (state.weeklyQuests || []).filter((q) => q.completed).map((q) => q.id),
+    };
+  }
+
+  static fromGamificationProfile(
+    profile: Partial<GamificationProfile>,
+    userId: string,
+    baseState?: WeeklyGamificationState
+  ): WeeklyGamificationState {
+    const existing = baseState || this.getGamificationState(userId);
+    const xpVal = Number(profile.xp ?? existing.xpTotal) || 0;
+    const gemsVal = Number(profile.gems ?? existing.gems) || 0;
+    const streakVal = Number(profile.weeklyStreak ?? existing.weeklyStreakCount) || 0;
+    const freezesVal = Number(profile.inventory?.freezes ?? existing.streakFreezeCount) || 0;
+    const doubleXpVal = profile.inventory?.doubleXpActiveUntil ?? existing.inventory?.doubleXpActiveUntil ?? null;
+    const claimedMissionsVal = Array.isArray(profile.claimedMissions)
+      ? profile.claimedMissions
+      : existing.claimedMissions || [];
+
+    const updatedQuests = (existing.weeklyQuests || []).map((q) => {
+      if (claimedMissionsVal.includes(q.id)) {
+        return { ...q, completed: true, currentProgress: q.targetProgress };
+      }
+      return q;
+    });
+
+    return {
+      ...existing,
+      userId,
+      xpTotal: xpVal,
+      gems: gemsVal,
+      weeklyStreakCount: streakVal,
+      streakFreezeCount: freezesVal,
+      inventory: {
+        freezes: freezesVal,
+        doubleXpActiveUntil: doubleXpVal,
+      },
+      claimedMissions: claimedMissionsVal,
+      weeklyQuests: updatedQuests,
+      updatedAt: new Date().toISOString(),
+    };
+  }
+
+  static setGamificationStateDirectly(
+    userId: string,
+    remoteStateOrProfile: Partial<WeeklyGamificationState> | Partial<GamificationProfile>
+  ): WeeklyGamificationState {
+    const canonicalId = getCanonicalUserId(userId);
+    let finalState: WeeklyGamificationState;
+
+    if ('weeklyQuests' in remoteStateOrProfile && Array.isArray((remoteStateOrProfile as any).weeklyQuests)) {
+      finalState = {
+        ...this.getGamificationState(userId),
+        ...(remoteStateOrProfile as WeeklyGamificationState),
+        userId: canonicalId,
+      };
+    } else {
+      finalState = this.fromGamificationProfile(remoteStateOrProfile as Partial<GamificationProfile>, userId);
+    }
+
+    const key = STORAGE_KEY_PREFIX + userId;
+    const canKey = STORAGE_KEY_PREFIX + canonicalId;
+    const dataStr = JSON.stringify(finalState);
+    localStorage.setItem(key, dataStr);
+    localStorage.setItem(canKey, dataStr);
+
+    window.dispatchEvent(new CustomEvent('gamification_updated_event', { detail: finalState }));
+    return finalState;
+  }
+
   static resetGamificationToZero(userId: string): WeeklyGamificationState {
     const state = this.createDefaultState(userId);
     this.saveGamificationState(state);
@@ -554,24 +636,30 @@ export class GamificationService {
 
   static async syncGamificationWithServer(state: WeeklyGamificationState, email?: string): Promise<void> {
     try {
-      const canonicalId = getCanonicalUserId(state.userId);
-      await fetch('/api/gamification/sync', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ userId: canonicalId, email, state }),
-      });
-    } catch (e) {}
+      const profile = this.toGamificationProfile(state);
+      await executeTransactionalGamification(state.userId, state, profile);
+    } catch (e) {
+      console.warn('[GamificationSync Error]', e);
+    }
   }
 
-  private static saveGamificationState(state: WeeklyGamificationState): void {
+  public static saveGamificationState(state: WeeklyGamificationState): void {
     const canonicalId = getCanonicalUserId(state.userId);
     const key = STORAGE_KEY_PREFIX + state.userId;
     const canKey = STORAGE_KEY_PREFIX + canonicalId;
+    
+    // Ensure inventory and claimedMissions are synchronized
+    const profile = this.toGamificationProfile(state);
+    state.inventory = profile.inventory;
+    state.claimedMissions = profile.claimedMissions;
+    state.updatedAt = new Date().toISOString();
+
     const dataStr = JSON.stringify(state);
     localStorage.setItem(key, dataStr);
     localStorage.setItem(canKey, dataStr);
     window.dispatchEvent(new CustomEvent('gamification_updated_event', { detail: state }));
-    // Asynchronously push to backend
+    
+    // Asynchronously push to backend with transactional consistency
     this.syncGamificationWithServer(state);
   }
 
@@ -579,7 +667,41 @@ export class GamificationService {
     const canonicalId = getCanonicalUserId(userId);
     localStorage.removeItem(STORAGE_KEY_PREFIX + userId);
     localStorage.removeItem(STORAGE_KEY_PREFIX + canonicalId);
+    clearPendingGamification();
     window.dispatchEvent(new CustomEvent('gamification_updated_event', { detail: null }));
+  }
+
+  static claimMission(
+    userId: string,
+    questId: string
+  ): { state: WeeklyGamificationState; xpEarned: number; gemsEarned: number; success: boolean } {
+    const state = this.getGamificationState(userId);
+    const quest = state.weeklyQuests.find((q) => q.id === questId);
+
+    if (!quest) {
+      return { state, xpEarned: 0, gemsEarned: 0, success: false };
+    }
+
+    if (!state.claimedMissions) {
+      state.claimedMissions = [];
+    }
+
+    if (state.claimedMissions.includes(questId)) {
+      return { state, xpEarned: 0, gemsEarned: 0, success: true };
+    }
+
+    const xpEarned = quest.xpReward;
+    const gemsEarned = quest.gemsReward;
+
+    quest.completed = true;
+    quest.currentProgress = quest.targetProgress;
+    state.claimedMissions.push(questId);
+    state.weeklyXP += xpEarned;
+    state.xpTotal += xpEarned;
+    state.gems += gemsEarned;
+
+    this.saveGamificationState(state);
+    return { state, xpEarned, gemsEarned, success: true };
   }
 
   static performWeeklyCheckIn(userId: string): { state: WeeklyGamificationState; xpEarned: number; gemsEarned: number; newlyCompletedQuest: WeeklyQuest | null } {

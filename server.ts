@@ -553,6 +553,9 @@ function loadServerFinancials(): Record<string, {
   investmentTransactions?: any[];
   targetAllocations?: any[];
   budgetGoals?: { essentials: number; lifestyle: number; investment: number };
+  gamificationState?: any;
+  gamificationProfile?: any;
+  gamification?: any;
   deletedIds?: string[];
   updatedAt?: string;
 }> {
@@ -2681,6 +2684,149 @@ async function startServer() {
     } catch (err) {
       console.error('[API Transactional Budget Goals Error]', err);
       return res.status(500).json({ success: false, message: 'Erro ao processar metas de orçamento no servidor.' });
+    }
+  });
+
+  // POST /api/financials/transactional-gamification - Atomic Server Transaction for Gamification Ecosystem
+  app.post('/api/financials/transactional-gamification', async (req, res) => {
+    try {
+      const { userId, email, state, profile } = req.body || {};
+      if (!userId && !email) {
+        return res.status(400).json({ success: false, message: 'userId ou email é obrigatório.' });
+      }
+
+      const cleanEmail = email ? email.trim().toLowerCase() : '';
+      const canonicalId = getCanonicalUserIdServer(userId || cleanEmail);
+      const nowIso = new Date().toISOString();
+
+      const incomingState = state || {};
+      const xpVal = Number(incomingState.xpTotal ?? profile?.xp) || 0;
+      const gemsVal = Number(incomingState.gems ?? profile?.gems) || 0;
+      const streakVal = Number(incomingState.weeklyStreakCount ?? profile?.weeklyStreak) || 0;
+      const freezesVal = Number(incomingState.streakFreezeCount ?? incomingState.inventory?.freezes ?? profile?.inventory?.freezes) || 0;
+      const doubleXpVal = incomingState.inventory?.doubleXpActiveUntil ?? profile?.inventory?.doubleXpActiveUntil ?? null;
+      const claimedMissionsVal = Array.isArray(incomingState.claimedMissions)
+        ? incomingState.claimedMissions
+        : Array.isArray(profile?.claimedMissions)
+        ? profile.claimedMissions
+        : (incomingState.weeklyQuests || []).filter((q: any) => q.completed).map((q: any) => q.id);
+
+      const gamificationProfile = {
+        xp: xpVal,
+        gems: gemsVal,
+        weeklyStreak: streakVal,
+        inventory: {
+          freezes: freezesVal,
+          doubleXpActiveUntil: doubleXpVal,
+        },
+        claimedMissions: claimedMissionsVal,
+      };
+
+      const syncedState = {
+        ...incomingState,
+        userId: canonicalId,
+        xpTotal: xpVal,
+        gems: gemsVal,
+        weeklyStreakCount: streakVal,
+        streakFreezeCount: freezesVal,
+        inventory: gamificationProfile.inventory,
+        claimedMissions: claimedMissionsVal,
+        updatedAt: nowIso,
+      };
+
+      // 1. Save to data-gamification.json
+      const gamifData = loadServerGamification();
+      gamifData[canonicalId] = syncedState;
+      if (cleanEmail) {
+        gamifData[cleanEmail] = syncedState;
+      }
+      saveServerGamification(gamifData);
+
+      // 2. Save to server financials state
+      const financials = loadServerFinancials();
+      const existing = financials[canonicalId] || {
+        accounts: [],
+        categories: [],
+        familyMembers: [],
+        transactions: [],
+        goals: [],
+        deletedIds: [],
+      };
+
+      existing.gamificationState = syncedState;
+      existing.gamificationProfile = gamificationProfile;
+      existing.gamification = syncedState;
+      existing.updatedAt = nowIso;
+      financials[canonicalId] = existing;
+      saveServerFinancials(financials);
+
+      // 3. Propagate directly to Appwrite central document 6a849358002db9e638ce
+      try {
+        const portfolio = loadServerPortfolio();
+        const userPort = portfolio[canonicalId] || { assets: [], transactions: [], targetAllocations: [] };
+        const fullPayload = {
+          transactions: existing.transactions || [],
+          accounts: existing.accounts || [],
+          familyBudget: [...(existing.goals || []), ...(existing.familyMembers || [])],
+          investorPortfolio: userPort.assets || [],
+          investmentTransactions: userPort.transactions || [],
+          targetAllocations: userPort.targetAllocations || [],
+          budgetGoals: existing.budgetGoals || { essentials: 50, lifestyle: 30, investment: 20 },
+          gamificationProfile: gamificationProfile,
+          gamificationState: syncedState,
+          gamification: syncedState,
+          goals: existing.goals || [],
+          investorGoals: existing.goals || [],
+          categories: existing.categories || [],
+          familyMembers: existing.familyMembers || [],
+          members: existing.familyMembers || [],
+          updatedAt: nowIso,
+        };
+
+        fetch('https://sfo.cloud.appwrite.io/v1/databases/6a83aa8d0038331e040f/collections/user_financials/documents/6a849358002db9e638ce', {
+          method: 'PATCH',
+          headers: {
+            'Content-Type': 'application/json',
+            'X-Appwrite-Project': '6a83a2d30034f2dd2811',
+          },
+          body: JSON.stringify({
+            data: JSON.stringify(fullPayload),
+            userId: '6a83b38ed065c08efa49',
+          }),
+        }).catch(() => {});
+      } catch (cloudErr) {
+        console.warn('[Server Appwrite Sync Notice for Gamification]', cloudErr);
+      }
+
+      // 4. Broadcast real-time WebSocket events
+      broadcastRealtime('GAMIFICATION_UPDATED', {
+        userId: canonicalId,
+        rawUserId: userId,
+        email: cleanEmail,
+        mutationType: 'GAMIFICATION',
+        state: syncedState,
+        profile: gamificationProfile,
+        updatedAt: nowIso,
+      });
+
+      broadcastRealtime('DATA_UPDATED', {
+        userId: canonicalId,
+        rawUserId: userId,
+        mutationType: 'GAMIFICATION',
+        gamificationProfile: gamificationProfile,
+        gamificationState: syncedState,
+        updatedAt: nowIso,
+      });
+
+      return res.json({
+        success: true,
+        state: syncedState,
+        profile: gamificationProfile,
+        updatedAt: nowIso,
+      });
+    } catch (err) {
+      console.error('[API Transactional Gamification Error]', err);
+      return res.status(500).json({ success: false, message: 'Erro ao processar gamificação no servidor.' });
     }
   });
 

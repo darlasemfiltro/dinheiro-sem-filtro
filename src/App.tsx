@@ -22,6 +22,7 @@ import {
   recordInvestmentTxDeletion,
   mergeRemoteTargetAllocationsWithOptimistic,
   mergeRemoteBudgetGoalsWithOptimistic,
+  mergeRemoteGamificationWithOptimistic,
 } from './lib/appwriteSync';
 import {
   calculateMonthSummary,
@@ -295,6 +296,13 @@ export default function App() {
               StorageService.saveBudgetGoals(mergedBudgetGoals, bId);
               window.dispatchEvent(new CustomEvent('budget_goals_updated', { detail: { budgetGoals: mergedBudgetGoals } }));
             }
+            if (remote.gamificationProfile || remote.gamificationState || remote.gamification) {
+              const incomingGamif = remote.gamificationState || remote.gamificationProfile || remote.gamification;
+              const mergedGamif = mergeRemoteGamificationWithOptimistic(incomingGamif, bId);
+              if (mergedGamif) {
+                GamificationService.setGamificationStateDirectly(bId, mergedGamif);
+              }
+            }
             window.dispatchEvent(new Event('portfolio_updated'));
             window.dispatchEvent(new Event('remote_data_updated'));
             window.dispatchEvent(new CustomEvent('financial_data_mutated', { detail: { userId: bId } }));
@@ -482,6 +490,11 @@ export default function App() {
           }
           if (remoteState.goals && remoteState.goals.length > 0) {
             setGoals(remoteState.goals);
+          }
+          if (remoteState.gamificationProfile || remoteState.gamificationState || remoteState.gamification) {
+            const incoming = remoteState.gamificationState || remoteState.gamificationProfile || remoteState.gamification;
+            const uId = StorageService.getCurrentUser()?.id || '6a83b38ed065c08efa49';
+            GamificationService.setGamificationStateDirectly(uId, incoming);
           }
         }
       } catch (e) {}

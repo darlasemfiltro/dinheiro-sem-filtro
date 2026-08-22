@@ -17,39 +17,130 @@ export const GamificationView: React.FC<GamificationViewProps> = ({ userId }) =>
   const [chartPeriod, setChartPeriod] = useState<'desde_inicio' | '12_months' | '2026' | '2025'>('desde_inicio');
 
   useEffect(() => {
+    // Initial fetch from state
     setGameState(GamificationService.getGamificationState(userId));
+
+    // Real-time synchronization listener for cross-device updates
+    const handleGamificationUpdated = (e: any) => {
+      if (e?.detail) {
+        if (e.detail.xpTotal !== undefined || e.detail.gems !== undefined || e.detail.weeklyStreakCount !== undefined) {
+          setGameState(e.detail);
+        } else if (e.detail.gamificationProfile || e.detail.gamificationState) {
+          const remote = e.detail.gamificationState || e.detail.gamificationProfile;
+          const s = GamificationService.fromGamificationProfile(remote, userId);
+          setGameState(s);
+        } else {
+          setGameState(GamificationService.getGamificationState(userId));
+        }
+      } else {
+        setGameState(GamificationService.getGamificationState(userId));
+      }
+    };
+
+    const handleRemoteDataUpdated = (e: any) => {
+      if (e?.detail?.gamificationProfile || e?.detail?.gamificationState || e?.detail?.gamification) {
+        const remote = e.detail.gamificationState || e.detail.gamificationProfile || e.detail.gamification;
+        const s = GamificationService.fromGamificationProfile(remote, userId);
+        setGameState(s);
+      }
+    };
+
+    window.addEventListener('gamification_updated_event', handleGamificationUpdated);
+    window.addEventListener('remote_data_updated', handleRemoteDataUpdated);
+
+    return () => {
+      window.removeEventListener('gamification_updated_event', handleGamificationUpdated);
+      window.removeEventListener('remote_data_updated', handleRemoteDataUpdated);
+    };
   }, [userId]);
 
+  // 0ms Optimistic UI for Weekly Check-in with rollback
   const handleWeeklyCheckIn = () => {
-    const { state, xpEarned, gemsEarned } = GamificationService.performWeeklyCheckIn(userId);
-    setGameState(state);
-    setShowConfetti(true);
-    setFeedbackMessage(`🎉 Check-in Semanal Concluído! Ganhou +${xpEarned} XP e 💎 ${gemsEarned} Gemas!`);
-    setTimeout(() => setShowConfetti(false), 4000);
-    setTimeout(() => setFeedbackMessage(null), 5000);
+    const backupState = JSON.parse(JSON.stringify(gameState));
+    try {
+      // 0ms local optimistic execution
+      const { state, xpEarned, gemsEarned } = GamificationService.performWeeklyCheckIn(userId);
+      setGameState(state);
+      setShowConfetti(true);
+      setFeedbackMessage(`🎉 Check-in Semanal Concluído! Ganhou +${xpEarned} XP e 💎 ${gemsEarned} Gemas!`);
+      setTimeout(() => setShowConfetti(false), 4000);
+      setTimeout(() => setFeedbackMessage(null), 5000);
+    } catch (err) {
+      console.error('[Optimistic Check-In Error]', err);
+      setGameState(backupState);
+      setFeedbackMessage('❌ Não foi possível registrar o check-in. Tente novamente.');
+      setTimeout(() => setFeedbackMessage(null), 4000);
+    }
   };
 
+  // 0ms Optimistic UI for Buying Streak Freeze with rollback
   const handleBuyFreeze = () => {
-    const result = GamificationService.buyStreakFreeze(userId);
-    setFeedbackMessage(result.message);
-    setGameState(result.state);
-    setTimeout(() => setFeedbackMessage(null), 4000);
+    const backupState = JSON.parse(JSON.stringify(gameState));
+    try {
+      const result = GamificationService.buyStreakFreeze(userId);
+      setFeedbackMessage(result.message);
+      setGameState(result.state);
+      setTimeout(() => setFeedbackMessage(null), 4000);
+    } catch (err) {
+      console.error('[Optimistic Buy Freeze Error]', err);
+      setGameState(backupState);
+      setFeedbackMessage('❌ Falha ao processar compra de Congelamento.');
+      setTimeout(() => setFeedbackMessage(null), 4000);
+    }
   };
 
+  // 0ms Optimistic UI for Buying Double XP with rollback
   const handleBuyDoubleXP = () => {
-    const result = GamificationService.buyDoubleXP(userId);
-    setFeedbackMessage(result.message);
-    setGameState(result.state);
-    setTimeout(() => setFeedbackMessage(null), 4000);
+    const backupState = JSON.parse(JSON.stringify(gameState));
+    try {
+      const result = GamificationService.buyDoubleXP(userId);
+      setFeedbackMessage(result.message);
+      setGameState(result.state);
+      setTimeout(() => setFeedbackMessage(null), 4000);
+    } catch (err) {
+      console.error('[Optimistic Buy Double XP Error]', err);
+      setGameState(backupState);
+      setFeedbackMessage('❌ Falha ao processar compra de Dobro de XP.');
+      setTimeout(() => setFeedbackMessage(null), 4000);
+    }
   };
 
+  // 0ms Optimistic UI for Profile Level selection with rollback
   const handleSelectLevel = (level: 'iniciante' | 'avancado') => {
-    const newState = GamificationService.setUserProfileLevel(userId, level);
-    setGameState(newState);
-    setFeedbackMessage(
-      `🎯 Perfil atualizado para ${level === 'iniciante' ? 'Iniciante (Foco em Reserva)' : 'Avançado (Foco em Aportes)'}! Missões personalizadas carregadas.`
-    );
-    setTimeout(() => setFeedbackMessage(null), 5000);
+    const backupState = JSON.parse(JSON.stringify(gameState));
+    try {
+      const newState = GamificationService.setUserProfileLevel(userId, level);
+      setGameState(newState);
+      setFeedbackMessage(
+        `🎯 Perfil atualizado para ${level === 'iniciante' ? 'Iniciante (Foco em Reserva)' : 'Avançado (Foco em Aportes)'}! Missões personalizadas carregadas.`
+      );
+      setTimeout(() => setFeedbackMessage(null), 5000);
+    } catch (err) {
+      console.error('[Optimistic Level Change Error]', err);
+      setGameState(backupState);
+      setFeedbackMessage('❌ Erro ao trocar perfil.');
+      setTimeout(() => setFeedbackMessage(null), 4000);
+    }
+  };
+
+  // 0ms Optimistic UI for Claiming Quest / Mission Reward
+  const handleClaimMission = (questId: string) => {
+    const backupState = JSON.parse(JSON.stringify(gameState));
+    try {
+      const { state, xpEarned, gemsEarned, success } = GamificationService.claimMission(userId, questId);
+      if (success) {
+        setGameState(state);
+        setShowConfetti(true);
+        setFeedbackMessage(`🎁 Missão Resgatada! +${xpEarned} XP e 💎 +${gemsEarned} Gemas!`);
+        setTimeout(() => setShowConfetti(false), 3500);
+        setTimeout(() => setFeedbackMessage(null), 4500);
+      }
+    } catch (err) {
+      console.error('[Optimistic Claim Mission Error]', err);
+      setGameState(backupState);
+      setFeedbackMessage('❌ Erro ao resgatar recompensa da missão.');
+      setTimeout(() => setFeedbackMessage(null), 4000);
+    }
   };
 
   const currentLeagueObj = LEAGUE_DIVISIONS.find((l) => l.id === gameState.currentDivision) || LEAGUE_DIVISIONS[7];
@@ -1010,6 +1101,28 @@ export const GamificationView: React.FC<GamificationViewProps> = ({ userId }) =>
                         style={{ width: `${Math.min(100, (quest.currentProgress / quest.targetProgress) * 100)}%` }}
                       />
                     </div>
+                  </div>
+
+                  {/* Resgate Otimista */}
+                  <div className="pt-2 flex items-center justify-between border-t border-gray-100">
+                    <span className="text-[11px] font-medium text-gray-500">
+                      {quest.completed
+                        ? '✅ Desafio concluído'
+                        : `${Math.max(0, quest.targetProgress - quest.currentProgress)} restante(s)`}
+                    </span>
+                    {!quest.completed && quest.currentProgress >= quest.targetProgress ? (
+                      <button
+                        type="button"
+                        onClick={() => handleClaimMission(quest.id)}
+                        className="px-3 py-1 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-black rounded-xl transition cursor-pointer shadow-xs animate-bounce"
+                      >
+                        Resgatar 🎁
+                      </button>
+                    ) : quest.completed ? (
+                      <span className="text-[11px] font-black text-emerald-700 bg-emerald-100/80 px-2.5 py-0.5 rounded-lg">
+                        Resgatado
+                      </span>
+                    ) : null}
                   </div>
                 </div>
               ))}
