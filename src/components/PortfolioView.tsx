@@ -97,6 +97,7 @@ import {
   DEFAULT_TARGET_ALLOCATIONS,
   CATEGORY_LABELS,
   CATEGORY_COLORS,
+  calculateLivePortfolio,
 } from '../services/portfolioStorage';
 import { formatNumberToPtBr, parsePtBrNumber, formatDateBR } from '../utils/finance';
 import jsPDF from 'jspdf';
@@ -299,7 +300,6 @@ export const PortfolioView: React.FC<PortfolioViewProps> = ({
   const [activeSubTab, setActiveSubTab] = useState<PortfolioSubTab>(initialSubTab);
   const isPrivacyActive = usePrivacyMode();
   const showValues = !isPrivacyActive;
-  const [assets, setAssets] = useState<InvestmentAsset[]>([]);
   const [transactions, setTransactions] = useState<InvestmentTransaction[]>([]);
   const [dividends, setDividends] = useState<InvestmentDividend[]>([]);
   const [goals, setGoals] = useState<PortfolioGoal[]>([]);
@@ -313,6 +313,19 @@ export const PortfolioView: React.FC<PortfolioViewProps> = ({
   const [expandedQuoteId, setExpandedQuoteId] = useState<string | null>(null);
   const [selectedChartQuoteId, setSelectedChartQuoteId] = useState<string>('');
   const [isRefreshingQuotes, setIsRefreshingQuotes] = useState<boolean>(false);
+
+  const livePortfolio = useMemo(() => {
+    const txs = investmentTransactions !== undefined ? investmentTransactions : transactions;
+    return calculateLivePortfolio(txs, goals);
+  }, [investmentTransactions, transactions, goals]);
+
+  const assets = livePortfolio.positions;
+  const totalEquity = livePortfolio.totalPortfolioValue;
+  const totalInvested = livePortfolio.totalInvested;
+  const totalProfitPercent = livePortfolio.totalProfitPercent;
+  const totalDividends = livePortfolio.totalDividends;
+  const categoryAllocation = livePortfolio.categoryAllocation;
+  const calculatedGoals = livePortfolio.calculatedGoals;
 
   // Selected Asset Details & Transaction History Panel (Requirement 2)
   const [selectedAssetForDetail, setSelectedAssetForDetail] = useState<InvestmentAsset | null>(null);
@@ -338,7 +351,7 @@ export const PortfolioView: React.FC<PortfolioViewProps> = ({
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           assets,
-          totalEquity: calculateTotalEquity(),
+          totalEquity: totalEquity,
           monthlyDividends: calculateTotalReceivedDividends(),
           targetAllocations,
         }),
@@ -588,7 +601,6 @@ export const PortfolioView: React.FC<PortfolioViewProps> = ({
 
   // Load Initial Data
   const loadData = () => {
-    const loadedAssets = PortfolioStorageService.getAssets(userId);
     const loadedTx = investmentTransactions !== undefined
       ? investmentTransactions
       : PortfolioStorageService.getTransactions(userId);
@@ -597,7 +609,6 @@ export const PortfolioView: React.FC<PortfolioViewProps> = ({
     const loadedQuotes = PortfolioStorageService.getMarketQuotes();
     const savedAdvice = PortfolioStorageService.getAIAdvice(userId);
 
-    setAssets(loadedAssets);
     setTransactions(loadedTx);
     setDividends(loadedDivs);
     setGoals(loadedGoals);
@@ -627,8 +638,7 @@ export const PortfolioView: React.FC<PortfolioViewProps> = ({
   const handleRefreshPrices = async () => {
     setIsRefreshingQuotes(true);
     try {
-      const { assets: updatedAssets, quotes: updatedQuotes } = await PortfolioStorageService.refreshMarketPrices(userId);
-      setAssets(updatedAssets);
+      const { quotes: updatedQuotes } = await PortfolioStorageService.refreshMarketPrices(userId);
       setQuotes(updatedQuotes);
     } finally {
       setIsRefreshingQuotes(false);
@@ -771,22 +781,6 @@ export const PortfolioView: React.FC<PortfolioViewProps> = ({
   };
 
   // Calculations
-  const calculateTotalEquity = () => {
-    return assets.reduce((acc, a) => {
-      const usdRate = quotes.find((q) => q.symbol === 'USD/BRL')?.price || 5.06;
-      const priceInBrl = a.currency === 'USD' ? a.currentPrice * usdRate : a.currentPrice;
-      return acc + priceInBrl * a.quantity;
-    }, 0);
-  };
-
-  const calculateTotalInvested = () => {
-    return assets.reduce((acc, a) => {
-      const usdRate = quotes.find((q) => q.symbol === 'USD/BRL')?.price || 5.06;
-      const priceInBrl = a.currency === 'USD' ? a.averagePrice * usdRate : a.averagePrice;
-      return acc + priceInBrl * a.quantity;
-    }, 0);
-  };
-
   const activeAssetsMap = useMemo(() => {
     const map = new Map<string, InvestmentAsset>();
     assets.forEach((a) => {
@@ -796,8 +790,6 @@ export const PortfolioView: React.FC<PortfolioViewProps> = ({
     });
     return map;
   }, [assets]);
-
-  const totalEquity = calculateTotalEquity();
 
   const uniqueSegments = useMemo(() => {
     const usdRate = quotes.find((q) => q.symbol === 'USD/BRL')?.price || 5.06;
@@ -870,7 +862,6 @@ export const PortfolioView: React.FC<PortfolioViewProps> = ({
       .reduce((acc, d) => acc + d.totalValue, 0);
   };
 
-  const totalInvested = calculateTotalInvested();
   const totalProfit = totalEquity - totalInvested;
   const returnPct = totalInvested > 0 ? (totalProfit / totalInvested) * 100 : 0;
 
@@ -1271,8 +1262,8 @@ export const PortfolioView: React.FC<PortfolioViewProps> = ({
     const ibovMonthly = 0.0095; // ~12.0% p.a.
     const ipcaMonthly = 0.0037; // ~4.5% p.a.
 
-    const totalInvestedOverall = calculateTotalInvested();
-    const totalEquityOverall = calculateTotalEquity();
+    const totalInvestedOverall = totalInvested;
+    const totalEquityOverall = totalEquity;
 
     let initialPointReturn: number | null = null;
 
@@ -4700,8 +4691,9 @@ export const PortfolioView: React.FC<PortfolioViewProps> = ({
             </div>
 
             <div className="space-y-4">
-              {goals.map((g) => {
-                const pct = Math.min(100, Math.round((totalEquity / g.targetAmount) * 100));
+              {calculatedGoals.map((g: any) => {
+                const pct = g.progressPercent || 0;
+                const currentAmt = g.currentAmount || 0;
                 return (
                   <div key={g.id} className="p-5 bg-[#121212] border border-[#D4AF37]/40 rounded-2xl space-y-3">
                     <div className="flex items-start justify-between gap-2">
@@ -4738,7 +4730,7 @@ export const PortfolioView: React.FC<PortfolioViewProps> = ({
                     </div>
 
                     <div className="flex justify-between text-xs font-bold text-gray-300">
-                      <span>Atual: {formatValue(totalEquity)}</span>
+                      <span>Atual: {formatValue(currentAmt)}</span>
                       <span>Objetivo: {formatValue(g.targetAmount)}</span>
                     </div>
                   </div>

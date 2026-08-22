@@ -1020,6 +1020,107 @@ export const DEFAULT_TARGET_ALLOCATIONS: TargetAllocation[] = [
   { id: 'cripto_altcoins', categoryKey: 'cripto_altcoins', label: 'Criptomoedas - Altcoins', targetPct: 5 },
 ];
 
+export function calculateLivePortfolio(transactions: any[], goals: any[] = []) {
+  if (!transactions || transactions.length === 0) {
+    return {
+      positions: [],
+      totalPortfolioValue: 0,
+      totalInvested: 0,
+      totalProfitPercent: 0,
+      categoryAllocation: [],
+      totalDividends: 0,
+      provisionedDividends: 0,
+      calculatedGoals: goals.map(g => ({ ...g, currentAmount: 0, progressPercent: 0 }))
+    };
+  }
+
+  const assetMap: Record<string, any> = {};
+  let totalDividends = 0;
+
+  transactions.forEach((tx) => {
+    const type = (tx.type || '').toUpperCase();
+    const qty = Number(tx.quantity) || 0;
+    const price = Number(tx.unitPrice || tx.price || 0) || 0;
+    const total = Number(tx.totalAmount || tx.totalValue) || (qty * price);
+    const ticker = (tx.assetTicker || tx.ticker || tx.asset || 'OUTRO').toUpperCase();
+    const category = tx.assetCategory || tx.category || 'Ações';
+
+    if (!assetMap[ticker]) {
+      assetMap[ticker] = {
+        ticker,
+        category,
+        quantity: 0,
+        totalCost: 0,
+        currentPrice: price,
+        totalValue: 0,
+        avgPrice: 0,
+        returnPct: 0
+      };
+    }
+
+    if (type === 'BUY' || type === 'COMPRA') {
+      assetMap[ticker].quantity += qty;
+      assetMap[ticker].totalCost += total;
+      assetMap[ticker].currentPrice = price > 0 ? price : assetMap[ticker].currentPrice;
+    } else if (type === 'SELL' || type === 'VENDA') {
+      assetMap[ticker].quantity -= qty;
+      assetMap[ticker].totalCost -= (assetMap[ticker].avgPrice * qty);
+      assetMap[ticker].currentPrice = price > 0 ? price : assetMap[ticker].currentPrice;
+    } else if (type === 'PROVENTO' || type === 'DIVIDENDO' || type === 'DIVIDEND' || type === 'JCP') {
+      totalDividends += total;
+    }
+
+    if (assetMap[ticker].quantity > 0) {
+      assetMap[ticker].avgPrice = assetMap[ticker].totalCost / assetMap[ticker].quantity;
+      assetMap[ticker].totalValue = assetMap[ticker].quantity * assetMap[ticker].currentPrice;
+      assetMap[ticker].returnPct = assetMap[ticker].totalCost > 0 ? ((assetMap[ticker].totalValue - assetMap[ticker].totalCost) / assetMap[ticker].totalCost) * 100 : 0;
+    } else {
+      assetMap[ticker].avgPrice = 0;
+      assetMap[ticker].totalValue = 0;
+      assetMap[ticker].returnPct = 0;
+    }
+  });
+
+  const activePositions = Object.values(assetMap).filter(a => a.quantity > 0);
+  const totalPortfolioValue = activePositions.reduce((acc, a) => acc + a.totalValue, 0);
+  const totalInvested = activePositions.reduce((acc, a) => acc + a.totalCost, 0);
+  const totalProfitPercent = totalInvested > 0 ? ((totalPortfolioValue - totalInvested) / totalInvested) * 100 : 0;
+
+  // Distribuição por Categoria
+  const catTotals: Record<string, number> = {};
+  activePositions.forEach(a => {
+    catTotals[a.category] = (catTotals[a.category] || 0) + a.totalValue;
+  });
+
+  const categoryAllocation = Object.entries(catTotals).map(([cat, val]) => ({
+    category: cat,
+    total: val,
+    percent: totalPortfolioValue > 0 ? (val / totalPortfolioValue) * 100 : 0
+  }));
+
+  // Metas Reais
+  const calculatedGoals = goals.map(g => {
+    const current = g.category === 'Patrimônio Total' ? totalPortfolioValue : (catTotals[g.category] || 0);
+    const target = Number(g.targetAmount) || 1;
+    return {
+      ...g,
+      currentAmount: current,
+      progressPercent: Math.min(100, Math.round((current / target) * 100))
+    };
+  });
+
+  return {
+    positions: activePositions,
+    totalPortfolioValue,
+    totalInvested,
+    totalProfitPercent,
+    categoryAllocation,
+    totalDividends,
+    provisionedDividends: 0,
+    calculatedGoals
+  };
+}
+
 export class PortfolioStorageService {
   static isDemoUser(userId = 'default'): boolean {
     if (!userId) return false;
@@ -1396,9 +1497,7 @@ export class PortfolioStorageService {
       }
 
       if (!raw) {
-        const initial = this.isDemoUser(userId) ? SEED_ASSETS : [];
-        this.saveToAllAliasKeys(STORAGE_KEYS.ASSETS, userId, initial);
-        return initial;
+        return [];
       }
 
       const parsed: InvestmentAsset[] = JSON.parse(raw);
@@ -1433,7 +1532,7 @@ export class PortfolioStorageService {
       this.saveToAllAliasKeys(STORAGE_KEYS.ASSETS, userId, activeOnly);
       return activeOnly;
     } catch {
-      return this.isDemoUser(userId) ? SEED_ASSETS : [];
+      return [];
     }
   }
 
@@ -1529,14 +1628,12 @@ export class PortfolioStorageService {
       }
 
       if (!raw) {
-        const initial = this.isDemoUser(userId) ? SEED_TRANSACTIONS : [];
-        localStorage.setItem(`${STORAGE_KEYS.TRANSACTIONS}_${userId}`, JSON.stringify(initial));
-        return initial;
+        return [];
       }
 
       return JSON.parse(raw);
     } catch {
-      return this.isDemoUser(userId) ? SEED_TRANSACTIONS : [];
+      return [];
     }
   }
 
@@ -1665,14 +1762,12 @@ export class PortfolioStorageService {
       }
 
       if (!raw) {
-        const initial = this.isDemoUser(userId) ? SEED_DIVIDENDS : [];
-        localStorage.setItem(`${STORAGE_KEYS.DIVIDENDS}_${userId}`, JSON.stringify(initial));
-        return initial;
+        return [];
       }
 
       return JSON.parse(raw);
     } catch {
-      return this.isDemoUser(userId) ? SEED_DIVIDENDS : [];
+      return [];
     }
   }
 
@@ -2002,14 +2097,12 @@ export class PortfolioStorageService {
       }
 
       if (!raw) {
-        const initial = this.isDemoUser(userId) ? SEED_PORTFOLIO_GOALS : [];
-        localStorage.setItem(`${STORAGE_KEYS.GOALS}_${userId}`, JSON.stringify(initial));
-        return initial;
+        return [];
       }
 
       return JSON.parse(raw);
     } catch {
-      return this.isDemoUser(userId) ? SEED_PORTFOLIO_GOALS : [];
+      return [];
     }
   }
 
