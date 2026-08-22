@@ -301,6 +301,7 @@ const pendingGoalMutations = new Map<
 // --- TRANSACTIONAL STRUCTURE (CATEGORIES, SUBCATEGORIES, MEMBERS) MANAGER ---
 const recentDeletedCategoryIds = new Map<string, number>();
 const recentDeletedMemberIds = new Map<string, number>();
+const recentDeletedInvestmentTxIds = new Map<string, number>();
 
 const pendingCategoryMutations = new Map<
   string,
@@ -319,6 +320,100 @@ const pendingMemberMutations = new Map<
     timestamp: number;
   }
 >();
+
+const pendingInvestmentTxMutations = new Map<
+  string,
+  {
+    action: string;
+    txData?: any;
+    timestamp: number;
+  }
+>();
+
+export function recordInvestmentTxDeletion(id: string): void {
+  if (!id) return;
+  recentDeletedInvestmentTxIds.set(id, Date.now());
+  pendingInvestmentTxMutations.delete(id);
+}
+
+export function isInvestmentTxRecentlyDeleted(id: string): boolean {
+  if (!id) return false;
+  const deletedAt = recentDeletedInvestmentTxIds.get(id);
+  if (!deletedAt) return false;
+  if (Date.now() - deletedAt > DELETION_TTL_MS) {
+    recentDeletedInvestmentTxIds.delete(id);
+    return false;
+  }
+  return true;
+}
+
+export function getRecentDeletedInvestmentTxIds(): Set<string> {
+  const now = Date.now();
+  const valid = new Set<string>();
+  recentDeletedInvestmentTxIds.forEach((time, id) => {
+    if (now - time <= DELETION_TTL_MS) {
+      valid.add(id);
+    } else {
+      recentDeletedInvestmentTxIds.delete(id);
+    }
+  });
+  return valid;
+}
+
+export function recordPendingInvestmentTxMutation(id: string, action: string, txData?: any): void {
+  if (!id) return;
+  pendingInvestmentTxMutations.set(id, {
+    action,
+    txData,
+    timestamp: Date.now(),
+  });
+}
+
+export function clearPendingInvestmentTxMutation(id: string): void {
+  pendingInvestmentTxMutations.delete(id);
+}
+
+export function mergeRemoteInvestmentTransactionsWithOptimistic(remoteTxs: any[]): any[] {
+  const deletedSet = getRecentDeletedInvestmentTxIds();
+  const map = new Map<string, any>();
+
+  if (Array.isArray(remoteTxs)) {
+    remoteTxs.forEach((rt: any) => {
+      if (rt && rt.id && !deletedSet.has(rt.id)) {
+        map.set(rt.id, rt);
+      }
+    });
+  }
+
+  const now = Date.now();
+  pendingInvestmentTxMutations.forEach((pending, txId) => {
+    if (deletedSet.has(txId)) {
+      map.delete(txId);
+      return;
+    }
+
+    if (now - pending.timestamp > 45000) {
+      pendingInvestmentTxMutations.delete(txId);
+      return;
+    }
+
+    if (pending.action === 'addInvestmentTransaction' || pending.action === 'updateInvestmentTransaction') {
+      const existing = map.get(txId);
+      if (!existing) {
+        if (pending.txData) map.set(txId, pending.txData);
+      } else {
+        const remoteTime = existing.updatedAt ? new Date(existing.updatedAt).getTime() : 0;
+        if (pending.timestamp >= remoteTime) {
+          map.set(txId, { ...existing, ...pending.txData });
+        }
+      }
+    } else if (pending.action === 'deleteInvestmentTransaction') {
+      map.delete(txId);
+    }
+  });
+
+  return Array.from(map.values());
+}
 
 export function recordCategoryDeletion(id: string): void {
   if (!id) return;
@@ -989,3 +1084,93 @@ export async function fetchPortfolioFromAppwrite(userId: string): Promise<any | 
     return null;
   }
 }
+
+/**
+ * Transactional Invoker for Investor Portfolio Transactions (Buy, Sell, Dividends).
+ * Solves race conditions across devices and maintains optimistic consistency.
+ */
+export async function executeTransactionalInvestmentTransaction(
+  userId: string,
+  action: 'addInvestmentTransaction' | 'updateInvestmentTransaction' | 'deleteInvestmentTransaction',
+  payload: {
+    transactionData?: any;
+    transactionId?: string;
+  }
+): Promise<{ success: boolean; investmentTransactions?: any[] }> {
+  const targetTxId = payload.transactionId || payload.transactionData?.id;
+
+  if (action === 'deleteInvestmentTransaction' && targetTxId) {
+    recordInvestmentTxDeletion(targetTxId);
+  } else if (targetTxId && payload.transactionData) {
+    recordPendingInvestmentTxMutation(targetTxId, action, payload.transactionData);
+  }
+
+  // Primary: Server atomic transactional endpoint
+  try {
+    const response = await fetch('/api/portfolio/transactional-transaction', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        userId,
+        action,
+        transactionData: payload.transactionData,
+        transactionId: payload.transactionId,
+      }),
+    });
+
+    if (response.ok) {
+      const resData = await response.json();
+      if (resData && resData.success) {
+        if (targetTxId && action !== 'deleteInvestmentTransaction') {
+          clearPendingInvestmentTxMutation(targetTxId);
+        }
+        return {
+          success: true,
+          investmentTransactions: resData.investmentTransactions,
+        };
+      }
+    }
+  } catch (err) {
+    console.warn('[Transactional Investment Server Notice] Server unreachable, using direct cloud sync:', err);
+  }
+
+  // Fallback: Direct Appwrite document transaction
+  try {
+    const cloudDoc = await loadFromCloud();
+    let existingTxs = Array.isArray(cloudDoc?.investmentTransactions) ? [...cloudDoc.investmentTransactions] : [];
+
+    if (action === 'addInvestmentTransaction' || action === 'updateInvestmentTransaction') {
+      const tx = payload.transactionData;
+      if (tx) {
+        const idx = existingTxs.findIndex((item: any) => item.id === tx.id);
+        if (idx >= 0) {
+          existingTxs[idx] = { ...existingTxs[idx], ...tx, updatedAt: new Date().toISOString() };
+        } else {
+          existingTxs.unshift({ ...tx, updatedAt: new Date().toISOString() });
+        }
+      }
+    } else if (action === 'deleteInvestmentTransaction') {
+      existingTxs = existingTxs.filter((item: any) => item.id !== targetTxId);
+    }
+
+    const mergedTxs = mergeRemoteInvestmentTransactionsWithOptimistic(existingTxs);
+
+    const fullPayload = {
+      ...(cloudDoc || {}),
+      investmentTransactions: mergedTxs,
+      updatedAt: new Date().toISOString(),
+    };
+
+    await saveAppData(fullPayload);
+
+    if (targetTxId && action !== 'deleteInvestmentTransaction') {
+      clearPendingInvestmentTxMutation(targetTxId);
+    }
+
+    return { success: true, investmentTransactions: mergedTxs };
+  } catch (err) {
+    console.error('[Direct Investment Transaction Sync Error]', err);
+    return { success: false };
+  }
+}
+

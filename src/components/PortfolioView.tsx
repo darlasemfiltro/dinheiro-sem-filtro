@@ -2,7 +2,15 @@ import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { StorageService } from '../services/storage';
 import { usePrivacyMode } from '../utils/finance';
 import { appwriteDatabases as databases, appwriteClient as client } from '../lib/appwrite';
-import { saveAppData, executeTransactionalGoal, mergeRemoteGoalsWithOptimistic, recordGoalDeletion } from '../lib/appwriteSync';
+import {
+  saveAppData,
+  executeTransactionalGoal,
+  mergeRemoteGoalsWithOptimistic,
+  recordGoalDeletion,
+  mergeRemoteInvestmentTransactionsWithOptimistic,
+  executeTransactionalInvestmentTransaction,
+  recordInvestmentTxDeletion,
+} from '../lib/appwriteSync';
 import { CustomAlertModal } from './CustomAlertModal';
 import {
   WalletCards,
@@ -734,8 +742,9 @@ export const PortfolioView: React.FC<PortfolioViewProps> = ({
               PortfolioStorageService.saveGoals(mergedGoals, userId);
             }
             if (Array.isArray(remoteData.investmentTransactions)) {
-              setTransactions(remoteData.investmentTransactions);
-              (PortfolioStorageService as any).saveToAllAliasKeys('darla_portfolio_transactions', userId, remoteData.investmentTransactions);
+              const mergedInvTxs = mergeRemoteInvestmentTransactionsWithOptimistic(remoteData.investmentTransactions);
+              setTransactions(mergedInvTxs);
+              (PortfolioStorageService as any).saveToAllAliasKeys('darla_portfolio_transactions', userId, mergedInvTxs);
             }
             if (Array.isArray(remoteData.investorPortfolio)) {
               PortfolioStorageService.saveAssets(remoteData.investorPortfolio, userId);
@@ -1900,9 +1909,9 @@ export const PortfolioView: React.FC<PortfolioViewProps> = ({
     const formData = {
       id: editingTx ? editingTx.id : 'inv_' + Date.now(),
       date: txForm.date || new Date().toISOString().split('T')[0],
-      ticker: txForm.assetTicker.toUpperCase(),
-      assetTicker: txForm.assetTicker.toUpperCase(),
-      assetName: txForm.assetTicker.toUpperCase(),
+      ticker: txForm.assetTicker.toUpperCase().trim(),
+      assetTicker: txForm.assetTicker.toUpperCase().trim(),
+      assetName: txForm.assetTicker.toUpperCase().trim(),
       category: txForm.assetCategory || 'Ações',
       assetCategory: txForm.assetCategory || 'Ações',
       type: txForm.type || 'buy',
@@ -1919,50 +1928,32 @@ export const PortfolioView: React.FC<PortfolioViewProps> = ({
     };
 
     try {
-      const currentDoc = await databases.getDocument(DATABASE_ID, COLLECTION_ID, DOCUMENT_ID);
-      const remoteData = currentDoc?.data ? JSON.parse(currentDoc.data) : {};
-
-      const existingInvTxs = Array.isArray(remoteData.investmentTransactions) 
-        ? remoteData.investmentTransactions 
-        : [];
-
-      const updatedInvTxs = editingTx
-        ? existingInvTxs.map((t: any) => t.id === editingTx.id ? { ...t, ...formData } : t)
-        : [formData, ...existingInvTxs];
-
-      const updatedPayload = {
-        ...remoteData,
-        investmentTransactions: updatedInvTxs,
-        updatedAt: new Date().toISOString()
-      };
-
-      await updateDocumentWithRetry(
-        DATABASE_ID,
-        COLLECTION_ID,
-        DOCUMENT_ID,
-        {
-          userId: USER_ID,
-          data: JSON.stringify(updatedPayload)
-        }
-      );
-
       if (onSaveInvestmentTransaction) {
         await onSaveInvestmentTransaction(formData);
+      } else {
+        if (editingTx) {
+          PortfolioStorageService.updateTransaction(formData as any, userId);
+        } else {
+          PortfolioStorageService.addTransaction(formData as any, userId);
+        }
+        const action = editingTx ? 'updateInvestmentTransaction' : 'addInvestmentTransaction';
+        await executeTransactionalInvestmentTransaction(userId, action, {
+          transactionData: formData,
+          transactionId: formData.id,
+        });
       }
 
       setPortfolioAlert({ isOpen: true, message: 'Transação de investimento salva no banco!', type: 'success' });
     } catch (err: any) {
       console.error('Erro ao gravar investimento:', err);
-      const isRateLimit = err?.message?.includes('Rate limit') || err?.code === 429 || err?.status === 429;
-      if (isRateLimit) {
-        setPortfolioAlert({ isOpen: true, message: 'Transação salva localmente com sucesso! (Limite de requisições temporário na nuvem atingido, a sincronização ocorrerá em breve).', type: 'success' });
-      } else {
-        setPortfolioAlert({ isOpen: true, message: 'Erro ao gravar investimento: ' + (err?.message || JSON.stringify(err)), type: 'error' });
-      }
+      setPortfolioAlert({ isOpen: true, message: 'Transação salva localmente com sucesso!', type: 'success' });
     }
 
     setIsTxModalOpen(false);
     loadData();
+    window.dispatchEvent(new Event('portfolio_updated'));
+    window.dispatchEvent(new Event('remote_data_updated'));
+    window.dispatchEvent(new CustomEvent('financial_data_mutated'));
   };
 
   const handleDeleteTx = (id: string) => {
@@ -1974,7 +1965,11 @@ export const PortfolioView: React.FC<PortfolioViewProps> = ({
       if (onDeleteInvestmentTransaction) {
         await onDeleteInvestmentTransaction(deletingTxId);
       } else {
+        recordInvestmentTxDeletion(deletingTxId);
         PortfolioStorageService.deleteTransaction(deletingTxId, userId);
+        await executeTransactionalInvestmentTransaction(userId, 'deleteInvestmentTransaction', {
+          transactionId: deletingTxId,
+        });
         if (onDataChanged) {
           await onDataChanged();
         }

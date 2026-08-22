@@ -550,6 +550,7 @@ function loadServerFinancials(): Record<string, {
   familyMembers: any[];
   transactions: any[];
   goals: any[];
+  investmentTransactions?: any[];
   deletedIds?: string[];
   updatedAt?: string;
 }> {
@@ -2332,6 +2333,160 @@ async function startServer() {
       return res.json({ success: true });
     } catch (err) {
       return res.status(500).json({ success: false });
+    }
+  });
+
+  // POST /api/portfolio/transactional-transaction - Atomic Server Transaction for Investor Portfolio Transactions (Buy, Sell, Dividends)
+  app.post('/api/portfolio/transactional-transaction', async (req, res) => {
+    try {
+      const { userId, action, transactionData, transactionId } = req.body || {};
+      if (!userId || !action) {
+        return res.status(400).json({ success: false, message: 'userId e action são obrigatórios.' });
+      }
+
+      const canonicalId = getCanonicalUserIdServer(userId);
+      const portfolioData = loadServerPortfolio();
+      const existing = portfolioData[canonicalId] || {
+        assets: [],
+        transactions: [],
+        dividends: [],
+        targetAllocations: [],
+        goals: [],
+        deletedIds: [],
+      };
+
+      existing.transactions = existing.transactions || [];
+      existing.deletedIds = existing.deletedIds || [];
+      const deletedSet = new Set<string>(existing.deletedIds);
+
+      if (action === 'addInvestmentTransaction' || action === 'updateInvestmentTransaction') {
+        if (!transactionData) {
+          return res.status(400).json({ success: false, message: 'transactionData é obrigatório.' });
+        }
+
+        const normalizedTx = {
+          id: transactionData.id || `tx_inv_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
+          userId: canonicalId,
+          assetTicker: (transactionData.assetTicker || transactionData.ticker || '').toUpperCase().trim(),
+          assetCategory: transactionData.assetCategory || transactionData.category || 'acoes',
+          type: transactionData.type || 'buy',
+          quantity: Number(transactionData.quantity) || 0,
+          unitPrice: Number(transactionData.unitPrice) || Number(transactionData.price) || 0,
+          totalAmount:
+            Number(transactionData.totalAmount) ||
+            Number(transactionData.totalValue) ||
+            (Number(transactionData.quantity) * Number(transactionData.unitPrice || transactionData.price)) ||
+            0,
+          broker: transactionData.broker || transactionData.institution || 'RICO INVESTIMENTOS',
+          date: transactionData.date || new Date().toISOString().split('T')[0],
+          notes: transactionData.notes || '',
+          createdAt: transactionData.createdAt || new Date().toISOString(),
+          updatedAt: new Date().toISOString(),
+        };
+
+        const txIndex = existing.transactions.findIndex((t: any) => t.id === normalizedTx.id);
+        if (txIndex >= 0) {
+          existing.transactions[txIndex] = {
+            ...existing.transactions[txIndex],
+            ...normalizedTx,
+          };
+        } else {
+          existing.transactions.unshift(normalizedTx);
+        }
+
+        // Remove from deletedIds if present
+        existing.deletedIds = existing.deletedIds.filter((dId: string) => dId !== normalizedTx.id);
+      } else if (action === 'deleteInvestmentTransaction') {
+        const idToDelete = transactionId || (transactionData && transactionData.id);
+        if (!idToDelete) {
+          return res.status(400).json({ success: false, message: 'transactionId é obrigatório para exclusão.' });
+        }
+
+        existing.transactions = existing.transactions.filter((t: any) => t.id !== idToDelete);
+        if (!existing.deletedIds.includes(idToDelete)) {
+          existing.deletedIds.push(idToDelete);
+        }
+      } else {
+        return res.status(400).json({ success: false, message: `Ação desconhecida: ${action}` });
+      }
+
+      existing.updatedAt = new Date().toISOString();
+      portfolioData[canonicalId] = existing;
+      saveServerPortfolio(portfolioData);
+
+      // Keep server financials in sync with portfolio transactions
+      const financials = loadServerFinancials();
+      if (financials[canonicalId]) {
+        financials[canonicalId].investmentTransactions = existing.transactions;
+        financials[canonicalId].updatedAt = existing.updatedAt;
+        saveServerFinancials(financials);
+      }
+
+      // Propagate directly to Appwrite central document 6a849358002db9e638ce
+      try {
+        const userFin = financials[canonicalId] || {
+          accounts: [],
+          transactions: [],
+          goals: [],
+          familyMembers: [],
+          categories: [],
+        };
+        const fullPayload = {
+          transactions: userFin.transactions || [],
+          accounts: userFin.accounts || [],
+          familyBudget: [...(userFin.goals || []), ...(userFin.familyMembers || [])],
+          investorPortfolio: existing.assets || [],
+          investmentTransactions: existing.transactions || [],
+          goals: userFin.goals || [],
+          investorGoals: userFin.goals || [],
+          categories: userFin.categories || [],
+          familyMembers: userFin.familyMembers || [],
+          members: userFin.familyMembers || [],
+          updatedAt: existing.updatedAt,
+        };
+
+        fetch('https://sfo.cloud.appwrite.io/v1/databases/6a83aa8d0038331e040f/collections/user_financials/documents/6a849358002db9e638ce', {
+          method: 'PATCH',
+          headers: {
+            'Content-Type': 'application/json',
+            'X-Appwrite-Project': '6a83a2d30034f2dd2811',
+          },
+          body: JSON.stringify({
+            data: JSON.stringify(fullPayload),
+            userId: '6a83b38ed065c08efa49',
+          }),
+        }).catch(() => {});
+      } catch (cloudErr) {
+        console.warn('[Server Appwrite Sync Notice for Investment Transaction]', cloudErr);
+      }
+
+      // Broadcast WebSocket real-time event to all connected devices
+      broadcastRealtime('PORTFOLIO_UPDATED', {
+        userId: canonicalId,
+        rawUserId: userId,
+        mutationType: 'INVESTMENT_TRANSACTION',
+        action,
+        transactionId: transactionId || (transactionData && transactionData.id),
+        investmentTransactions: existing.transactions,
+        updatedAt: existing.updatedAt,
+      });
+
+      broadcastRealtime('DATA_UPDATED', {
+        userId: canonicalId,
+        rawUserId: userId,
+        mutationType: 'INVESTMENT_TRANSACTION',
+        investmentTransactions: existing.transactions,
+        updatedAt: existing.updatedAt,
+      });
+
+      return res.json({
+        success: true,
+        investmentTransactions: existing.transactions,
+        updatedAt: existing.updatedAt,
+      });
+    } catch (err) {
+      console.error('[API Transactional Investment Transaction Error]', err);
+      return res.status(500).json({ success: false, message: 'Erro ao processar transação de investimento no servidor.' });
     }
   });
 
