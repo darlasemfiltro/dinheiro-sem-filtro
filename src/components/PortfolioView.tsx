@@ -1160,7 +1160,7 @@ export const PortfolioView: React.FC<PortfolioViewProps> = ({
             const mult = a.currency === 'USD' ? usdRate : 1;
             const val = a.currentPrice * a.quantity * mult;
             const cost = a.averagePrice * a.quantity * mult;
-            const todayVar = (a.currentPrice * (a.priceChange24h / 100)) * a.quantity * mult;
+            const todayVar = (a.currentPrice * ((a.priceChange24h || 0) / 100)) * a.quantity * mult;
             totalVal += val;
             totalCost += cost;
             todayVal += todayVar;
@@ -3235,7 +3235,8 @@ export const PortfolioView: React.FC<PortfolioViewProps> = ({
                               const currentVal =
                                 asset.currency === 'USD' ? asset.currentPrice * usdRate * asset.quantity : asset.currentPrice * asset.quantity;
                               const assetPct = totalEquity > 0 ? (currentVal / totalEquity) * 100 : 0;
-                              const isPositive = asset.priceChange24h >= 0;
+                              const change24h = asset.priceChange24h || 0;
+                              const isPositive = change24h >= 0;
                               const avg = asset.averagePrice || 0;
                               const cur = asset.currentPrice || 0;
                               const totalRentPct = avg > 0 ? ((cur - avg) / avg) * 100 : (asset.returnPct || 0);
@@ -3256,7 +3257,7 @@ export const PortfolioView: React.FC<PortfolioViewProps> = ({
                                       </span>
                                     </div>
                                     <p className="text-[10px] text-gray-400">
-                                      {asset.quantity} un. x {asset.currency === 'USD' ? 'US$' : 'R$'} {asset.currentPrice.toFixed(2)}
+                                      {asset.quantity} un. x {asset.currency === 'USD' ? 'US$' : 'R$'} {(asset.currentPrice || 0).toFixed(2)}
                                     </p>
                                   </div>
 
@@ -3269,7 +3270,7 @@ export const PortfolioView: React.FC<PortfolioViewProps> = ({
                                           Tot: {isTotalRentPos ? '+' : ''}{totalRentPct.toFixed(1)}%
                                         </span>
                                         <span className={isPositive ? 'text-[#00E676]' : 'text-[#FF5252]'} title="Rentabilidade Hoje">
-                                          Hoje: {isPositive ? '+' : ''}{asset.priceChange24h.toFixed(1)}%
+                                          Hoje: {isPositive ? '+' : ''}{change24h.toFixed(1)}%
                                         </span>
                                       </div>
                                     </div>
@@ -5412,9 +5413,14 @@ export const PortfolioView: React.FC<PortfolioViewProps> = ({
                       <span className="text-xs font-black text-[#00E676]">
                         {formatValue(a.currentPrice, a.currency === 'USD' ? 'US$ ' : 'R$ ')}
                       </span>
-                      <span className={`text-xs font-bold ${a.priceChange24h >= 0 ? 'text-[#00E676]' : 'text-[#FF5252]'}`}>
-                        ({a.priceChange24h >= 0 ? '+' : ''}{a.priceChange24h.toFixed(2)}% hoje)
-                      </span>
+                      {(() => {
+                        const change24 = a.priceChange24h || 0;
+                        return (
+                          <span className={`text-xs font-bold ${change24 >= 0 ? 'text-[#00E676]' : 'text-[#FF5252]'}`}>
+                            ({change24 >= 0 ? '+' : ''}{change24.toFixed(2)}% hoje)
+                          </span>
+                        );
+                      })()}
                     </div>
                     <p className="text-xs text-gray-400">
                       Detalhes do Ativo & Detalhamento das Transações
@@ -5479,9 +5485,14 @@ export const PortfolioView: React.FC<PortfolioViewProps> = ({
                   {/* 6. Variação hoje */}
                   <div className="space-y-0.5">
                     <span className="text-gray-400 font-bold block text-[11px]">Variação hoje</span>
-                    <p className={`font-black text-sm font-serif ${a.priceChange24h >= 0 ? 'text-[#00E676]' : 'text-[#FF5252]'}`}>
-                      {a.priceChange24h >= 0 ? '+' : ''}{a.priceChange24h.toFixed(2)}%
-                    </p>
+                    {(() => {
+                      const change24 = a.priceChange24h || 0;
+                      return (
+                        <p className={`font-black text-sm font-serif ${change24 >= 0 ? 'text-[#00E676]' : 'text-[#FF5252]'}`}>
+                          {change24 >= 0 ? '+' : ''}{change24.toFixed(2)}%
+                        </p>
+                      );
+                    })()}
                   </div>
 
                   {/* 7. Variação total */}
@@ -5510,9 +5521,14 @@ export const PortfolioView: React.FC<PortfolioViewProps> = ({
               <div className="p-4 bg-[#121212] border border-white/10 rounded-2xl space-y-3">
                 <div className="flex items-center justify-between text-xs">
                   <span className="font-bold text-gray-300">Evolução da Cotação</span>
-                  <span className={`font-black ${a.priceChange24h >= 0 ? 'text-[#00E676]' : 'text-[#FF5252]'}`}>
-                    {a.priceChange24h >= 0 ? '+' : ''}{a.priceChange24h.toFixed(2)}% (24h)
-                  </span>
+                  {(() => {
+                    const change24 = a.priceChange24h || 0;
+                    return (
+                      <span className={`font-black ${change24 >= 0 ? 'text-[#00E676]' : 'text-[#FF5252]'}`}>
+                        {change24 >= 0 ? '+' : ''}{change24.toFixed(2)}% (24h)
+                      </span>
+                    );
+                  })()}
                 </div>
 
                 <div className="h-48 w-full">

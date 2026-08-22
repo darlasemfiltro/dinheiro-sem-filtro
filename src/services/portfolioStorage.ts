@@ -1051,14 +1051,19 @@ export function calculateLivePortfolio(transactions: any[], goals: any[] = []) {
 
     if (!assetMap[ticker]) {
       assetMap[ticker] = {
+        id: ticker,
         ticker,
         category,
+        segment: 'Outros',
+        currency: 'BRL',
         quantity: 0,
         totalCost: 0,
         currentPrice: price,
         totalValue: 0,
-        avgPrice: 0,
-        returnPct: 0
+        averagePrice: 0,
+        returnPct: 0,
+        priceChange24h: 0,
+        priceChange24hValue: 0
       };
     }
 
@@ -1067,7 +1072,7 @@ export function calculateLivePortfolio(transactions: any[], goals: any[] = []) {
       assetMap[ticker].totalCost += total;
       assetMap[ticker].currentPrice = price > 0 ? price : assetMap[ticker].currentPrice;
     } else if (type === 'SELL' || type === 'VENDA') {
-      const avg = assetMap[ticker].avgPrice || 0;
+      const avg = assetMap[ticker].averagePrice || 0;
       assetMap[ticker].quantity -= qty;
       assetMap[ticker].totalCost -= (avg * qty);
       assetMap[ticker].currentPrice = price > 0 ? price : assetMap[ticker].currentPrice;
@@ -1076,11 +1081,11 @@ export function calculateLivePortfolio(transactions: any[], goals: any[] = []) {
     }
 
     if (assetMap[ticker].quantity > 0) {
-      assetMap[ticker].avgPrice = assetMap[ticker].totalCost / assetMap[ticker].quantity;
+      assetMap[ticker].averagePrice = assetMap[ticker].totalCost / assetMap[ticker].quantity;
       assetMap[ticker].totalValue = assetMap[ticker].quantity * assetMap[ticker].currentPrice;
       assetMap[ticker].returnPct = assetMap[ticker].totalCost > 0 ? ((assetMap[ticker].totalValue - assetMap[ticker].totalCost) / assetMap[ticker].totalCost) * 100 : 0;
     } else {
-      assetMap[ticker].avgPrice = 0;
+      assetMap[ticker].averagePrice = 0;
       assetMap[ticker].totalValue = 0;
       assetMap[ticker].returnPct = 0;
     }
