@@ -243,6 +243,7 @@ export async function saveAppData(updatedData: any): Promise<boolean> {
       familyBudget: updatedData.familyBudget || [...(updatedData.goals || []), ...(updatedData.familyMembers || [])],
       investorPortfolio: updatedData.investorPortfolio || [],
       investmentTransactions: updatedData.investmentTransactions || [],
+      targetAllocations: updatedData.targetAllocations || [],
       goals: updatedData.goals || [],
       investorGoals: updatedData.investorGoals || updatedData.goals || [],
       updatedAt: new Date().toISOString()
@@ -1173,4 +1174,91 @@ export async function executeTransactionalInvestmentTransaction(
     return { success: false };
   }
 }
+
+// --- TRANSACTIONAL TARGET ALLOCATIONS (DESIRED PERCENTAGES) ---
+
+let pendingTargetAllocations: { allocations: any[]; timestamp: number } | null = null;
+
+export function recordPendingTargetAllocations(allocations: any[]): void {
+  pendingTargetAllocations = {
+    allocations,
+    timestamp: Date.now(),
+  };
+}
+
+export function clearPendingTargetAllocations(): void {
+  pendingTargetAllocations = null;
+}
+
+export function mergeRemoteTargetAllocationsWithOptimistic(remoteAllocations: any[]): any[] {
+  if (!Array.isArray(remoteAllocations) || remoteAllocations.length === 0) {
+    return pendingTargetAllocations ? pendingTargetAllocations.allocations : (remoteAllocations || []);
+  }
+
+  if (pendingTargetAllocations) {
+    const age = Date.now() - pendingTargetAllocations.timestamp;
+    if (age < 15000) {
+      return pendingTargetAllocations.allocations;
+    }
+    pendingTargetAllocations = null;
+  }
+
+  return remoteAllocations;
+}
+
+/**
+ * Atomic Server & Cloud Transaction for Target Allocations
+ */
+export async function executeTransactionalTargetAllocations(
+  userId: string,
+  targetAllocations: any[]
+): Promise<{ success: boolean; targetAllocations?: any[] }> {
+  recordPendingTargetAllocations(targetAllocations);
+
+  // Primary: Server atomic transactional endpoint
+  try {
+    const response = await fetch('/api/portfolio/transactional-allocations', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        userId,
+        targetAllocations,
+      }),
+    });
+
+    if (response.ok) {
+      const resData = await response.json();
+      if (resData && resData.success) {
+        clearPendingTargetAllocations();
+        return {
+          success: true,
+          targetAllocations: resData.targetAllocations || targetAllocations,
+        };
+      }
+    }
+  } catch (err) {
+    console.warn('[Transactional Allocations Server Notice] Server unreachable, using direct cloud sync:', err);
+  }
+
+  // Fallback: Direct Appwrite document update
+  try {
+    const cloudDoc = await loadFromCloud();
+    const fullPayload = {
+      ...(cloudDoc || {}),
+      targetAllocations,
+      updatedAt: new Date().toISOString(),
+    };
+
+    const saved = await saveAppData(fullPayload);
+    if (saved) {
+      clearPendingTargetAllocations();
+      return { success: true, targetAllocations };
+    }
+    return { success: false };
+  } catch (err) {
+    console.error('[Direct Allocations Sync Error]', err);
+    return { success: false };
+  }
+}
+
 

@@ -551,6 +551,7 @@ function loadServerFinancials(): Record<string, {
   transactions: any[];
   goals: any[];
   investmentTransactions?: any[];
+  targetAllocations?: any[];
   deletedIds?: string[];
   updatedAt?: string;
 }> {
@@ -2487,6 +2488,105 @@ async function startServer() {
     } catch (err) {
       console.error('[API Transactional Investment Transaction Error]', err);
       return res.status(500).json({ success: false, message: 'Erro ao processar transação de investimento no servidor.' });
+    }
+  });
+
+  // POST /api/portfolio/transactional-allocations - Atomic Server Transaction for Target Allocations
+  app.post('/api/portfolio/transactional-allocations', async (req, res) => {
+    try {
+      const { userId, targetAllocations } = req.body || {};
+      if (!userId || !Array.isArray(targetAllocations)) {
+        return res.status(400).json({ success: false, message: 'userId e targetAllocations (array) são obrigatórios.' });
+      }
+
+      const canonicalId = getCanonicalUserIdServer(userId);
+      const portfolioData = loadServerPortfolio();
+      const existing = portfolioData[canonicalId] || {
+        assets: [],
+        transactions: [],
+        dividends: [],
+        targetAllocations: [],
+        goals: [],
+        deletedIds: [],
+      };
+
+      existing.targetAllocations = targetAllocations;
+      existing.updatedAt = new Date().toISOString();
+      portfolioData[canonicalId] = existing;
+      saveServerPortfolio(portfolioData);
+
+      // Keep server financials in sync with portfolio target allocations
+      const financials = loadServerFinancials();
+      if (financials[canonicalId]) {
+        financials[canonicalId].targetAllocations = targetAllocations;
+        financials[canonicalId].updatedAt = existing.updatedAt;
+        saveServerFinancials(financials);
+      }
+
+      // Propagate directly to Appwrite central document 6a849358002db9e638ce
+      try {
+        const userFin = financials[canonicalId] || {
+          accounts: [],
+          transactions: [],
+          goals: [],
+          familyMembers: [],
+          categories: [],
+        };
+        const fullPayload = {
+          transactions: userFin.transactions || [],
+          accounts: userFin.accounts || [],
+          familyBudget: [...(userFin.goals || []), ...(userFin.familyMembers || [])],
+          investorPortfolio: existing.assets || [],
+          investmentTransactions: existing.transactions || [],
+          targetAllocations: targetAllocations,
+          goals: userFin.goals || [],
+          investorGoals: userFin.goals || [],
+          categories: userFin.categories || [],
+          familyMembers: userFin.familyMembers || [],
+          members: userFin.familyMembers || [],
+          updatedAt: existing.updatedAt,
+        };
+
+        fetch('https://sfo.cloud.appwrite.io/v1/databases/6a83aa8d0038331e040f/collections/user_financials/documents/6a849358002db9e638ce', {
+          method: 'PATCH',
+          headers: {
+            'Content-Type': 'application/json',
+            'X-Appwrite-Project': '6a83a2d30034f2dd2811',
+          },
+          body: JSON.stringify({
+            data: JSON.stringify(fullPayload),
+            userId: '6a83b38ed065c08efa49',
+          }),
+        }).catch(() => {});
+      } catch (cloudErr) {
+        console.warn('[Server Appwrite Sync Notice for Target Allocations]', cloudErr);
+      }
+
+      // Broadcast WebSocket real-time event to all connected devices
+      broadcastRealtime('PORTFOLIO_UPDATED', {
+        userId: canonicalId,
+        rawUserId: userId,
+        mutationType: 'TARGET_ALLOCATIONS',
+        targetAllocations: existing.targetAllocations,
+        updatedAt: existing.updatedAt,
+      });
+
+      broadcastRealtime('DATA_UPDATED', {
+        userId: canonicalId,
+        rawUserId: userId,
+        mutationType: 'TARGET_ALLOCATIONS',
+        targetAllocations: existing.targetAllocations,
+        updatedAt: existing.updatedAt,
+      });
+
+      return res.json({
+        success: true,
+        targetAllocations: existing.targetAllocations,
+        updatedAt: existing.updatedAt,
+      });
+    } catch (err) {
+      console.error('[API Transactional Allocations Error]', err);
+      return res.status(500).json({ success: false, message: 'Erro ao processar alocações no servidor.' });
     }
   });
 

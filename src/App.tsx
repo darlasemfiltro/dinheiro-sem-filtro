@@ -20,6 +20,7 @@ import {
   executeTransactionalInvestmentTransaction,
   mergeRemoteInvestmentTransactionsWithOptimistic,
   recordInvestmentTxDeletion,
+  mergeRemoteTargetAllocationsWithOptimistic,
 } from './lib/appwriteSync';
 import {
   calculateMonthSummary,
@@ -187,6 +188,10 @@ export default function App() {
             setInvestmentTransactions([]);
             (PortfolioStorageService as any).saveToAllAliasKeys('darla_portfolio_transactions', bId, []);
           }
+          if (remoteData.targetAllocations && Array.isArray(remoteData.targetAllocations)) {
+            const mergedTargets = mergeRemoteTargetAllocationsWithOptimistic(remoteData.targetAllocations);
+            (PortfolioStorageService as any).saveToAllAliasKeys('darla_target_allocations', bId, mergedTargets);
+          }
           window.dispatchEvent(new Event('portfolio_updated'));
         }
       } catch (err: any) {
@@ -272,6 +277,10 @@ export default function App() {
             } else if (!remote.investmentTransactions) {
               setInvestmentTransactions([]);
               (PortfolioStorageService as any).saveToAllAliasKeys('darla_portfolio_transactions', bId, []);
+            }
+            if (remote.targetAllocations && Array.isArray(remote.targetAllocations)) {
+              const mergedTargets = mergeRemoteTargetAllocationsWithOptimistic(remote.targetAllocations);
+              (PortfolioStorageService as any).saveToAllAliasKeys('darla_target_allocations', bId, mergedTargets);
             }
             window.dispatchEvent(new Event('portfolio_updated'));
             window.dispatchEvent(new Event('remote_data_updated'));

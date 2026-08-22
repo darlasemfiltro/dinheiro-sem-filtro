@@ -1326,7 +1326,11 @@ export class PortfolioStorageService {
         ...(appwriteData?.goals || []),
         ...(firestoreData?.goals || [])
       ];
-      const targetAllocations = serverData?.targetAllocations || [];
+      const targetAllocations = (Array.isArray(serverData?.targetAllocations) && serverData.targetAllocations.length > 0)
+        ? serverData.targetAllocations
+        : ((Array.isArray(appwriteData?.targetAllocations) && appwriteData.targetAllocations.length > 0)
+          ? appwriteData.targetAllocations
+          : (Array.isArray(firestoreData?.targetAllocations) ? firestoreData.targetAllocations : []));
       const remoteDeletedIds = serverData?.deletedIds || [];
 
       const deletedIds = this.getDeletedPortfolioIds(canonicalId);

@@ -10,6 +10,8 @@ import {
   mergeRemoteInvestmentTransactionsWithOptimistic,
   executeTransactionalInvestmentTransaction,
   recordInvestmentTxDeletion,
+  executeTransactionalTargetAllocations,
+  mergeRemoteTargetAllocationsWithOptimistic,
 } from '../lib/appwriteSync';
 import { CustomAlertModal } from './CustomAlertModal';
 import {
@@ -616,11 +618,15 @@ export const PortfolioView: React.FC<PortfolioViewProps> = ({
     const loadedGoals = StorageService.getGoals(userId);
     const loadedQuotes = PortfolioStorageService.getMarketQuotes();
     const savedAdvice = PortfolioStorageService.getAIAdvice(userId);
+    const loadedTargets = PortfolioStorageService.getTargetAllocations(userId);
 
     setTransactions(loadedTx);
     setDividends(loadedDivs);
     setGoals(loadedGoals);
     setQuotes(loadedQuotes);
+    if (loadedTargets && loadedTargets.length > 0) {
+      setTargetAllocations(loadedTargets);
+    }
     if (savedAdvice) {
       setAiAdvice(savedAdvice);
     }
@@ -717,7 +723,13 @@ export const PortfolioView: React.FC<PortfolioViewProps> = ({
       loadData();
     });
 
-    const handlePortfolioUpdate = () => {
+    const handlePortfolioUpdate = (e?: any) => {
+      const detail = e?.detail;
+      if (detail && Array.isArray(detail.targetAllocations) && detail.targetAllocations.length > 0) {
+        const mergedTargets = mergeRemoteTargetAllocationsWithOptimistic(detail.targetAllocations);
+        setTargetAllocations(mergedTargets);
+        (PortfolioStorageService as any).saveToAllAliasKeys('darla_target_allocations', userId, mergedTargets);
+      }
       loadData();
     };
 
@@ -748,6 +760,11 @@ export const PortfolioView: React.FC<PortfolioViewProps> = ({
             }
             if (Array.isArray(remoteData.investorPortfolio)) {
               PortfolioStorageService.saveAssets(remoteData.investorPortfolio, userId);
+            }
+            if (Array.isArray(remoteData.targetAllocations) && remoteData.targetAllocations.length > 0) {
+              const mergedTargets = mergeRemoteTargetAllocationsWithOptimistic(remoteData.targetAllocations);
+              setTargetAllocations(mergedTargets);
+              (PortfolioStorageService as any).saveToAllAliasKeys('darla_target_allocations', userId, mergedTargets);
             }
           } catch (e) {
             console.error('[PortfolioView Realtime Parse Error]', e);
@@ -1187,9 +1204,43 @@ export const PortfolioView: React.FC<PortfolioViewProps> = ({
   };
 
   const handleSaveTargetAllocations = () => {
-    PortfolioStorageService.saveTargetAllocations(editingAllocations, userId);
-    setTargetAllocations(editingAllocations);
+    const newAllocations = [...editingAllocations];
+
+    // 1. Backup do estado atual caso a requisição falhe (Rollback)
+    const previousAllocations = [...targetAllocations];
+
+    // 2. ATUALIZAÇÃO OTIMISTA (0ms delay): Atualiza a tela e cálculos imediatamente
+    setTargetAllocations(newAllocations);
+    PortfolioStorageService.saveTargetAllocations(newAllocations, userId);
     setIsEditingTargetModalOpen(false);
+
+    // Dispara eventos imediatamente para recalcular na hora o gráfico e as barras de progresso
+    window.dispatchEvent(new Event('portfolio_updated'));
+    window.dispatchEvent(new Event('remote_data_updated'));
+    window.dispatchEvent(new CustomEvent('financial_data_mutated', { detail: { userId } }));
+
+    // 3. Processamento em Background (Sem travar a tela)
+    (async () => {
+      try {
+        const result = await executeTransactionalTargetAllocations(userId, newAllocations);
+        if (!result || !result.success) {
+          throw new Error('Falha ao sincronizar metas de alocação na nuvem.');
+        }
+      } catch (error) {
+        console.error('Erro ao salvar alocações. Revertendo...', error);
+        // 4. ROLLBACK: Se a nuvem falhar, devolve os valores antigos
+        setTargetAllocations(previousAllocations);
+        PortfolioStorageService.saveTargetAllocations(previousAllocations, userId);
+        window.dispatchEvent(new Event('portfolio_updated'));
+        window.dispatchEvent(new Event('remote_data_updated'));
+        window.dispatchEvent(new CustomEvent('financial_data_mutated', { detail: { userId } }));
+        setPortfolioAlert({
+          isOpen: true,
+          message: 'Erro ao salvar as metas de alocação. Verifique sua conexão.',
+          type: 'error',
+        });
+      }
+    })();
   };
 
   // Format value with visibility toggle (standardized strictly to 2 decimal places)
