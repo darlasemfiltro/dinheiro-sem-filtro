@@ -799,6 +799,13 @@ export class GamificationService {
     }
 
     state.gems -= COST;
+    if (!state.inventory) {
+      state.inventory = {
+        freezes: state.streakFreezeCount || 0,
+        doubleXpActiveUntil: null,
+      };
+    }
+    state.inventory.doubleXpActiveUntil = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString();
     this.saveGamificationState(state);
 
     return { success: true, message: '⚡ Dobro de XP por 7 Dias adquirido com sucesso!', state };

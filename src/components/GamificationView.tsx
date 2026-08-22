@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { GamificationService, LEAGUE_DIVISIONS, getCurrentISOWeekKey, calculateUserFinancialMetrics, checkDivisionQualification } from '../services/gamification';
 import { WeeklyGamificationState, LeagueDivision } from '../types';
+import { executeTransactionalGamification } from '../lib/appwriteSync';
 import { Flame, Trophy, Gem, ShieldCheck, Sparkles, CheckCircle, ChevronRight, Award, Zap, Calendar, ShoppingBag, ArrowUpRight, Lock, Info, Check, RotateCcw, Target, AlertTriangle } from 'lucide-react';
 
 interface GamificationViewProps {
@@ -73,36 +74,74 @@ export const GamificationView: React.FC<GamificationViewProps> = ({ userId }) =>
     }
   };
 
-  // 0ms Optimistic UI for Buying Streak Freeze with rollback
-  const handleBuyFreeze = () => {
+  // 0ms Optimistic UI for Buying Items (freeze | doubleXp) with automatic rollback
+  const handleBuyItem = async (itemType: 'freeze' | 'doubleXp', cost: number) => {
+    if (gameState.gems < cost) {
+      alert('Gemas insuficientes para esta compra.');
+      return;
+    }
+
     const backupState = JSON.parse(JSON.stringify(gameState));
+
+    // 1. ATUALIZAÇÃO OTIMISTA (0ms delay)
+    const newFreezes = itemType === 'freeze' ? (gameState.streakFreezeCount || 0) + 1 : gameState.streakFreezeCount || 0;
+    const newDoubleXp = itemType === 'doubleXp'
+      ? new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString()
+      : gameState.inventory?.doubleXpActiveUntil || null;
+
+    const updatedProfile = {
+      xp: gameState.xpTotal,
+      gems: gameState.gems - cost,
+      weeklyStreak: gameState.weeklyStreakCount,
+      inventory: {
+        freezes: newFreezes,
+        doubleXpActiveUntil: newDoubleXp,
+      },
+      claimedMissions: gameState.claimedMissions || [],
+    };
+
+    const optimisticState: WeeklyGamificationState = {
+      ...gameState,
+      gems: gameState.gems - cost,
+      streakFreezeCount: newFreezes,
+      inventory: updatedProfile.inventory,
+      updatedAt: new Date().toISOString(),
+    };
+
+    setGameState(optimisticState); // Atualiza saldo e botões na hora
+    GamificationService.saveGamificationState(optimisticState);
+
+    const successMessage =
+      itemType === 'freeze'
+        ? '🛡️ Congelamento de Ofensiva adquirido com sucesso!'
+        : '⚡ Dobro de XP ativado por 7 dias!';
+    setFeedbackMessage(successMessage);
+    setShowConfetti(true);
+    setTimeout(() => setShowConfetti(false), 3000);
+    setTimeout(() => setFeedbackMessage(null), 4000);
+
     try {
-      const result = GamificationService.buyStreakFreeze(userId);
-      setFeedbackMessage(result.message);
-      setGameState(result.state);
-      setTimeout(() => setFeedbackMessage(null), 4000);
-    } catch (err) {
-      console.error('[Optimistic Buy Freeze Error]', err);
+      // 2. Salva na nuvem em background via transação atômica
+      const res = await executeTransactionalGamification(userId, optimisticState, updatedProfile);
+      if (!res.success) {
+        throw new Error('Falha ao sincronizar compra no servidor.');
+      }
+    } catch (error) {
+      console.error('[Optimistic Buy Error]', error);
+      // 3. Rollback
       setGameState(backupState);
-      setFeedbackMessage('❌ Falha ao processar compra de Congelamento.');
-      setTimeout(() => setFeedbackMessage(null), 4000);
+      GamificationService.saveGamificationState(backupState);
+      alert('Erro ao processar a compra. Suas gemas foram devolvidas.');
     }
   };
 
-  // 0ms Optimistic UI for Buying Double XP with rollback
+  // Wrapper handlers for buttons
+  const handleBuyFreeze = () => {
+    handleBuyItem('freeze', 450);
+  };
+
   const handleBuyDoubleXP = () => {
-    const backupState = JSON.parse(JSON.stringify(gameState));
-    try {
-      const result = GamificationService.buyDoubleXP(userId);
-      setFeedbackMessage(result.message);
-      setGameState(result.state);
-      setTimeout(() => setFeedbackMessage(null), 4000);
-    } catch (err) {
-      console.error('[Optimistic Buy Double XP Error]', err);
-      setGameState(backupState);
-      setFeedbackMessage('❌ Falha ao processar compra de Dobro de XP.');
-      setTimeout(() => setFeedbackMessage(null), 4000);
-    }
+    handleBuyItem('doubleXp', 600);
   };
 
   // 0ms Optimistic UI for Profile Level selection with rollback
