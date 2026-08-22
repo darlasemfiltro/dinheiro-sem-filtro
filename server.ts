@@ -1689,6 +1689,165 @@ async function startServer() {
     }
   });
 
+  // POST /api/data/transactional-goal - Atomic Server Transaction for Goals (Cross-device latency and race-condition fix)
+  app.post('/api/data/transactional-goal', async (req, res) => {
+    try {
+      const { userId, action, goalId, goalData, addedAmount } = req.body || {};
+      if (!userId || !action) {
+        return res.status(400).json({ success: false, message: 'userId e action são obrigatórios.' });
+      }
+      const canonicalId = getCanonicalUserIdServer(userId);
+      const financials = loadServerFinancials();
+      const existing = financials[canonicalId] || { accounts: [], categories: [], familyMembers: [], transactions: [], goals: [], deletedIds: [] };
+      existing.goals = existing.goals || [];
+      existing.deletedIds = existing.deletedIds || [];
+
+      const deletedSet = new Set<string>(existing.deletedIds);
+
+      if (action === 'addGoal' || action === 'updateGoal') {
+        if (!goalData || !goalData.id) {
+          return res.status(400).json({ success: false, message: 'goalData com id é obrigatório.' });
+        }
+        const rawTarget = typeof goalData.targetAmount === 'string'
+          ? goalData.targetAmount.replace(/\s/g, '').replace(/\./g, '').replace(',', '.')
+          : String(goalData.targetAmount);
+        const parsedTarget = parseFloat(rawTarget) || 0;
+
+        const rawCurrent = typeof goalData.currentAmount === 'string'
+          ? goalData.currentAmount.replace(/\s/g, '').replace(/\./g, '').replace(',', '.')
+          : String(goalData.currentAmount || '0');
+        const parsedCurrent = parseFloat(rawCurrent) || 0;
+
+        const rawYield = goalData.yieldRate !== undefined && goalData.yieldRate !== null && goalData.yieldRate !== ''
+          ? (typeof goalData.yieldRate === 'string' ? parseFloat(goalData.yieldRate.replace(',', '.')) : Number(goalData.yieldRate))
+          : undefined;
+
+        const sanitizedGoal = {
+          ...goalData,
+          id: String(goalData.id),
+          userId: canonicalId,
+          title: String(goalData.title || '').trim(),
+          targetAmount: parsedTarget,
+          currentAmount: parsedCurrent,
+          targetDate: goalData.targetDate || goalData.deadline || '',
+          deadline: goalData.targetDate || goalData.deadline || '',
+          category: goalData.category || 'Viagem & Lazer',
+          color: goalData.color || '#D4AF37',
+          icon: goalData.icon || 'Target',
+          notes: goalData.notes || '',
+          yieldRate: isNaN(rawYield as number) ? undefined : rawYield,
+          yieldPeriod: goalData.yieldPeriod || 'monthly',
+          updatedAt: new Date().toISOString(),
+        };
+        delete sanitizedGoal._pendingSync;
+
+        // Remove from deletedIds if previously deleted
+        existing.deletedIds = existing.deletedIds.filter((id: string) => id !== sanitizedGoal.id);
+        deletedSet.delete(sanitizedGoal.id);
+
+        const gIdx = existing.goals.findIndex((g: any) => g.id === sanitizedGoal.id);
+        if (gIdx >= 0) {
+          existing.goals[gIdx] = { ...existing.goals[gIdx], ...sanitizedGoal };
+        } else {
+          existing.goals.push(sanitizedGoal);
+        }
+      } else if (action === 'deleteGoal') {
+        const idToDelete = goalId || (goalData && goalData.id);
+        if (!idToDelete) {
+          return res.status(400).json({ success: false, message: 'goalId é obrigatório para exclusão.' });
+        }
+        if (!existing.deletedIds.includes(idToDelete)) {
+          existing.deletedIds.push(idToDelete);
+        }
+        existing.goals = existing.goals.filter((g: any) => g.id !== idToDelete);
+      } else if (action === 'updateGoalProgress') {
+        const targetId = goalId || (goalData && goalData.id);
+        if (!targetId) {
+          return res.status(400).json({ success: false, message: 'goalId é obrigatório para progresso.' });
+        }
+        const gIdx = existing.goals.findIndex((g: any) => g.id === targetId);
+        if (gIdx >= 0) {
+          const added = typeof addedAmount === 'number'
+            ? addedAmount
+            : (parseFloat(String(addedAmount || 0).replace(',', '.')) || 0);
+          existing.goals[gIdx].currentAmount = Math.max(0, (existing.goals[gIdx].currentAmount || 0) + added);
+          existing.goals[gIdx].updatedAt = new Date().toISOString();
+        }
+      }
+
+      existing.updatedAt = new Date().toISOString();
+      financials[canonicalId] = existing;
+      saveServerFinancials(financials);
+
+      // Keep portfolio data in sync too
+      const portfolioData = loadServerPortfolio();
+      if (portfolioData[canonicalId]) {
+        portfolioData[canonicalId].goals = existing.goals;
+        portfolioData[canonicalId].deletedIds = existing.deletedIds;
+        portfolioData[canonicalId].updatedAt = existing.updatedAt;
+        saveServerPortfolio(portfolioData);
+      }
+
+      // Propagate directly to central Appwrite doc via server-side fetch
+      try {
+        const currentPortfolio = portfolioData[canonicalId] || { assets: [], transactions: [] };
+        const fullPayload = {
+          transactions: existing.transactions || [],
+          accounts: existing.accounts || [],
+          familyBudget: [...(existing.goals || []), ...(existing.familyMembers || [])],
+          investorPortfolio: currentPortfolio.assets || [],
+          investmentTransactions: currentPortfolio.transactions || [],
+          goals: existing.goals,
+          investorGoals: existing.goals,
+          updatedAt: existing.updatedAt,
+        };
+
+        fetch('https://sfo.cloud.appwrite.io/v1/databases/6a83aa8d0038331e040f/collections/user_financials/documents/6a849358002db9e638ce', {
+          method: 'PATCH',
+          headers: {
+            'Content-Type': 'application/json',
+            'X-Appwrite-Project': '6a83a2d30034f2dd2811',
+          },
+          body: JSON.stringify({
+            data: JSON.stringify(fullPayload),
+            userId: '6a83b38ed065c08efa49',
+          }),
+        }).catch(() => {});
+      } catch (cloudErr) {
+        console.warn('[Server Appwrite Sync Notice]', cloudErr);
+      }
+
+      // Broadcast WebSocket real-time event to all connected devices
+      broadcastRealtime('DATA_UPDATED', {
+        userId: canonicalId,
+        rawUserId: userId,
+        mutationType: 'GOALS',
+        action,
+        goalId: goalId || (goalData && goalData.id),
+        updatedAt: existing.updatedAt,
+        goals: existing.goals,
+      });
+
+      broadcastRealtime('PORTFOLIO_UPDATED', {
+        userId: canonicalId,
+        rawUserId: userId,
+        mutationType: 'GOALS',
+        action,
+        goalId: goalId || (goalData && goalData.id),
+        updatedAt: existing.updatedAt,
+      });
+
+      return res.json({
+        success: true,
+        goals: existing.goals,
+        updatedAt: existing.updatedAt,
+      });
+    } catch (err) {
+      console.error('[API Transactional Goal Error]', err);
+      return res.status(500).json({ success: false, message: 'Erro ao processar transação de meta no servidor.' });
+    }
+  });
+
   // POST /api/data/reset
   app.post('/api/data/reset', (req, res) => {
     try {

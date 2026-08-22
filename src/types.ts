@@ -320,8 +320,13 @@ export interface PortfolioGoal {
   targetAmount: number;
   currentAmount: number;
   targetDate: string; // YYYY-MM-DD
-  startDate: string;
+  startDate?: string;
   category?: string;
+  color?: string;
+  icon?: string;
+  notes?: string;
+  yieldRate?: number;
+  yieldPeriod?: 'monthly' | 'yearly';
   updatedAt?: string;
   _pendingSync?: boolean;
   _synced?: boolean;

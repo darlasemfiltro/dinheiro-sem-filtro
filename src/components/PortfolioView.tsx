@@ -2,7 +2,7 @@ import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { StorageService } from '../services/storage';
 import { usePrivacyMode } from '../utils/finance';
 import { appwriteDatabases as databases, appwriteClient as client } from '../lib/appwrite';
-import { saveAppData } from '../lib/appwriteSync';
+import { saveAppData, executeTransactionalGoal, mergeRemoteGoalsWithOptimistic, recordGoalDeletion } from '../lib/appwriteSync';
 import { CustomAlertModal } from './CustomAlertModal';
 import {
   WalletCards,
@@ -726,11 +726,12 @@ export const PortfolioView: React.FC<PortfolioViewProps> = ({
           try {
             const raw = response.payload.data;
             const remoteData = typeof raw === 'string' ? JSON.parse(raw) : raw;
-            const remoteGoals = remoteData.investorGoals || remoteData.goals;
-            if (Array.isArray(remoteGoals)) {
-              setGoals(remoteGoals);
-              StorageService.setGoals(remoteGoals as any);
-              PortfolioStorageService.saveGoals(remoteGoals, userId);
+            const rawGoals = remoteData.investorGoals || remoteData.goals;
+            if (Array.isArray(rawGoals)) {
+              const mergedGoals = mergeRemoteGoalsWithOptimistic(rawGoals);
+              setGoals(mergedGoals);
+              StorageService.setGoals(mergedGoals as any);
+              PortfolioStorageService.saveGoals(mergedGoals, userId);
             }
             if (Array.isArray(remoteData.investmentTransactions)) {
               setTransactions(remoteData.investmentTransactions);
@@ -1759,7 +1760,6 @@ export const PortfolioView: React.FC<PortfolioViewProps> = ({
         currentAmount: parsedCurrentAmount,
         startDate: goalForm.startDate || new Date().toISOString().split('T')[0],
         targetDate: goalForm.targetDate || '',
-        deadline: goalForm.targetDate || '',
         category: goalForm.category || 'Patrimônio Total',
         color: '#D4AF37',
         icon: 'Target',
@@ -1785,54 +1785,15 @@ export const PortfolioView: React.FC<PortfolioViewProps> = ({
       // Instant React state update
       setGoals(updatedGoals);
 
-      // Prepare global full payload and send IMMEDIATELY to Appwrite databases.updateDocument
-      const currentTxs = StorageService.getTransactions(userId);
-      const currentAccs = StorageService.getAccounts(userId);
-      const currentFamily = StorageService.getFamilyMembers(userId);
-      const sharedBudgets = StorageService.deduplicateSharedBudgets();
-      const assets = PortfolioStorageService.getAssets(userId);
-      const invTxs = investmentTransactions !== undefined ? investmentTransactions : PortfolioStorageService.getTransactions(userId);
-
-      const fullPayload = {
-        transactions: currentTxs,
-        accounts: currentAccs,
-        familyBudget: [...updatedGoals, ...currentFamily, ...sharedBudgets],
-        investorPortfolio: assets,
-        investmentTransactions: invTxs,
-        goals: updatedGoals,
-        investorGoals: updatedGoals,
-        updatedAt: new Date().toISOString(),
-      };
-
-      // Direct write to Appwrite central doc
-      try {
-        await databases.updateDocument(
-          '6a83aa8d0038331e040f',
-          'user_financials',
-          '6a849358002db9e638ce',
-          {
-            userId: '6a83b38ed065c08efa49',
-            data: JSON.stringify(fullPayload),
-          }
-        );
-        console.log('[Appwrite Sync] Metas do investidor gravadas diretamente no Appwrite!');
-      } catch (appwriteErr: any) {
-        if (appwriteErr?.code === 404 || appwriteErr?.message?.includes('not found')) {
-          try {
-            await databases.createDocument(
-              '6a83aa8d0038331e040f',
-              'user_financials',
-              '6a849358002db9e638ce',
-              {
-                userId: '6a83b38ed065c08efa49',
-                data: JSON.stringify(fullPayload),
-              }
-            );
-          } catch {}
-        } else {
-          console.warn('[Appwrite Direct Update Warning]', appwriteErr);
+      // Execute atomic server transaction and direct Appwrite write
+      await executeTransactionalGoal(
+        userId,
+        editingGoal ? 'updateGoal' : 'addGoal',
+        {
+          goalData,
+          goalId: goalData.id,
         }
-      }
+      );
 
       // Sync with server mutation & Firestore
       await StorageService.syncUserMutationToServer(userId);
@@ -1866,45 +1827,22 @@ export const PortfolioView: React.FC<PortfolioViewProps> = ({
       const idToDelete = deletingGoalId;
       setDeletingGoalId(null);
       
+      // Guard against race-condition resurrection
+      recordGoalDeletion(idToDelete);
+
       const currentList = StorageService.getGoals(userId);
       const updatedGoals = currentList.filter((g: any) => g.id !== idToDelete);
       
       StorageService.deleteGoal(idToDelete);
       PortfolioStorageService.deleteGoal(idToDelete, userId);
       StorageService.setGoals(updatedGoals as any);
-      PortfolioStorageService.saveGoals(updatedGoals, userId);
-      setGoals(updatedGoals);
+      PortfolioStorageService.saveGoals(updatedGoals as any, userId);
+      setGoals(updatedGoals as any);
 
-      // Direct Appwrite update
-      const currentTxs = StorageService.getTransactions(userId);
-      const currentAccs = StorageService.getAccounts(userId);
-      const currentFamily = StorageService.getFamilyMembers(userId);
-      const sharedBudgets = StorageService.deduplicateSharedBudgets();
-      const assets = PortfolioStorageService.getAssets(userId);
-      const invTxs = investmentTransactions !== undefined ? investmentTransactions : PortfolioStorageService.getTransactions(userId);
-
-      const fullPayload = {
-        transactions: currentTxs,
-        accounts: currentAccs,
-        familyBudget: [...updatedGoals, ...currentFamily, ...sharedBudgets],
-        investorPortfolio: assets,
-        investmentTransactions: invTxs,
-        goals: updatedGoals,
-        investorGoals: updatedGoals,
-        updatedAt: new Date().toISOString(),
-      };
-
-      try {
-        await databases.updateDocument(
-          '6a83aa8d0038331e040f',
-          'user_financials',
-          '6a849358002db9e638ce',
-          {
-            userId: '6a83b38ed065c08efa49',
-            data: JSON.stringify(fullPayload),
-          }
-        );
-      } catch (e) {}
+      // Execute atomic server transaction and direct Appwrite deletion
+      await executeTransactionalGoal(userId, 'deleteGoal', {
+        goalId: idToDelete,
+      });
 
       await StorageService.syncUserMutationToServer(userId);
       await onDataChanged?.();

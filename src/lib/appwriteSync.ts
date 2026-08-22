@@ -281,6 +281,219 @@ export async function persistCurrentStateToAppwrite(state: any): Promise<boolean
   return await saveAppData(state);
 }
 
+// --- TRANSACTIONAL GOALS MANAGER (CROSS-DEVICE ATOMICITY & RACE CONDITION FIX) ---
+
+const DELETION_TTL_MS = 30000; // 30 seconds retention to prevent websocket race rollback
+const recentDeletedGoalIds = new Map<string, number>();
+const pendingGoalMutations = new Map<
+  string,
+  {
+    action: string;
+    goalData?: any;
+    addedAmount?: number;
+    timestamp: number;
+  }
+>();
+
+export function recordGoalDeletion(goalId: string): void {
+  if (!goalId) return;
+  recentDeletedGoalIds.set(goalId, Date.now());
+  pendingGoalMutations.delete(goalId);
+}
+
+export function isGoalRecentlyDeleted(goalId: string): boolean {
+  if (!goalId) return false;
+  const deletedAt = recentDeletedGoalIds.get(goalId);
+  if (!deletedAt) return false;
+  if (Date.now() - deletedAt > DELETION_TTL_MS) {
+    recentDeletedGoalIds.delete(goalId);
+    return false;
+  }
+  return true;
+}
+
+export function getRecentDeletedGoalIds(): Set<string> {
+  const now = Date.now();
+  const valid = new Set<string>();
+  recentDeletedGoalIds.forEach((time, id) => {
+    if (now - time <= DELETION_TTL_MS) {
+      valid.add(id);
+    } else {
+      recentDeletedGoalIds.delete(id);
+    }
+  });
+  return valid;
+}
+
+export function recordPendingGoalMutation(id: string, action: string, goalData?: any, addedAmount?: number): void {
+  if (!id) return;
+  pendingGoalMutations.set(id, {
+    action,
+    goalData,
+    addedAmount,
+    timestamp: Date.now(),
+  });
+}
+
+export function clearPendingGoalMutation(id: string): void {
+  pendingGoalMutations.delete(id);
+}
+
+/**
+ * Non-destructive merge of remote goals with local in-flight mutations & deletion guards
+ */
+export function mergeRemoteGoalsWithOptimistic(remoteGoals: any[]): any[] {
+  const deletedSet = getRecentDeletedGoalIds();
+  const map = new Map<string, any>();
+
+  // 1. Add remote items if not recently deleted locally
+  if (Array.isArray(remoteGoals)) {
+    remoteGoals.forEach((rg: any) => {
+      if (rg && rg.id && !deletedSet.has(rg.id)) {
+        map.set(rg.id, rg);
+      }
+    });
+  }
+
+  // 2. Overlay any optimistic local modifications that are newer
+  const now = Date.now();
+  pendingGoalMutations.forEach((pending, gId) => {
+    if (deletedSet.has(gId)) {
+      map.delete(gId);
+      return;
+    }
+
+    if (now - pending.timestamp > 45000) {
+      pendingGoalMutations.delete(gId);
+      return;
+    }
+
+    if (pending.action === 'addGoal' || pending.action === 'updateGoal') {
+      const existing = map.get(gId);
+      if (!existing) {
+        map.set(gId, pending.goalData);
+      } else {
+        const remoteTime = existing.updatedAt ? new Date(existing.updatedAt).getTime() : 0;
+        if (pending.timestamp >= remoteTime) {
+          map.set(gId, { ...existing, ...pending.goalData });
+        }
+      }
+    } else if (pending.action === 'updateGoalProgress') {
+      const existing = map.get(gId);
+      if (existing) {
+        map.set(gId, {
+          ...existing,
+          currentAmount: Math.max(0, (existing.currentAmount || 0) + (pending.addedAmount || 0)),
+        });
+      }
+    } else if (pending.action === 'deleteGoal') {
+      map.delete(gId);
+    }
+  });
+
+  return Array.from(map.values());
+}
+
+/**
+ * Executes an atomic server transaction for goal operations and updates Appwrite directly
+ */
+export async function executeTransactionalGoal(
+  userId: string,
+  action: 'addGoal' | 'updateGoal' | 'deleteGoal' | 'updateGoalProgress',
+  payload: { goalData?: any; goalId?: string; addedAmount?: number }
+): Promise<{ success: boolean; goals: any[] }> {
+  const targetId = payload.goalId || payload.goalData?.id;
+
+  if (action === 'deleteGoal' && targetId) {
+    recordGoalDeletion(targetId);
+  } else if (targetId) {
+    recordPendingGoalMutation(targetId, action, payload.goalData, payload.addedAmount);
+  }
+
+  try {
+    // Call backend server transactional endpoint
+    const response = await fetch('/api/data/transactional-goal', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        userId,
+        action,
+        goalId: targetId,
+        goalData: payload.goalData,
+        addedAmount: payload.addedAmount,
+      }),
+    });
+
+    if (response.ok) {
+      const resData = await response.json();
+      if (resData && resData.success && Array.isArray(resData.goals)) {
+        if (targetId && action !== 'deleteGoal') {
+          clearPendingGoalMutation(targetId);
+        }
+        return { success: true, goals: resData.goals };
+      }
+    }
+  } catch (err) {
+    console.warn('[Transactional Goal Server Notice] Server unreachable, executing direct Appwrite transaction:', err);
+  }
+
+  // Fallback: Direct Appwrite document transaction
+  try {
+    const cloudDoc = await loadFromCloud();
+    const existingGoals = Array.isArray(cloudDoc?.investorGoals)
+      ? cloudDoc.investorGoals
+      : (Array.isArray(cloudDoc?.goals) ? cloudDoc.goals : []);
+
+    let updatedGoals = [...existingGoals];
+
+    if (action === 'addGoal' || action === 'updateGoal') {
+      const g = payload.goalData;
+      const idx = updatedGoals.findIndex((item: any) => item.id === g.id);
+      if (idx >= 0) {
+        updatedGoals[idx] = { ...updatedGoals[idx], ...g, updatedAt: new Date().toISOString() };
+      } else {
+        updatedGoals.push({ ...g, updatedAt: new Date().toISOString() });
+      }
+    } else if (action === 'deleteGoal') {
+      updatedGoals = updatedGoals.filter((item: any) => item.id !== targetId);
+    } else if (action === 'updateGoalProgress') {
+      const idx = updatedGoals.findIndex((item: any) => item.id === targetId);
+      if (idx >= 0) {
+        const added = payload.addedAmount || 0;
+        updatedGoals[idx] = {
+          ...updatedGoals[idx],
+          currentAmount: Math.max(0, (updatedGoals[idx].currentAmount || 0) + added),
+          updatedAt: new Date().toISOString(),
+        };
+      }
+    }
+
+    const mergedGoals = mergeRemoteGoalsWithOptimistic(updatedGoals);
+
+    const fullPayload = {
+      ...(cloudDoc || {}),
+      goals: mergedGoals,
+      investorGoals: mergedGoals,
+      familyBudget: [
+        ...mergedGoals,
+        ...(Array.isArray(cloudDoc?.familyBudget)
+          ? cloudDoc.familyBudget.filter((f: any) => f.relationship !== undefined || (f.name && f.color && !f.targetAmount))
+          : []),
+      ],
+      updatedAt: new Date().toISOString(),
+    };
+
+    await saveAppData(fullPayload);
+    if (targetId && action !== 'deleteGoal') {
+      clearPendingGoalMutation(targetId);
+    }
+    return { success: true, goals: mergedGoals };
+  } catch (appwriteErr) {
+    console.error('[Direct Appwrite Transaction Error]', appwriteErr);
+    return { success: false, goals: [] };
+  }
+}
+
 /**
  * Syncs user portfolio data to Cloud Appwrite
  */

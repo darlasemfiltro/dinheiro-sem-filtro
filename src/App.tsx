@@ -5,7 +5,7 @@ import { PortfolioStorageService } from './services/portfolioStorage';
 import { realtimeSync } from './services/websocket';
 import { auth, onAuthStateChanged, firebaseSignOut, subscribeToUserFirestoreChanges } from './lib/firebase';
 import { subscribeToAppwriteRealtime, getAppwriteUser, appwriteSignOut, appwriteDatabases as databases, appwriteClient as client } from './lib/appwrite';
-import { saveAppData, persistCurrentStateToAppwrite, loadFromCloud } from './lib/appwriteSync';
+import { saveAppData, persistCurrentStateToAppwrite, loadFromCloud, executeTransactionalGoal, mergeRemoteGoalsWithOptimistic, recordGoalDeletion } from './lib/appwriteSync';
 import { calculateMonthSummary, calculateAccountBalances, usePrivacyMode } from './utils/finance';
 import { CustomAlertModal } from './components/CustomAlertModal';
 import { AuthScreen } from './components/AuthScreen';
@@ -204,19 +204,23 @@ export default function App() {
               setBudgets(remote.budgets);
             }
 
-            const remoteGoals = remote.investorGoals || remote.goals;
-            if (Array.isArray(remoteGoals) && remoteGoals.length > 0) {
-              setGoals(remoteGoals);
-              StorageService.setGoals(remoteGoals as any);
-              PortfolioStorageService.saveGoals(remoteGoals, bId);
-            } else if (remote.familyBudget) {
-              const goalsList = remote.familyBudget.filter((item: any) => item.targetAmount !== undefined || item.targetDate !== undefined);
+            const rawRemoteGoals = remote.investorGoals || remote.goals;
+            let rawGoalsToMerge: any[] = [];
+            if (Array.isArray(rawRemoteGoals) && rawRemoteGoals.length > 0) {
+              rawGoalsToMerge = rawRemoteGoals;
+            } else if (Array.isArray(remote.familyBudget)) {
+              rawGoalsToMerge = remote.familyBudget.filter((item: any) => item.targetAmount !== undefined || item.targetDate !== undefined);
+            }
+
+            if (rawGoalsToMerge.length > 0 || (Array.isArray(rawRemoteGoals) && rawRemoteGoals.length === 0)) {
+              const mergedGoals = mergeRemoteGoalsWithOptimistic(rawGoalsToMerge);
+              setGoals(mergedGoals);
+              StorageService.setGoals(mergedGoals as any);
+              PortfolioStorageService.saveGoals(mergedGoals, bId);
+            }
+
+            if (Array.isArray(remote.familyBudget)) {
               const familyList = remote.familyBudget.filter((item: any) => item.relationship !== undefined || (item.name && item.color && !item.targetAmount));
-              if (goalsList.length > 0) {
-                setGoals(goalsList);
-                StorageService.setGoals(goalsList as any);
-                PortfolioStorageService.saveGoals(goalsList, bId);
-              }
               if (familyList.length > 0) {
                 setFamilyMembers(familyList);
               }
@@ -599,9 +603,10 @@ export default function App() {
         const incomingGoals = remoteData.investorGoals || remoteData.goals;
         if (incomingGoals && Array.isArray(incomingGoals)) {
           const budgetId = StorageService.getEffectiveBudgetId(currentUser);
-          setGoals(incomingGoals);
-          StorageService.setGoals(incomingGoals as any);
-          PortfolioStorageService.saveGoals(incomingGoals, budgetId);
+          const mergedGoals = mergeRemoteGoalsWithOptimistic(incomingGoals);
+          setGoals(mergedGoals);
+          StorageService.setGoals(mergedGoals as any);
+          PortfolioStorageService.saveGoals(mergedGoals, budgetId);
         }
       }
       refreshData(currentUser, false);
@@ -1069,36 +1074,58 @@ export default function App() {
     refreshData(currentUser, false);
   };
 
-  // Goal Handlers
+  // Goal Handlers (Atomic Transactions + Zero Latency)
   const handleSaveGoal = async (goal: Goal) => {
     const budgetId = currentUser ? StorageService.getEffectiveBudgetId(currentUser) : 'default';
+    
+    // 1. Instant local optimistic update
     StorageService.saveGoal(goal);
     PortfolioStorageService.addGoal(goal as any, budgetId);
     const freshGoals = StorageService.getGoals(budgetId);
     setGoals(freshGoals);
-    await saveAppData(buildAppFinancialState(undefined, undefined, freshGoals));
-    await StorageService.syncUserMutationToServer(budgetId);
+
+    // 2. Atomic server transaction & Appwrite direct propagation
+    const isEditing = goals.some((g) => g.id === goal.id);
+    await executeTransactionalGoal(budgetId, isEditing ? 'updateGoal' : 'addGoal', {
+      goalData: goal,
+      goalId: goal.id,
+    });
+
     refreshData(currentUser, false);
   };
 
   const handleUpdateGoalProgress = async (goalId: string, addedAmount: number) => {
     const budgetId = currentUser ? StorageService.getEffectiveBudgetId(currentUser) : 'default';
+    
+    // 1. Instant local optimistic update
     StorageService.updateGoalProgress(goalId, addedAmount);
     const freshGoals = StorageService.getGoals(budgetId);
     setGoals(freshGoals);
-    await saveAppData(buildAppFinancialState(undefined, undefined, freshGoals));
-    await StorageService.syncUserMutationToServer(budgetId);
+
+    // 2. Atomic server transaction & Appwrite direct propagation
+    await executeTransactionalGoal(budgetId, 'updateGoalProgress', {
+      goalId,
+      addedAmount,
+    });
+
     refreshData(currentUser, false);
   };
 
   const handleDeleteGoal = async (id: string) => {
     const budgetId = currentUser ? StorageService.getEffectiveBudgetId(currentUser) : 'default';
+    
+    // 1. Instant local optimistic update & deletion guard
+    recordGoalDeletion(id);
     StorageService.deleteGoal(id);
     PortfolioStorageService.deleteGoal(id, budgetId);
-    const freshGoals = StorageService.getGoals(budgetId);
+    const freshGoals = StorageService.getGoals(budgetId).filter((g) => g.id !== id);
     setGoals(freshGoals);
-    await saveAppData(buildAppFinancialState(undefined, undefined, freshGoals));
-    await StorageService.syncUserMutationToServer(budgetId);
+
+    // 2. Atomic server transaction & Appwrite direct propagation
+    await executeTransactionalGoal(budgetId, 'deleteGoal', {
+      goalId: id,
+    });
+
     refreshData(currentUser, false);
   };
 
