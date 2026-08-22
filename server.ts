@@ -552,6 +552,7 @@ function loadServerFinancials(): Record<string, {
   goals: any[];
   investmentTransactions?: any[];
   targetAllocations?: any[];
+  budgetGoals?: { essentials: number; lifestyle: number; investment: number };
   deletedIds?: string[];
   updatedAt?: string;
 }> {
@@ -1569,6 +1570,7 @@ async function startServer() {
           familyMembers: (safeEntry.familyMembers || []).map((f: any) => ({ ...f, userId: rawUserId })),
           transactions: (safeEntry.transactions || []).map((t: any) => ({ ...t, userId: rawUserId })),
           goals: (safeEntry.goals || []).map((g: any) => ({ ...g, userId: rawUserId })),
+          budgetGoals: safeEntry.budgetGoals || { essentials: 50, lifestyle: 30, investment: 20 },
           deletedIds: safeEntry.deletedIds || [],
         },
       });
@@ -1581,7 +1583,7 @@ async function startServer() {
   // POST /api/data/sync
   app.post('/api/data/sync', (req, res) => {
     try {
-      const { userId, accounts, categories, familyMembers, transactions, goals, deletedIds } = req.body || {};
+      const { userId, accounts, categories, familyMembers, transactions, goals, budgetGoals, deletedIds } = req.body || {};
       if (!userId) {
         return res.status(400).json({ success: false, message: 'userId é obrigatório.' });
       }
@@ -1641,12 +1643,13 @@ async function startServer() {
         return Array.from(map.values());
       };
 
-      const syncedData = {
+      const syncedData: any = {
         accounts: mergeRecords(existing.accounts, accounts),
         categories: mergeRecords(existing.categories, categories),
         familyMembers: mergeRecords(existing.familyMembers, familyMembers),
         transactions: mergeRecords(existing.transactions, transactions),
         goals: mergeRecords(existing.goals, goals),
+        budgetGoals: budgetGoals || existing.budgetGoals || { essentials: 50, lifestyle: 30, investment: 20 },
         deletedIds: Array.from(deletedSet),
         updatedAt: new Date().toISOString(),
       };
@@ -2587,6 +2590,97 @@ async function startServer() {
     } catch (err) {
       console.error('[API Transactional Allocations Error]', err);
       return res.status(500).json({ success: false, message: 'Erro ao processar alocações no servidor.' });
+    }
+  });
+
+  // POST /api/financials/transactional-budget-goals - Atomic Server Transaction for Budget Goals (50/30/20 Strategy)
+  app.post('/api/financials/transactional-budget-goals', async (req, res) => {
+    try {
+      const { userId, budgetGoals } = req.body || {};
+      if (!userId || !budgetGoals || typeof budgetGoals !== 'object') {
+        return res.status(400).json({ success: false, message: 'userId e budgetGoals são obrigatórios.' });
+      }
+
+      const canonicalId = getCanonicalUserIdServer(userId);
+      const financials = loadServerFinancials();
+      const existing = financials[canonicalId] || {
+        accounts: [],
+        categories: [],
+        familyMembers: [],
+        transactions: [],
+        goals: [],
+        deletedIds: [],
+      };
+
+      existing.budgetGoals = {
+        essentials: Number(budgetGoals.essentials) || 50,
+        lifestyle: Number(budgetGoals.lifestyle) || 30,
+        investment: Number(budgetGoals.investment) || 20,
+      };
+      existing.updatedAt = new Date().toISOString();
+      financials[canonicalId] = existing;
+      saveServerFinancials(financials);
+
+      // Propagate directly to Appwrite central document 6a849358002db9e638ce
+      try {
+        const portfolio = loadServerPortfolio();
+        const userPort = portfolio[canonicalId] || { assets: [], transactions: [], targetAllocations: [] };
+        const fullPayload = {
+          transactions: existing.transactions || [],
+          accounts: existing.accounts || [],
+          familyBudget: [...(existing.goals || []), ...(existing.familyMembers || [])],
+          investorPortfolio: userPort.assets || [],
+          investmentTransactions: userPort.transactions || [],
+          targetAllocations: userPort.targetAllocations || [],
+          budgetGoals: existing.budgetGoals,
+          goals: existing.goals || [],
+          investorGoals: existing.goals || [],
+          categories: existing.categories || [],
+          familyMembers: existing.familyMembers || [],
+          members: existing.familyMembers || [],
+          updatedAt: existing.updatedAt,
+        };
+
+        fetch('https://sfo.cloud.appwrite.io/v1/databases/6a83aa8d0038331e040f/collections/user_financials/documents/6a849358002db9e638ce', {
+          method: 'PATCH',
+          headers: {
+            'Content-Type': 'application/json',
+            'X-Appwrite-Project': '6a83a2d30034f2dd2811',
+          },
+          body: JSON.stringify({
+            data: JSON.stringify(fullPayload),
+            userId: '6a83b38ed065c08efa49',
+          }),
+        }).catch(() => {});
+      } catch (cloudErr) {
+        console.warn('[Server Appwrite Sync Notice for Budget Goals]', cloudErr);
+      }
+
+      // Broadcast WebSocket real-time event to all connected devices
+      broadcastRealtime('BUDGET_GOALS_UPDATED', {
+        userId: canonicalId,
+        rawUserId: userId,
+        mutationType: 'BUDGET_GOALS',
+        budgetGoals: existing.budgetGoals,
+        updatedAt: existing.updatedAt,
+      });
+
+      broadcastRealtime('DATA_UPDATED', {
+        userId: canonicalId,
+        rawUserId: userId,
+        mutationType: 'BUDGET_GOALS',
+        budgetGoals: existing.budgetGoals,
+        updatedAt: existing.updatedAt,
+      });
+
+      return res.json({
+        success: true,
+        budgetGoals: existing.budgetGoals,
+        updatedAt: existing.updatedAt,
+      });
+    } catch (err) {
+      console.error('[API Transactional Budget Goals Error]', err);
+      return res.status(500).json({ success: false, message: 'Erro ao processar metas de orçamento no servidor.' });
     }
   });
 

@@ -398,6 +398,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
         familyMembers={familyMembers}
         currentYear={currentYear}
         currentMonth={currentMonth}
+        userId={user?.id || user?.email}
         onEditTransaction={onEditTransaction}
         onUpdateSingleTransaction={onUpdateSingleTransaction}
       />

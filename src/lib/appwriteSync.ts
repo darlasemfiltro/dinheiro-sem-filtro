@@ -244,6 +244,7 @@ export async function saveAppData(updatedData: any): Promise<boolean> {
       investorPortfolio: updatedData.investorPortfolio || [],
       investmentTransactions: updatedData.investmentTransactions || [],
       targetAllocations: updatedData.targetAllocations || [],
+      budgetGoals: updatedData.budgetGoals || updatedData.budgetStrategy || { essentials: 50, lifestyle: 30, investment: 20 },
       goals: updatedData.goals || [],
       investorGoals: updatedData.investorGoals || updatedData.goals || [],
       updatedAt: new Date().toISOString()
@@ -1257,6 +1258,114 @@ export async function executeTransactionalTargetAllocations(
     return { success: false };
   } catch (err) {
     console.error('[Direct Allocations Sync Error]', err);
+    return { success: false };
+  }
+}
+
+// --- TRANSACTIONAL BUDGET GOALS (50/30/20 STRATEGY) ---
+
+let pendingBudgetGoals: { goals: { essentials: number; lifestyle: number; investment: number }; timestamp: number } | null = null;
+
+export function recordPendingBudgetGoals(goals: { essentials: number; lifestyle: number; investment: number }): void {
+  pendingBudgetGoals = {
+    goals: {
+      essentials: Number(goals.essentials) || 50,
+      lifestyle: Number(goals.lifestyle) || 30,
+      investment: Number(goals.investment) || 20,
+    },
+    timestamp: Date.now(),
+  };
+}
+
+export function clearPendingBudgetGoals(): void {
+  pendingBudgetGoals = null;
+}
+
+export function mergeRemoteBudgetGoalsWithOptimistic(
+  remoteGoals: { essentials?: number; lifestyle?: number; investment?: number } | null | undefined
+): { essentials: number; lifestyle: number; investment: number } {
+  if (pendingBudgetGoals) {
+    const age = Date.now() - pendingBudgetGoals.timestamp;
+    if (age < 15000) {
+      return pendingBudgetGoals.goals;
+    }
+    pendingBudgetGoals = null;
+  }
+
+  if (
+    remoteGoals &&
+    typeof remoteGoals.essentials === 'number' &&
+    typeof remoteGoals.lifestyle === 'number' &&
+    typeof remoteGoals.investment === 'number'
+  ) {
+    return {
+      essentials: remoteGoals.essentials,
+      lifestyle: remoteGoals.lifestyle,
+      investment: remoteGoals.investment,
+    };
+  }
+
+  return { essentials: 50, lifestyle: 30, investment: 20 };
+}
+
+/**
+ * Atomic Server & Cloud Transaction for Budget Goals (50/30/20 Strategy)
+ */
+export async function executeTransactionalBudgetGoals(
+  userId: string,
+  budgetGoals: { essentials: number; lifestyle: number; investment: number }
+): Promise<{ success: boolean; budgetGoals?: { essentials: number; lifestyle: number; investment: number } }> {
+  const sanitized = {
+    essentials: Number(budgetGoals.essentials) || 50,
+    lifestyle: Number(budgetGoals.lifestyle) || 30,
+    investment: Number(budgetGoals.investment) || 20,
+  };
+
+  recordPendingBudgetGoals(sanitized);
+
+  // Primary: Server atomic transactional endpoint
+  try {
+    const response = await fetch('/api/financials/transactional-budget-goals', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        userId,
+        budgetGoals: sanitized,
+      }),
+    });
+
+    if (response.ok) {
+      const resData = await response.json();
+      if (resData && resData.success) {
+        clearPendingBudgetGoals();
+        return {
+          success: true,
+          budgetGoals: resData.budgetGoals || sanitized,
+        };
+      }
+    }
+  } catch (err) {
+    console.warn('[Transactional Budget Goals Server Notice] Server unreachable, using direct cloud sync:', err);
+  }
+
+  // Fallback: Direct Appwrite document update (Document ID: '6a849358002db9e638ce')
+  try {
+    const cloudDoc = await loadFromCloud();
+    const fullPayload = {
+      ...(cloudDoc || {}),
+      budgetGoals: sanitized,
+      budgetStrategy: sanitized,
+      updatedAt: new Date().toISOString(),
+    };
+
+    const saved = await saveAppData(fullPayload);
+    if (saved) {
+      clearPendingBudgetGoals();
+      return { success: true, budgetGoals: sanitized };
+    }
+    return { success: false };
+  } catch (err) {
+    console.error('[Direct Budget Goals Sync Error]', err);
     return { success: false };
   }
 }

@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import {
   Target,
   Edit3,
@@ -24,6 +24,8 @@ import {
 } from 'lucide-react';
 import { Transaction, Category, RuleGroup, FamilyMember } from '../types';
 import { formatCurrency, formatDateBR, findSubcategoryById } from '../utils/finance';
+import { StorageService } from '../services/storage';
+import { executeTransactionalBudgetGoals, mergeRemoteBudgetGoalsWithOptimistic } from '../lib/appwriteSync';
 
 const formatPct = (val: number, decimals = 1): string => {
   return (val || 0).toFixed(decimals).replace('.', ',');
@@ -37,6 +39,7 @@ interface FiftyThirtyTwentyWidgetProps {
   familyMembers?: FamilyMember[];
   currentYear: number;
   currentMonth: number;
+  userId?: string;
   onEditTransaction?: (transaction: Transaction) => void;
   onUpdateSingleTransaction?: (transaction: Transaction) => void;
 }
@@ -47,9 +50,12 @@ export const FiftyThirtyTwentyWidget: React.FC<FiftyThirtyTwentyWidgetProps> = (
   familyMembers = [],
   currentYear,
   currentMonth,
+  userId,
   onEditTransaction,
   onUpdateSingleTransaction,
 }) => {
+  const effectiveUserId = userId || StorageService.getCurrentUser()?.id || 'default';
+
   // Period filter state
   const [period, setPeriod] = useState<PerformancePeriod>('monthly');
 
@@ -95,15 +101,37 @@ export const FiftyThirtyTwentyWidget: React.FC<FiftyThirtyTwentyWidgetProps> = (
   const [startText, setStartText] = useState<string>(() => formatDateBRInput(firstOfMonthStr));
   const [endText, setEndText] = useState<string>(() => formatDateBRInput(todayStr));
 
-  // Target percentages state (50%, 30%, 20% default)
-  const [targets, setTargets] = useState<{ essentials: number; lifestyle: number; investment: number }>({
-    essentials: 50,
-    lifestyle: 30,
-    investment: 20,
+  // Target percentages state (50%, 30%, 20% default or loaded from StorageService)
+  const [targets, setTargets] = useState<{ essentials: number; lifestyle: number; investment: number }>(() => {
+    return StorageService.getBudgetGoals(effectiveUserId);
   });
 
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [tempTargets, setTempTargets] = useState({ ...targets });
+
+  // Sync state with StorageService and real-time remote updates
+  useEffect(() => {
+    const loaded = StorageService.getBudgetGoals(effectiveUserId);
+    setTargets(loaded);
+    setTempTargets(loaded);
+
+    const handleSync = (e?: any) => {
+      const remote = e?.detail?.budgetGoals || StorageService.getBudgetGoals(effectiveUserId);
+      const merged = mergeRemoteBudgetGoalsWithOptimistic(remote);
+      setTargets(merged);
+      StorageService.saveBudgetGoals(merged, effectiveUserId);
+    };
+
+    window.addEventListener('budget_goals_updated', handleSync);
+    window.addEventListener('remote_data_updated', handleSync);
+    window.addEventListener('financial_data_mutated', handleSync);
+
+    return () => {
+      window.removeEventListener('budget_goals_updated', handleSync);
+      window.removeEventListener('remote_data_updated', handleSync);
+      window.removeEventListener('financial_data_mutated', handleSync);
+    };
+  }, [effectiveUserId]);
 
   // Family breakdown view options
   const [breakdownViewMode, setBreakdownViewMode] = useState<'by_category' | 'by_member'>('by_category');
@@ -552,9 +580,37 @@ export const FiftyThirtyTwentyWidget: React.FC<FiftyThirtyTwentyWidgetProps> = (
     }
   };
 
-  const handleSaveTargets = () => {
-    setTargets({ ...tempTargets });
+  const handleSaveBudgetGoals = async (newGoals: { essentials: number; lifestyle: number; investment: number }) => {
+    // 1. Backup do estado atual para caso de falha (Rollback)
+    const previousGoals = { ...targets };
+
+    // 2. ATUALIZAÇÃO OTIMISTA (0ms delay): Atualiza a tela imediatamente
+    const sanitizedGoals = {
+      essentials: Number(newGoals.essentials) || 50,
+      lifestyle: Number(newGoals.lifestyle) || 30,
+      investment: Number(newGoals.investment) || 20,
+    };
+    setTargets(sanitizedGoals);
+    StorageService.saveBudgetGoals(sanitizedGoals, effectiveUserId);
     setIsEditModalOpen(false);
+
+    // 3. Monta o payload e salva em background na nuvem (Appwrite Document ID 6a849358002db9e638ce + Servidor atômico)
+    try {
+      const res = await executeTransactionalBudgetGoals(effectiveUserId, sanitizedGoals);
+      if (!res.success) {
+        throw new Error('Falha ao sincronizar metas do orçamento no servidor.');
+      }
+    } catch (err) {
+      console.error('[Optimistic UI Error - Budget Goals]', err);
+      // 4. ROLLBACK: Em caso de falha, devolve os valores antigos para a tela e alerta o usuário
+      setTargets(previousGoals);
+      StorageService.saveBudgetGoals(previousGoals, effectiveUserId);
+      alert('Não foi possível salvar as metas de orçamento no servidor. As alterações foram revertidas.');
+    }
+  };
+
+  const handleSaveTargets = () => {
+    handleSaveBudgetGoals(tempTargets);
   };
 
   const getPeriodLabel = (p: PerformancePeriod) => {

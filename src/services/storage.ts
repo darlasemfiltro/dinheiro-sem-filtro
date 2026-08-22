@@ -73,6 +73,7 @@ const STORAGE_KEYS = {
   TRANSACTIONS: 'darla_transactions',
   GOALS: 'darla_goals',
   FAMILY_MEMBERS: 'darla_family_members',
+  BUDGET_GOALS: 'darla_budget_goals',
   SHARED_BUDGETS: 'darla_shared_budgets',
   NOTIFICATIONS: 'darla_notifications',
   EMAIL_LOGS: 'darla_email_logs',
@@ -3807,6 +3808,40 @@ export class StorageService {
       window.dispatchEvent(new Event('remote_data_updated'));
       window.dispatchEvent(new CustomEvent('financial_data_mutated', { detail: { userId: canonicalId } }));
     }
+  }
+
+  // --- BUDGET GOALS (50/30/20 STRATEGY) ---
+  static getBudgetGoals(userId: string = 'default'): { essentials: number; lifestyle: number; investment: number } {
+    this.initialize();
+    const canonicalId = getCanonicalUserId(userId);
+    try {
+      const stored = localStorage.getItem(`${STORAGE_KEYS.BUDGET_GOALS}_${canonicalId}`) || localStorage.getItem(STORAGE_KEYS.BUDGET_GOALS);
+      if (stored) {
+        const parsed = JSON.parse(stored);
+        if (parsed && typeof parsed.essentials === 'number' && typeof parsed.lifestyle === 'number' && typeof parsed.investment === 'number') {
+          return {
+            essentials: parsed.essentials,
+            lifestyle: parsed.lifestyle,
+            investment: parsed.investment,
+          };
+        }
+      }
+    } catch {}
+    return { essentials: 50, lifestyle: 30, investment: 20 };
+  }
+
+  static saveBudgetGoals(goals: { essentials: number; lifestyle: number; investment: number }, userId: string = 'default'): void {
+    this.initialize();
+    const canonicalId = getCanonicalUserId(userId);
+    try {
+      const sanitized = {
+        essentials: Number(goals.essentials) || 50,
+        lifestyle: Number(goals.lifestyle) || 30,
+        investment: Number(goals.investment) || 20,
+      };
+      localStorage.setItem(`${STORAGE_KEYS.BUDGET_GOALS}_${canonicalId}`, JSON.stringify(sanitized));
+      localStorage.setItem(STORAGE_KEYS.BUDGET_GOALS, JSON.stringify(sanitized));
+    } catch {}
   }
 
   // --- FAMILY MEMBERS ---

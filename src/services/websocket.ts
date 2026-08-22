@@ -8,6 +8,7 @@ type RealtimeMessage = {
   type:
     | 'DATA_UPDATED'
     | 'PORTFOLIO_UPDATED'
+    | 'BUDGET_GOALS_UPDATED'
     | 'NOTIFICATIONS_UPDATED'
     | 'SHARED_BUDGET_UPDATED'
     | 'USER_UPDATED'
@@ -143,6 +144,10 @@ class RealtimeSyncService {
           );
         }
         window.dispatchEvent(new CustomEvent('portfolio_updated', { detail: msg.payload }));
+        break;
+      case 'BUDGET_GOALS_UPDATED':
+        window.dispatchEvent(new CustomEvent('budget_goals_updated', { detail: msg.payload }));
+        window.dispatchEvent(new CustomEvent('remote_data_updated', { detail: msg.payload }));
         break;
       case 'NOTIFICATIONS_UPDATED':
         window.dispatchEvent(new CustomEvent('notifications_updated', { detail: msg.payload }));

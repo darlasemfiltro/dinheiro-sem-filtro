@@ -21,6 +21,7 @@ import {
   mergeRemoteInvestmentTransactionsWithOptimistic,
   recordInvestmentTxDeletion,
   mergeRemoteTargetAllocationsWithOptimistic,
+  mergeRemoteBudgetGoalsWithOptimistic,
 } from './lib/appwriteSync';
 import {
   calculateMonthSummary,
@@ -664,6 +665,13 @@ export default function App() {
           const mergedMembers = mergeRemoteMembersWithOptimistic(incomingMembers);
           setFamilyMembers(mergedMembers);
           StorageService.setFamilyMembers(mergedMembers);
+        }
+        const incomingBudgetGoals = remoteData.budgetGoals || remoteData.budgetStrategy;
+        if (incomingBudgetGoals && typeof incomingBudgetGoals === 'object') {
+          const mergedBudgetGoals = mergeRemoteBudgetGoalsWithOptimistic(incomingBudgetGoals);
+          const budgetId = StorageService.getEffectiveBudgetId(currentUser);
+          StorageService.saveBudgetGoals(mergedBudgetGoals, budgetId);
+          window.dispatchEvent(new CustomEvent('budget_goals_updated', { detail: { budgetGoals: mergedBudgetGoals } }));
         }
       }
       refreshData(currentUser, false);
