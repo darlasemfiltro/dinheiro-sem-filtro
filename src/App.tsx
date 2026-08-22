@@ -450,12 +450,6 @@ export default function App() {
         }, 100);
       }
     }
-
-    // Automate weekly check-in upon login and refresh gamification criteria for active users
-    if (user?.id) {
-      GamificationService.performWeeklyCheckIn(user.id);
-      GamificationService.refreshAllActiveUsersGamification();
-    }
   };
 
   useEffect(() => {

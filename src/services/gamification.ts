@@ -423,14 +423,25 @@ export class GamificationService {
     if (stored) {
       try {
         state = JSON.parse(stored);
-        // Reset legacy mock pre-filled state if user had old 3850 XP / 4 week streak default
-        if (state.xpTotal === 3850 || state.currentDivision === 'Pérola') {
+        // Reset corrupt state if user was hit by loop bug (> 20000 XP or NaN)
+        if (state.xpTotal > 20000 || isNaN(state.xpTotal) || isNaN(state.gems)) {
+          state = {
+            ...this.createDefaultState(userId),
+            xpTotal: 120,
+            weeklyXP: 120,
+            gems: 50,
+            weeklyStreakCount: 1,
+            hasCompletedWeeklyCheckIn: true,
+          };
+          const dataStr = JSON.stringify(state);
+          localStorage.setItem(key, dataStr);
+          localStorage.setItem(STORAGE_KEY_PREFIX + getCanonicalUserId(userId), dataStr);
+        } else if (state.xpTotal === 3850 || state.currentDivision === 'Pérola') {
           state = this.createDefaultState(userId);
-          this.saveGamificationState(state);
+          const dataStr = JSON.stringify(state);
+          localStorage.setItem(key, dataStr);
         } else if (!state.accountCreatedAt) {
-          // Default account creation date to Jan 2025 for existing accounts
           state.accountCreatedAt = '2025-01-01T00:00:00.000Z';
-          this.saveGamificationState(state);
         }
       } catch (e) {
         state = this.createDefaultState(userId);
@@ -439,55 +450,32 @@ export class GamificationService {
       state = this.createDefaultState(userId);
     }
 
-    // Check if new week has started
+    // Check if new week has started purely in memory without triggering network loops
     if (state.lastActiveWeekKey !== currentWeekKey) {
-      // Duolingo-style streak check:
-      // If user did not complete weekly check-in for the previous week (or missed weeks)
       if (!state.hasCompletedWeeklyCheckIn && state.weeklyStreakCount > 0) {
         if (state.streakFreezeCount > 0) {
-          // Protected by Bloqueio de Ofensiva (Streak Freeze)!
           state.streakFreezeCount -= 1;
         } else {
-          // No streak freeze available -> Ofensiva zerada (Duolingo style)
           state.weeklyStreakCount = 0;
         }
       }
 
       state.hasCompletedWeeklyCheckIn = false;
-      state.weeklyXP = 0; // Reset weekly XP for the new week
-      
-      // Reset progress of weekly quests
+      state.weeklyXP = 0;
       state.weeklyQuests = INITIAL_QUESTS.map((q) => ({ ...q }));
       state.lastActiveWeekKey = currentWeekKey;
-      
-      this.saveGamificationState(state);
+
+      const dataStr = JSON.stringify(state);
+      localStorage.setItem(key, dataStr);
+      localStorage.setItem(STORAGE_KEY_PREFIX + getCanonicalUserId(userId), dataStr);
     }
 
-    // Automatically check division promotion based on total / weekly XP milestones
-    const prevDiv = state.currentDivision;
     this.updateDivisionProgress(state);
-
-    if (prevDiv !== state.currentDivision) {
-      this.saveGamificationState(state);
-    }
-
     return state;
   }
 
   static refreshAllActiveUsersGamification(): void {
-    try {
-      for (let i = 0; i < localStorage.length; i++) {
-        const key = localStorage.key(i);
-        if (key && key.startsWith(STORAGE_KEY_PREFIX)) {
-          const userId = key.replace(STORAGE_KEY_PREFIX, '');
-          if (userId) {
-            this.getGamificationState(userId);
-          }
-        }
-      }
-    } catch (e) {
-      // ignore
-    }
+    // Pure passive check - does not trigger sync loops
   }
 
   private static updateDivisionProgress(state: WeeklyGamificationState): void {
@@ -671,6 +659,108 @@ export class GamificationService {
     window.dispatchEvent(new CustomEvent('gamification_updated_event', { detail: null }));
   }
 
+  /**
+   * ARQUITETURA ORIENTADA A EVENTOS (AWARD SYSTEM):
+   * Concede recompensas estritas de XP e Gemas de forma otimista (0ms) e persistência em background.
+   */
+  static async awardGamification(
+    userId: string,
+    addedXp: number,
+    addedGems: number,
+    options?: {
+      questId?: string;
+      isWeeklyCheckIn?: boolean;
+    }
+  ): Promise<{ success: boolean; state: WeeklyGamificationState; profile: GamificationProfile }> {
+    const currentState = this.getGamificationState(userId);
+    const backupState = JSON.parse(JSON.stringify(currentState));
+    const currentProfile = this.toGamificationProfile(currentState);
+
+    // 1. Atualização Otimista (Soma o valor estrito da tarefa com o atual)
+    const newXp = (Number(currentProfile.xp) || 0) + (Number(addedXp) || 0);
+    const newGems = (Number(currentProfile.gems) || 0) + (Number(addedGems) || 0);
+
+    const claimedMissions = Array.isArray(currentProfile.claimedMissions) ? [...currentProfile.claimedMissions] : [];
+    if (options?.questId && !claimedMissions.includes(options.questId)) {
+      claimedMissions.push(options.questId);
+    }
+
+    let newStreak = currentProfile.weeklyStreak || 0;
+    const completedWeeks = [...(currentState.completedWeeksHistory || [])];
+    if (options?.isWeeklyCheckIn) {
+      const currentWeekKey = getCurrentISOWeekKey();
+      if (!completedWeeks.includes(currentWeekKey)) {
+        completedWeeks.push(currentWeekKey);
+        newStreak += 1;
+      }
+    }
+
+    const updatedProfile: GamificationProfile = {
+      xp: newXp,
+      gems: newGems,
+      weeklyStreak: newStreak,
+      inventory: {
+        freezes: currentState.streakFreezeCount ?? currentState.inventory?.freezes ?? 0,
+        doubleXpActiveUntil: currentState.inventory?.doubleXpActiveUntil ?? null,
+      },
+      claimedMissions,
+    };
+
+    const updatedQuests = (currentState.weeklyQuests || []).map((q) => {
+      if (options?.questId && q.id === options.questId) {
+        return { ...q, completed: true, currentProgress: q.targetProgress };
+      }
+      if (options?.isWeeklyCheckIn && q.category === 'checkin') {
+        return { ...q, completed: true, currentProgress: 1 };
+      }
+      return q;
+    });
+
+    const updatedState: WeeklyGamificationState = {
+      ...currentState,
+      xpTotal: newXp,
+      weeklyXP: (Number(currentState.weeklyXP) || 0) + (Number(addedXp) || 0),
+      gems: newGems,
+      weeklyStreakCount: newStreak,
+      completedWeeksHistory: completedWeeks,
+      hasCompletedWeeklyCheckIn: options?.isWeeklyCheckIn ? true : currentState.hasCompletedWeeklyCheckIn,
+      inventory: updatedProfile.inventory,
+      claimedMissions,
+      weeklyQuests: updatedQuests,
+      updatedAt: new Date().toISOString(),
+    };
+
+    this.updateDivisionProgress(updatedState);
+
+    // Salva localmente na hora e trava no novo valor
+    const canonicalId = getCanonicalUserId(userId);
+    const key = STORAGE_KEY_PREFIX + userId;
+    const canKey = STORAGE_KEY_PREFIX + canonicalId;
+    const dataStr = JSON.stringify(updatedState);
+    localStorage.setItem(key, dataStr);
+    localStorage.setItem(canKey, dataStr);
+    window.dispatchEvent(new CustomEvent('gamification_updated_event', { detail: updatedState }));
+
+    try {
+      // 2. Persistência Assíncrona no Banco (Appwrite / Servidor)
+      const res = await executeTransactionalGamification(userId, updatedState, updatedProfile);
+      if (!res.success) {
+        throw new Error('Falha ao sincronizar gamificação no Appwrite.');
+      }
+      return { success: true, state: updatedState, profile: updatedProfile };
+    } catch (error) {
+      // 3. Rollback
+      console.error('[awardGamification Error] Erro ao salvar progresso:', error);
+      const bKey = STORAGE_KEY_PREFIX + userId;
+      const bCanKey = STORAGE_KEY_PREFIX + canonicalId;
+      const bDataStr = JSON.stringify(backupState);
+      localStorage.setItem(bKey, bDataStr);
+      localStorage.setItem(bCanKey, bDataStr);
+      window.dispatchEvent(new CustomEvent('gamification_updated_event', { detail: backupState }));
+      return { success: false, state: backupState, profile: currentProfile };
+    }
+  }
+
   static claimMission(
     userId: string,
     questId: string
@@ -693,45 +783,38 @@ export class GamificationService {
     const xpEarned = quest.xpReward;
     const gemsEarned = quest.gemsReward;
 
-    quest.completed = true;
-    quest.currentProgress = quest.targetProgress;
-    state.claimedMissions.push(questId);
-    state.weeklyXP += xpEarned;
-    state.xpTotal += xpEarned;
-    state.gems += gemsEarned;
+    // Dispara via awardGamification event-driven
+    this.awardGamification(userId, xpEarned, gemsEarned, { questId });
 
-    this.saveGamificationState(state);
-    return { state, xpEarned, gemsEarned, success: true };
+    return {
+      state: this.getGamificationState(userId),
+      xpEarned,
+      gemsEarned,
+      success: true,
+    };
   }
 
   static performWeeklyCheckIn(userId: string): { state: WeeklyGamificationState; xpEarned: number; gemsEarned: number; newlyCompletedQuest: WeeklyQuest | null } {
     const state = this.getGamificationState(userId);
-    const currentWeekKey = getCurrentISOWeekKey();
 
-    let xpEarned = 60;
-    let gemsEarned = 25;
+    const xpEarned = 60;
+    const gemsEarned = 25;
+
     let newlyCompletedQuest: WeeklyQuest | null = null;
-
-    state.hasCompletedWeeklyCheckIn = true;
-    if (!state.completedWeeksHistory.includes(currentWeekKey)) {
-      state.completedWeeksHistory.push(currentWeekKey);
-      state.weeklyStreakCount += 1;
-    }
-
-    state.weeklyXP += xpEarned;
-    state.xpTotal += xpEarned;
-    state.gems += gemsEarned;
-
-    // Check off checkin quest
     const checkinQuest = state.weeklyQuests.find((q) => q.category === 'checkin');
     if (checkinQuest && !checkinQuest.completed) {
-      checkinQuest.currentProgress = 1;
-      checkinQuest.completed = true;
-      newlyCompletedQuest = { ...checkinQuest };
+      newlyCompletedQuest = { ...checkinQuest, completed: true, currentProgress: 1 };
     }
 
-    this.saveGamificationState(state);
-    return { state, xpEarned, gemsEarned, newlyCompletedQuest };
+    // Dispara via awardGamification event-driven
+    this.awardGamification(userId, xpEarned, gemsEarned, { isWeeklyCheckIn: true });
+
+    return {
+      state: this.getGamificationState(userId),
+      xpEarned,
+      gemsEarned,
+      newlyCompletedQuest,
+    };
   }
 
   static recordAction(

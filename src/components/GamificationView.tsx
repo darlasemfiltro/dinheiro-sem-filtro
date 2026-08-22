@@ -55,23 +55,69 @@ export const GamificationView: React.FC<GamificationViewProps> = ({ userId }) =>
     };
   }, [userId]);
 
-  // 0ms Optimistic UI for Weekly Check-in with rollback
-  const handleWeeklyCheckIn = () => {
+  // ARQUITETURA ORIENTADA A EVENTOS (AWARD SYSTEM CENTRAL)
+  const awardGamification = async (
+    addedXp: number,
+    addedGems: number,
+    options?: { questId?: string; isWeeklyCheckIn?: boolean }
+  ) => {
     const backupState = JSON.parse(JSON.stringify(gameState));
+
+    // 1. Atualização Otimista (Soma o valor estrito da tarefa com o atual)
+    const updatedProfile = {
+      xp: (Number(gameState.xpTotal) || 0) + addedXp,
+      gems: (Number(gameState.gems) || 0) + addedGems,
+      weeklyStreak: options?.isWeeklyCheckIn ? (gameState.weeklyStreakCount || 0) + 1 : gameState.weeklyStreakCount || 0,
+      inventory: {
+        freezes: gameState.streakFreezeCount ?? gameState.inventory?.freezes ?? 0,
+        doubleXpActiveUntil: gameState.inventory?.doubleXpActiveUntil ?? null,
+      },
+      claimedMissions: options?.questId
+        ? Array.from(new Set([...(gameState.claimedMissions || []), options.questId]))
+        : gameState.claimedMissions || [],
+    };
+
+    const optimisticState: WeeklyGamificationState = {
+      ...gameState,
+      xpTotal: updatedProfile.xp,
+      weeklyXP: (Number(gameState.weeklyXP) || 0) + addedXp,
+      gems: updatedProfile.gems,
+      weeklyStreakCount: updatedProfile.weeklyStreak,
+      hasCompletedWeeklyCheckIn: options?.isWeeklyCheckIn ? true : gameState.hasCompletedWeeklyCheckIn,
+      claimedMissions: updatedProfile.claimedMissions,
+      inventory: updatedProfile.inventory,
+      updatedAt: new Date().toISOString(),
+    };
+
+    setGameState(optimisticState); // Atualiza na hora e TRAVA no novo valor
+
     try {
-      // 0ms local optimistic execution
-      const { state, xpEarned, gemsEarned } = GamificationService.performWeeklyCheckIn(userId);
-      setGameState(state);
-      setShowConfetti(true);
-      setFeedbackMessage(`🎉 Check-in Semanal Concluído! Ganhou +${xpEarned} XP e 💎 ${gemsEarned} Gemas!`);
-      setTimeout(() => setShowConfetti(false), 4000);
-      setTimeout(() => setFeedbackMessage(null), 5000);
-    } catch (err) {
-      console.error('[Optimistic Check-In Error]', err);
+      // 2. Persistência Assíncrona no Banco (Appwrite / Servidor)
+      const res = await GamificationService.awardGamification(userId, addedXp, addedGems, options);
+      if (!res.success) {
+        throw new Error('Falha ao persistir recompensa de gamificação.');
+      }
+      setGameState(res.state);
+    } catch (error) {
+      // 3. Rollback
+      console.error('Erro ao salvar progresso.', error);
       setGameState(backupState);
-      setFeedbackMessage('❌ Não foi possível registrar o check-in. Tente novamente.');
-      setTimeout(() => setFeedbackMessage(null), 4000);
+      GamificationService.saveGamificationState(backupState);
+      alert('Erro ao processar recompensa. Estado anterior restaurado.');
     }
+  };
+
+  // 0ms Optimistic UI for Weekly Check-in with rollback
+  const handleWeeklyCheckIn = async () => {
+    if (gameState.hasCompletedWeeklyCheckIn) {
+      return;
+    }
+    setShowConfetti(true);
+    setFeedbackMessage('🎉 Check-in Semanal Concluído! Ganhou +60 XP e 💎 25 Gemas!');
+    setTimeout(() => setShowConfetti(false), 4000);
+    setTimeout(() => setFeedbackMessage(null), 5000);
+
+    await awardGamification(60, 25, { isWeeklyCheckIn: true });
   };
 
   // 0ms Optimistic UI for Buying Items (freeze | doubleXp) with automatic rollback
@@ -163,23 +209,16 @@ export const GamificationView: React.FC<GamificationViewProps> = ({ userId }) =>
   };
 
   // 0ms Optimistic UI for Claiming Quest / Mission Reward
-  const handleClaimMission = (questId: string) => {
-    const backupState = JSON.parse(JSON.stringify(gameState));
-    try {
-      const { state, xpEarned, gemsEarned, success } = GamificationService.claimMission(userId, questId);
-      if (success) {
-        setGameState(state);
-        setShowConfetti(true);
-        setFeedbackMessage(`🎁 Missão Resgatada! +${xpEarned} XP e 💎 +${gemsEarned} Gemas!`);
-        setTimeout(() => setShowConfetti(false), 3500);
-        setTimeout(() => setFeedbackMessage(null), 4500);
-      }
-    } catch (err) {
-      console.error('[Optimistic Claim Mission Error]', err);
-      setGameState(backupState);
-      setFeedbackMessage('❌ Erro ao resgatar recompensa da missão.');
-      setTimeout(() => setFeedbackMessage(null), 4000);
-    }
+  const handleClaimMission = async (questId: string) => {
+    const quest = gameState.weeklyQuests.find((q) => q.id === questId);
+    if (!quest) return;
+
+    setShowConfetti(true);
+    setFeedbackMessage(`🎁 Missão Resgatada! +${quest.xpReward} XP e 💎 +${quest.gemsReward} Gemas!`);
+    setTimeout(() => setShowConfetti(false), 3500);
+    setTimeout(() => setFeedbackMessage(null), 4500);
+
+    await awardGamification(quest.xpReward, quest.gemsReward, { questId });
   };
 
   const currentLeagueObj = LEAGUE_DIVISIONS.find((l) => l.id === gameState.currentDivision) || LEAGUE_DIVISIONS[7];

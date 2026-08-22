@@ -7,11 +7,11 @@
     "completedWeeksHistory": [
       "2026-W34"
     ],
-    "xpTotal": 408540,
-    "weeklyXP": 408540,
-    "gems": 170225,
+    "xpTotal": 780,
+    "weeklyXP": 780,
+    "gems": 325,
     "streakFreezeCount": 0,
-    "currentDivision": "Ouro",
+    "currentDivision": "Prata",
     "divisionRankPosition": 1,
     "hasCompletedWeeklyCheckIn": true,
     "weeklyQuests": [
@@ -67,7 +67,7 @@
         "description": "Realizou seu primeiro check-in financeiro semanal.",
         "iconName": "Sparkles",
         "category": "Início",
-        "unlocked": false
+        "unlocked": true
       },
       {
         "id": "ach_2",
@@ -95,6 +95,11 @@
       }
     ],
     "leaderboard": [],
-    "updatedAt": "2026-08-22T18:46:53.589Z"
+    "inventory": {
+      "freezes": 0,
+      "doubleXpActiveUntil": null
+    },
+    "claimedMissions": [],
+    "updatedAt": "2026-08-22T19:00:10.698Z"
   }
 }
