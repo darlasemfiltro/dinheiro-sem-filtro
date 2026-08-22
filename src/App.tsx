@@ -692,6 +692,20 @@ export default function App() {
           StorageService.saveBudgetGoals(mergedBudgetGoals, budgetId);
           window.dispatchEvent(new CustomEvent('budget_goals_updated', { detail: { budgetGoals: mergedBudgetGoals } }));
         }
+        const incomingGamif = remoteData.gamificationState || remoteData.gamificationProfile || remoteData.gamification;
+        if (incomingGamif) {
+          const budgetId = StorageService.getEffectiveBudgetId(currentUser);
+          const sanitizedGamif = {
+            ...incomingGamif,
+            xp: Number(incomingGamif.xp ?? incomingGamif.xpTotal) || 0,
+            gems: Number(incomingGamif.gems) || 0,
+          };
+          const mergedGamif = mergeRemoteGamificationWithOptimistic(sanitizedGamif, budgetId);
+          if (mergedGamif) {
+            GamificationService.setGamificationStateDirectly(budgetId, mergedGamif);
+            window.dispatchEvent(new CustomEvent('gamification_updated_event', { detail: mergedGamif }));
+          }
+        }
       }
       refreshData(currentUser, false);
       window.dispatchEvent(new Event('portfolio_updated'));
