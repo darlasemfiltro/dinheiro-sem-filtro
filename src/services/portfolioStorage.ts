@@ -1158,6 +1158,7 @@ export class PortfolioStorageService {
       const transactions = this.getTransactions(canonicalId);
       const dividends = this.getDividends(canonicalId);
       const targetAllocations = this.getTargetAllocations(canonicalId);
+      const goals = this.getGoals(canonicalId);
 
       // Push to Cloud Appwrite in background
       syncPortfolioWithAppwrite(canonicalId, {
@@ -1165,6 +1166,7 @@ export class PortfolioStorageService {
         transactions,
         dividends,
         targetAllocations,
+        goals,
       }).catch(() => {});
 
       // Optionally sync to Firestore concurrently
@@ -1172,11 +1174,13 @@ export class PortfolioStorageService {
         const pendingAssets = assets.filter((a: any) => a._pendingSync);
         const pendingTxs = transactions.filter((t: any) => t._pendingSync);
         const pendingDivs = dividends.filter((d: any) => d._pendingSync);
+        const pendingGoals = goals.filter((g: any) => g._pendingSync);
         
         await Promise.all([
           ...pendingAssets.map(a => pushPortfolioAssetToFirestore(a)),
           ...pendingTxs.map(t => pushPortfolioTransactionToFirestore(t)),
           ...pendingDivs.map(d => pushPortfolioDividendToFirestore(d)),
+          ...pendingGoals.map(g => pushPortfolioGoalToFirestore(g)),
         ]);
       } catch (e) {
         console.warn('[Firestore Sync Error in syncPortfolioWithRemote]', e);
@@ -1191,6 +1195,7 @@ export class PortfolioStorageService {
           transactions,
           dividends,
           targetAllocations,
+          goals,
         }),
       });
 
@@ -1202,6 +1207,8 @@ export class PortfolioStorageService {
           this.saveToAllAliasKeys(STORAGE_KEYS.TRANSACTIONS, canonicalId, cleanTxs);
           const cleanDivs = this.getDividends(canonicalId).map(d => ({ ...d, _pendingSync: false }));
           this.saveToAllAliasKeys(STORAGE_KEYS.DIVIDENDS, canonicalId, cleanDivs);
+          const cleanGoals = this.getGoals(canonicalId).map(g => ({ ...g, _pendingSync: false }));
+          this.saveToAllAliasKeys(STORAGE_KEYS.GOALS, canonicalId, cleanGoals);
         } catch {}
 
         // Load clean merged state back instead of blind overwrite
@@ -1430,6 +1437,14 @@ export class PortfolioStorageService {
           const localDivs = this.getDividends(canonicalId);
           const allDivs = reconcileItems(localDivs, dividends, (d) => d.id);
           this.saveToAllAliasKeys(STORAGE_KEYS.DIVIDENDS, canonicalId, allDivs);
+        }
+        if (Array.isArray(goals)) {
+          const localGoals = this.getGoals(canonicalId);
+          const allGoals = reconcileItems(localGoals, goals, (g) => g.id);
+          this.saveToAllAliasKeys(STORAGE_KEYS.GOALS, canonicalId, allGoals);
+          try {
+            StorageService.setGoals(allGoals as any);
+          } catch {}
         }
         if (Array.isArray(targetAllocations) && targetAllocations.length > 0) {
           this.saveToAllAliasKeys('darla_target_allocations', canonicalId, targetAllocations);
@@ -2113,6 +2128,7 @@ export class PortfolioStorageService {
 
   static addGoal(goal: Omit<PortfolioGoal, 'id'> & { id?: string }, userId = 'default'): PortfolioGoal {
     const goals = this.getGoals(userId);
+    const existingIdx = goals.findIndex(g => g.id === goal.id);
     const newGoal: PortfolioGoal = {
       ...goal,
       id: goal.id || `goal_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
@@ -2120,9 +2136,17 @@ export class PortfolioStorageService {
       updatedAt: new Date().toISOString(),
       _pendingSync: true,
     };
-    goals.push(newGoal);
+    if (existingIdx >= 0) {
+      goals[existingIdx] = newGoal;
+    } else {
+      goals.push(newGoal);
+    }
+    this.saveToAllAliasKeys(STORAGE_KEYS.GOALS, userId, goals);
+    this.notifyUpdate();
+    this.syncPortfolioWithRemote(userId);
     pushPortfolioGoalToFirestore(newGoal);
     try {
+      StorageService.saveGoal(newGoal as any);
       StorageService.syncUserMutationToServer(userId);
     } catch {}
     return newGoal;
@@ -2142,13 +2166,19 @@ export class PortfolioStorageService {
     } else {
       updatedGoal = {
         ...goal,
+        id: goal.id || `goal_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
+        userId,
         updatedAt: new Date().toISOString(),
         _pendingSync: true,
       };
       goals.push(updatedGoal);
     }
+    this.saveToAllAliasKeys(STORAGE_KEYS.GOALS, userId, goals);
+    this.notifyUpdate();
+    this.syncPortfolioWithRemote(userId);
     pushPortfolioGoalToFirestore(updatedGoal);
     try {
+      StorageService.saveGoal(updatedGoal as any);
       StorageService.syncUserMutationToServer(userId);
     } catch {}
   }

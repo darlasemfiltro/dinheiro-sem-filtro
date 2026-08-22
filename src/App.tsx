@@ -728,12 +728,17 @@ export default function App() {
     return false;
   };
 
-  const buildAppFinancialState = (overrideTxs?: Transaction[], overrideAccounts?: Account[]) => {
+  const buildAppFinancialState = (
+    overrideTxs?: Transaction[],
+    overrideAccounts?: Account[],
+    overrideGoals?: Goal[],
+    overrideFamily?: FamilyMember[]
+  ) => {
     const budgetId = currentUser ? StorageService.getEffectiveBudgetId(currentUser) : 'default';
-    const currentTxs = overrideTxs || transactions;
-    const currentAccounts = overrideAccounts || accounts;
-    const currentGoals = goals;
-    const currentFamily = familyMembers;
+    const currentTxs = overrideTxs || StorageService.getTransactions(budgetId);
+    const currentAccounts = overrideAccounts || StorageService.getAccounts(budgetId);
+    const currentGoals = overrideGoals || StorageService.getGoals(budgetId);
+    const currentFamily = overrideFamily || StorageService.getFamilyMembers(budgetId);
     const budgets = StorageService.deduplicateSharedBudgets();
 
     const familyBudget = [
@@ -1051,20 +1056,34 @@ export default function App() {
 
   // Goal Handlers
   const handleSaveGoal = async (goal: Goal) => {
+    const budgetId = currentUser ? StorageService.getEffectiveBudgetId(currentUser) : 'default';
     StorageService.saveGoal(goal);
-    await saveAppData(buildAppFinancialState());
+    PortfolioStorageService.addGoal(goal as any, budgetId);
+    const freshGoals = StorageService.getGoals(budgetId);
+    setGoals(freshGoals);
+    await saveAppData(buildAppFinancialState(undefined, undefined, freshGoals));
+    await StorageService.syncUserMutationToServer(budgetId);
     refreshData(currentUser, false);
   };
 
   const handleUpdateGoalProgress = async (goalId: string, addedAmount: number) => {
+    const budgetId = currentUser ? StorageService.getEffectiveBudgetId(currentUser) : 'default';
     StorageService.updateGoalProgress(goalId, addedAmount);
-    await saveAppData(buildAppFinancialState());
+    const freshGoals = StorageService.getGoals(budgetId);
+    setGoals(freshGoals);
+    await saveAppData(buildAppFinancialState(undefined, undefined, freshGoals));
+    await StorageService.syncUserMutationToServer(budgetId);
     refreshData(currentUser, false);
   };
 
   const handleDeleteGoal = async (id: string) => {
+    const budgetId = currentUser ? StorageService.getEffectiveBudgetId(currentUser) : 'default';
     StorageService.deleteGoal(id);
-    await saveAppData(buildAppFinancialState());
+    PortfolioStorageService.deleteGoal(id, budgetId);
+    const freshGoals = StorageService.getGoals(budgetId);
+    setGoals(freshGoals);
+    await saveAppData(buildAppFinancialState(undefined, undefined, freshGoals));
+    await StorageService.syncUserMutationToServer(budgetId);
     refreshData(currentUser, false);
   };
 

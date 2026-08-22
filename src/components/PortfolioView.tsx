@@ -1751,12 +1751,14 @@ export const PortfolioView: React.FC<PortfolioViewProps> = ({
 
   const confirmDeleteGoal = async () => {
     if (deletingGoalId) {
-      const updatedGoals = goals.filter((g: any) => g.id !== deletingGoalId);
-      StorageService.deleteGoal(deletingGoalId);
-      PortfolioStorageService.deleteGoal(deletingGoalId, userId);
-      setGoals(updatedGoals);
-
+      const idToDelete = deletingGoalId;
       setDeletingGoalId(null);
+      const updatedGoals = goals.filter((g: any) => g.id !== idToDelete);
+      setGoals(updatedGoals);
+      StorageService.deleteGoal(idToDelete);
+      PortfolioStorageService.deleteGoal(idToDelete, userId);
+      await StorageService.syncUserMutationToServer(userId);
+      await onDataChanged?.();
       loadData();
     }
   };

@@ -3745,6 +3745,11 @@ export class StorageService {
     } catch (e) {}
     pushGoalToFirestore(updatedGoal);
     this.syncUserMutationToServer(canonicalId);
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new Event('portfolio_updated'));
+      window.dispatchEvent(new Event('remote_data_updated'));
+      window.dispatchEvent(new CustomEvent('financial_data_mutated', { detail: { userId: canonicalId } }));
+    }
     return updatedGoal;
   }
 
@@ -3757,6 +3762,11 @@ export class StorageService {
       } catch (e) {}
       pushGoalToFirestore(goal);
       this.syncUserMutationToServer(goal.userId);
+      if (typeof window !== 'undefined') {
+        window.dispatchEvent(new Event('portfolio_updated'));
+        window.dispatchEvent(new Event('remote_data_updated'));
+        window.dispatchEvent(new CustomEvent('financial_data_mutated', { detail: { userId: goal.userId } }));
+      }
       return goal;
     }
     return null;
@@ -3775,6 +3785,11 @@ export class StorageService {
     deleteGoalFromFirestore(goalId);
     if (canonicalId) {
       this.syncUserMutationToServer(canonicalId);
+    }
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new Event('portfolio_updated'));
+      window.dispatchEvent(new Event('remote_data_updated'));
+      window.dispatchEvent(new CustomEvent('financial_data_mutated', { detail: { userId: canonicalId } }));
     }
   }
 
