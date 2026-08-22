@@ -1,12 +1,31 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { User, Account, Category, Transaction, Goal, FamilyMember } from './types';
-import { StorageService } from './services/storage';
+import { User, Account, Category, Transaction, Goal, FamilyMember, Subcategory } from './types';
+import { StorageService, SEED_CATEGORIES } from './services/storage';
 import { PortfolioStorageService } from './services/portfolioStorage';
 import { realtimeSync } from './services/websocket';
 import { auth, onAuthStateChanged, firebaseSignOut, subscribeToUserFirestoreChanges } from './lib/firebase';
 import { subscribeToAppwriteRealtime, getAppwriteUser, appwriteSignOut, appwriteDatabases as databases, appwriteClient as client } from './lib/appwrite';
-import { saveAppData, persistCurrentStateToAppwrite, loadFromCloud, executeTransactionalGoal, mergeRemoteGoalsWithOptimistic, recordGoalDeletion } from './lib/appwriteSync';
-import { calculateMonthSummary, calculateAccountBalances, usePrivacyMode } from './utils/finance';
+import {
+  saveAppData,
+  persistCurrentStateToAppwrite,
+  loadFromCloud,
+  executeTransactionalGoal,
+  mergeRemoteGoalsWithOptimistic,
+  recordGoalDeletion,
+  executeTransactionalStructure,
+  mergeRemoteCategoriesWithOptimistic,
+  mergeRemoteMembersWithOptimistic,
+  recordCategoryDeletion,
+  recordMemberDeletion,
+} from './lib/appwriteSync';
+import {
+  calculateMonthSummary,
+  calculateAccountBalances,
+  usePrivacyMode,
+  addSubcategoryToTree,
+  deleteSubcategoryFromTree,
+  renameSubcategoryInTree,
+} from './utils/finance';
 import { CustomAlertModal } from './components/CustomAlertModal';
 import { AuthScreen } from './components/AuthScreen';
 import { Header } from './components/Header';
@@ -204,6 +223,12 @@ export default function App() {
               setBudgets(remote.budgets);
             }
 
+            if (remote.categories && Array.isArray(remote.categories)) {
+              const mergedCats = mergeRemoteCategoriesWithOptimistic(remote.categories);
+              setCategories(mergedCats);
+              StorageService.setCategories(mergedCats);
+            }
+
             const rawRemoteGoals = remote.investorGoals || remote.goals;
             let rawGoalsToMerge: any[] = [];
             if (Array.isArray(rawRemoteGoals) && rawRemoteGoals.length > 0) {
@@ -219,11 +244,18 @@ export default function App() {
               PortfolioStorageService.saveGoals(mergedGoals, bId);
             }
 
-            if (Array.isArray(remote.familyBudget)) {
-              const familyList = remote.familyBudget.filter((item: any) => item.relationship !== undefined || (item.name && item.color && !item.targetAmount));
-              if (familyList.length > 0) {
-                setFamilyMembers(familyList);
-              }
+            const rawMembers = remote.familyMembers || remote.members;
+            let rawMembersToMerge: any[] = [];
+            if (Array.isArray(rawMembers) && rawMembers.length > 0) {
+              rawMembersToMerge = rawMembers;
+            } else if (Array.isArray(remote.familyBudget)) {
+              rawMembersToMerge = remote.familyBudget.filter((item: any) => item.relationship !== undefined || (item.name && item.color && !item.targetAmount));
+            }
+
+            if (rawMembersToMerge.length > 0) {
+              const mergedMembers = mergeRemoteMembersWithOptimistic(rawMembersToMerge);
+              setFamilyMembers(mergedMembers);
+              StorageService.setFamilyMembers(mergedMembers);
             }
 
             if (remote.investorPortfolio) {
@@ -607,6 +639,17 @@ export default function App() {
           setGoals(mergedGoals);
           StorageService.setGoals(mergedGoals as any);
           PortfolioStorageService.saveGoals(mergedGoals, budgetId);
+        }
+        if (remoteData.categories && Array.isArray(remoteData.categories)) {
+          const mergedCats = mergeRemoteCategoriesWithOptimistic(remoteData.categories);
+          setCategories(mergedCats);
+          StorageService.setCategories(mergedCats);
+        }
+        const incomingMembers = remoteData.familyMembers || remoteData.members;
+        if (incomingMembers && Array.isArray(incomingMembers)) {
+          const mergedMembers = mergeRemoteMembersWithOptimistic(incomingMembers);
+          setFamilyMembers(mergedMembers);
+          StorageService.setFamilyMembers(mergedMembers);
         }
       }
       refreshData(currentUser, false);
@@ -1050,27 +1093,177 @@ export default function App() {
     return success;
   };
 
-  // Category Handlers
-  const handleSaveCategory = (cat: Category) => {
+  // Category Handlers (Atomic Transactions + Zero Latency)
+  const handleSaveCategory = async (cat: Category) => {
+    const budgetId = currentUser ? StorageService.getEffectiveBudgetId(currentUser) : 'default';
+    
+    // 1. Instant local optimistic update
     StorageService.saveCategory(cat);
+    const freshCats = StorageService.getCategories(budgetId);
+    setCategories(freshCats);
+
+    // 2. Atomic server transaction & Appwrite direct propagation
+    const isEditing = categories.some((c) => c.id === cat.id);
+    await executeTransactionalStructure(budgetId, isEditing ? 'updateCategory' : 'addCategory', {
+      categoryData: cat,
+      categoryId: cat.id,
+    });
+
     refreshData(currentUser, false);
   };
 
-  const handleDeleteCategory = (id: string) => {
+  const handleDeleteCategory = async (id: string) => {
+    const budgetId = currentUser ? StorageService.getEffectiveBudgetId(currentUser) : 'default';
+    
+    // 1. Instant local optimistic update & deletion guard
+    recordCategoryDeletion(id);
     StorageService.deleteCategory(id);
+    const freshCats = StorageService.getCategories(budgetId).filter((c) => c.id !== id);
+    setCategories(freshCats);
+
+    // 2. Atomic server transaction & Appwrite direct propagation
+    await executeTransactionalStructure(budgetId, 'deleteCategory', {
+      categoryId: id,
+    });
+
     refreshData(currentUser, false);
   };
 
-  // Family Member Handlers
+  const handleAddSubcategory = async (cat: Category, parentSubId: string | null, name: string) => {
+    const budgetId = currentUser ? StorageService.getEffectiveBudgetId(currentUser) : 'default';
+    const newSub: Subcategory = {
+      id: `sub_${Date.now()}_${Math.random().toString(36).substr(2, 4)}`,
+      categoryId: cat.id,
+      parentId: parentSubId || undefined,
+      name: name.trim(),
+      subcategories: [],
+    };
+    const updatedSubcategories = addSubcategoryToTree(cat.subcategories || [], parentSubId, newSub);
+    const updatedCat: Category = { ...cat, subcategories: updatedSubcategories };
+
+    // 1. Instant local optimistic update
+    StorageService.saveCategory(updatedCat);
+    setCategories(StorageService.getCategories(budgetId));
+
+    // 2. Atomic server transaction
+    await executeTransactionalStructure(budgetId, 'addSubcategory', {
+      categoryId: cat.id,
+      parentSubId,
+      subData: newSub,
+    });
+
+    refreshData(currentUser, false);
+  };
+
+  const handleRenameSubcategory = async (cat: Category, subId: string, newName: string) => {
+    const budgetId = currentUser ? StorageService.getEffectiveBudgetId(currentUser) : 'default';
+    const updatedSubcategories = renameSubcategoryInTree(cat.subcategories || [], subId, newName.trim());
+    const updatedCat: Category = { ...cat, subcategories: updatedSubcategories };
+
+    // 1. Instant local optimistic update
+    StorageService.saveCategory(updatedCat);
+    setCategories(StorageService.getCategories(budgetId));
+
+    // 2. Atomic server transaction
+    await executeTransactionalStructure(budgetId, 'renameSubcategory', {
+      categoryId: cat.id,
+      subId,
+      newSubName: newName.trim(),
+    });
+
+    refreshData(currentUser, false);
+  };
+
+  const handleDeleteSubcategory = async (cat: Category, subId: string) => {
+    const budgetId = currentUser ? StorageService.getEffectiveBudgetId(currentUser) : 'default';
+    const updatedSubcategories = deleteSubcategoryFromTree(cat.subcategories || [], subId);
+    const updatedCat: Category = { ...cat, subcategories: updatedSubcategories };
+
+    // 1. Instant local optimistic update
+    StorageService.saveCategory(updatedCat);
+    setCategories(StorageService.getCategories(budgetId));
+
+    // 2. Atomic server transaction
+    await executeTransactionalStructure(budgetId, 'deleteSubcategory', {
+      categoryId: cat.id,
+      subId,
+    });
+
+    refreshData(currentUser, false);
+  };
+
+  const handleMoveSubcategory = async (sub: Subcategory, sourceCat: Category, targetCat: Category) => {
+    const budgetId = currentUser ? StorageService.getEffectiveBudgetId(currentUser) : 'default';
+    const updatedSourceSubs = deleteSubcategoryFromTree(sourceCat.subcategories || [], sub.id);
+    const updatedSourceCat = { ...sourceCat, subcategories: updatedSourceSubs };
+    const movedSub = { ...sub, categoryId: targetCat.id, parentId: undefined };
+    const updatedTargetSubs = [...(targetCat.subcategories || []), movedSub];
+    const updatedTargetCat = { ...targetCat, subcategories: updatedTargetSubs };
+
+    // 1. Instant local optimistic update
+    StorageService.saveCategory(updatedSourceCat);
+    StorageService.saveCategory(updatedTargetCat);
+    setCategories(StorageService.getCategories(budgetId));
+
+    // 2. Atomic server transaction
+    await executeTransactionalStructure(budgetId, 'moveSubcategory', {
+      sourceCatId: sourceCat.id,
+      targetCatId: targetCat.id,
+      subData: sub,
+    });
+
+    refreshData(currentUser, false);
+  };
+
+  const handleRestoreDefaultCategories = async () => {
+    const budgetId = currentUser ? StorageService.getEffectiveBudgetId(currentUser) : 'default';
+    const restored = SEED_CATEGORIES.map((c) => ({ ...c, userId: budgetId }));
+
+    // 1. Instant local optimistic update
+    StorageService.setCategories(restored);
+    setCategories(restored);
+
+    // 2. Atomic server transaction
+    await executeTransactionalStructure(budgetId, 'restoreDefaultCategories', {
+      categoriesList: restored,
+    });
+
+    refreshData(currentUser, false);
+  };
+
+  // Family Member Handlers (Atomic Transactions + Zero Latency)
   const handleSaveFamilyMember = async (member: FamilyMember) => {
+    const budgetId = currentUser ? StorageService.getEffectiveBudgetId(currentUser) : 'default';
+    
+    // 1. Instant local optimistic update
     StorageService.saveFamilyMember(member);
-    await saveAppData(buildAppFinancialState());
+    const freshMembers = StorageService.getFamilyMembers(budgetId);
+    setFamilyMembers(freshMembers);
+
+    // 2. Atomic server transaction & Appwrite direct propagation
+    const isEditing = familyMembers.some((f) => f.id === member.id);
+    await executeTransactionalStructure(budgetId, isEditing ? 'updateMember' : 'addMember', {
+      memberData: member,
+      memberId: member.id,
+    });
+
     refreshData(currentUser, false);
   };
 
   const handleDeleteFamilyMember = async (id: string) => {
+    const budgetId = currentUser ? StorageService.getEffectiveBudgetId(currentUser) : 'default';
+    
+    // 1. Instant local optimistic update & deletion guard
+    recordMemberDeletion(id);
     StorageService.deleteFamilyMember(id);
-    await saveAppData(buildAppFinancialState());
+    const freshMembers = StorageService.getFamilyMembers(budgetId).filter((f) => f.id !== id);
+    setFamilyMembers(freshMembers);
+
+    // 2. Atomic server transaction & Appwrite direct propagation
+    await executeTransactionalStructure(budgetId, 'deleteMember', {
+      memberId: id,
+    });
+
     refreshData(currentUser, false);
   };
 
@@ -1270,6 +1463,11 @@ export default function App() {
             familyMembers={familyMembers}
             onSaveFamilyMember={handleSaveFamilyMember}
             onDeleteFamilyMember={handleDeleteFamilyMember}
+            onAddSubcategory={handleAddSubcategory}
+            onRenameSubcategory={handleRenameSubcategory}
+            onDeleteSubcategory={handleDeleteSubcategory}
+            onMoveSubcategory={handleMoveSubcategory}
+            onRestoreDefaultCategories={handleRestoreDefaultCategories}
             userId={effectiveBudgetId}
           />
         )}

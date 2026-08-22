@@ -3589,6 +3589,22 @@ export class StorageService {
     } catch (e) {}
   }
 
+  static setCategories(categories: Category[]) {
+    this.initialize();
+    _inMemoryStore.categories = categories;
+    try {
+      localStorage.setItem(STORAGE_KEYS.CATEGORIES, JSON.stringify(categories));
+    } catch (e) {}
+  }
+
+  static setFamilyMembers(familyMembers: FamilyMember[]) {
+    this.initialize();
+    _inMemoryStore.familyMembers = familyMembers;
+    try {
+      localStorage.setItem(STORAGE_KEYS.FAMILY_MEMBERS, JSON.stringify(familyMembers));
+    } catch (e) {}
+  }
+
   static setTransactions(transactions: Transaction[]) {
     this.initialize();
     _inMemoryStore.transactions = transactions;

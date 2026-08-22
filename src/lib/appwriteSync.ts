@@ -237,7 +237,10 @@ export async function saveAppData(updatedData: any): Promise<boolean> {
     const payloadData = {
       transactions: updatedData.transactions || [],
       accounts: updatedData.accounts || [],
-      familyBudget: updatedData.familyBudget || [],
+      categories: updatedData.categories || [],
+      familyMembers: updatedData.familyMembers || updatedData.members || [],
+      members: updatedData.familyMembers || updatedData.members || [],
+      familyBudget: updatedData.familyBudget || [...(updatedData.goals || []), ...(updatedData.familyMembers || [])],
       investorPortfolio: updatedData.investorPortfolio || [],
       investmentTransactions: updatedData.investmentTransactions || [],
       goals: updatedData.goals || [],
@@ -294,6 +297,198 @@ const pendingGoalMutations = new Map<
     timestamp: number;
   }
 >();
+
+// --- TRANSACTIONAL STRUCTURE (CATEGORIES, SUBCATEGORIES, MEMBERS) MANAGER ---
+const recentDeletedCategoryIds = new Map<string, number>();
+const recentDeletedMemberIds = new Map<string, number>();
+
+const pendingCategoryMutations = new Map<
+  string,
+  {
+    action: string;
+    categoryData?: any;
+    timestamp: number;
+  }
+>();
+
+const pendingMemberMutations = new Map<
+  string,
+  {
+    action: string;
+    memberData?: any;
+    timestamp: number;
+  }
+>();
+
+export function recordCategoryDeletion(id: string): void {
+  if (!id) return;
+  recentDeletedCategoryIds.set(id, Date.now());
+  pendingCategoryMutations.delete(id);
+}
+
+export function isCategoryRecentlyDeleted(id: string): boolean {
+  if (!id) return false;
+  const deletedAt = recentDeletedCategoryIds.get(id);
+  if (!deletedAt) return false;
+  if (Date.now() - deletedAt > DELETION_TTL_MS) {
+    recentDeletedCategoryIds.delete(id);
+    return false;
+  }
+  return true;
+}
+
+export function getRecentDeletedCategoryIds(): Set<string> {
+  const now = Date.now();
+  const valid = new Set<string>();
+  recentDeletedCategoryIds.forEach((time, id) => {
+    if (now - time <= DELETION_TTL_MS) {
+      valid.add(id);
+    } else {
+      recentDeletedCategoryIds.delete(id);
+    }
+  });
+  return valid;
+}
+
+export function recordMemberDeletion(id: string): void {
+  if (!id) return;
+  recentDeletedMemberIds.set(id, Date.now());
+  pendingMemberMutations.delete(id);
+}
+
+export function isMemberRecentlyDeleted(id: string): boolean {
+  if (!id) return false;
+  const deletedAt = recentDeletedMemberIds.get(id);
+  if (!deletedAt) return false;
+  if (Date.now() - deletedAt > DELETION_TTL_MS) {
+    recentDeletedMemberIds.delete(id);
+    return false;
+  }
+  return true;
+}
+
+export function getRecentDeletedMemberIds(): Set<string> {
+  const now = Date.now();
+  const valid = new Set<string>();
+  recentDeletedMemberIds.forEach((time, id) => {
+    if (now - time <= DELETION_TTL_MS) {
+      valid.add(id);
+    } else {
+      recentDeletedMemberIds.delete(id);
+    }
+  });
+  return valid;
+}
+
+export function recordPendingCategoryMutation(id: string, action: string, categoryData?: any): void {
+  if (!id) return;
+  pendingCategoryMutations.set(id, {
+    action,
+    categoryData,
+    timestamp: Date.now(),
+  });
+}
+
+export function clearPendingCategoryMutation(id: string): void {
+  pendingCategoryMutations.delete(id);
+}
+
+export function recordPendingMemberMutation(id: string, action: string, memberData?: any): void {
+  if (!id) return;
+  pendingMemberMutations.set(id, {
+    action,
+    memberData,
+    timestamp: Date.now(),
+  });
+}
+
+export function clearPendingMemberMutation(id: string): void {
+  pendingMemberMutations.delete(id);
+}
+
+export function mergeRemoteCategoriesWithOptimistic(remoteCategories: any[]): any[] {
+  const deletedSet = getRecentDeletedCategoryIds();
+  const map = new Map<string, any>();
+
+  if (Array.isArray(remoteCategories)) {
+    remoteCategories.forEach((rc: any) => {
+      if (rc && rc.id && !deletedSet.has(rc.id)) {
+        map.set(rc.id, rc);
+      }
+    });
+  }
+
+  const now = Date.now();
+  pendingCategoryMutations.forEach((pending, cId) => {
+    if (deletedSet.has(cId)) {
+      map.delete(cId);
+      return;
+    }
+
+    if (now - pending.timestamp > 45000) {
+      pendingCategoryMutations.delete(cId);
+      return;
+    }
+
+    if (pending.action === 'addCategory' || pending.action === 'updateCategory' || pending.action.includes('Subcategory')) {
+      const existing = map.get(cId);
+      if (!existing) {
+        if (pending.categoryData) map.set(cId, pending.categoryData);
+      } else {
+        const remoteTime = existing.updatedAt ? new Date(existing.updatedAt).getTime() : 0;
+        if (pending.timestamp >= remoteTime) {
+          map.set(cId, { ...existing, ...pending.categoryData });
+        }
+      }
+    } else if (pending.action === 'deleteCategory') {
+      map.delete(cId);
+    }
+  });
+
+  return Array.from(map.values());
+}
+
+export function mergeRemoteMembersWithOptimistic(remoteMembers: any[]): any[] {
+  const deletedSet = getRecentDeletedMemberIds();
+  const map = new Map<string, any>();
+
+  if (Array.isArray(remoteMembers)) {
+    remoteMembers.forEach((rm: any) => {
+      if (rm && rm.id && !deletedSet.has(rm.id)) {
+        map.set(rm.id, rm);
+      }
+    });
+  }
+
+  const now = Date.now();
+  pendingMemberMutations.forEach((pending, mId) => {
+    if (deletedSet.has(mId)) {
+      map.delete(mId);
+      return;
+    }
+
+    if (now - pending.timestamp > 45000) {
+      pendingMemberMutations.delete(mId);
+      return;
+    }
+
+    if (pending.action === 'addMember' || pending.action === 'updateMember') {
+      const existing = map.get(mId);
+      if (!existing) {
+        if (pending.memberData) map.set(mId, pending.memberData);
+      } else {
+        const remoteTime = existing.updatedAt ? new Date(existing.updatedAt).getTime() : 0;
+        if (pending.timestamp >= remoteTime) {
+          map.set(mId, { ...existing, ...pending.memberData });
+        }
+      }
+    } else if (pending.action === 'deleteMember') {
+      map.delete(mId);
+    }
+  });
+
+  return Array.from(map.values());
+}
 
 export function recordGoalDeletion(goalId: string): void {
   if (!goalId) return;
@@ -491,6 +686,256 @@ export async function executeTransactionalGoal(
   } catch (appwriteErr) {
     console.error('[Direct Appwrite Transaction Error]', appwriteErr);
     return { success: false, goals: [] };
+  }
+}
+
+// Subcategory tree helpers for fallback direct client manipulation
+function addSubcategoryToTreeClient(
+  subs: any[] = [],
+  parentSubId: string | null = null,
+  newSub: any
+): any[] {
+  if (!parentSubId) {
+    return [...subs, newSub];
+  }
+  return subs.map((s) => {
+    if (s.id === parentSubId) {
+      return {
+        ...s,
+        subcategories: [...(s.subcategories || []), newSub],
+      };
+    }
+    if (s.subcategories && s.subcategories.length > 0) {
+      return {
+        ...s,
+        subcategories: addSubcategoryToTreeClient(s.subcategories, parentSubId, newSub),
+      };
+    }
+    return s;
+  });
+}
+
+function deleteSubcategoryFromTreeClient(subs: any[] = [], targetSubId: string): any[] {
+  return subs
+    .filter((s) => s.id !== targetSubId)
+    .map((s) => ({
+      ...s,
+      subcategories: s.subcategories ? deleteSubcategoryFromTreeClient(s.subcategories, targetSubId) : [],
+    }));
+}
+
+function renameSubcategoryInTreeClient(
+  subs: any[] = [],
+  targetSubId: string,
+  newName: string
+): any[] {
+  return subs.map((s) => {
+    if (s.id === targetSubId) {
+      return {
+        ...s,
+        name: newName,
+      };
+    }
+    if (s.subcategories && s.subcategories.length > 0) {
+      return {
+        ...s,
+        subcategories: renameSubcategoryInTreeClient(s.subcategories, targetSubId, newName),
+      };
+    }
+    return s;
+  });
+}
+
+/**
+ * Executes an atomic server transaction for categories, subcategories, and members
+ */
+export async function executeTransactionalStructure(
+  userId: string,
+  action:
+    | 'addCategory'
+    | 'updateCategory'
+    | 'deleteCategory'
+    | 'addSubcategory'
+    | 'updateSubcategory'
+    | 'renameSubcategory'
+    | 'deleteSubcategory'
+    | 'moveSubcategory'
+    | 'restoreDefaultCategories'
+    | 'addMember'
+    | 'updateMember'
+    | 'deleteMember',
+  payload: {
+    categoryData?: any;
+    categoryId?: string;
+    subData?: any;
+    parentSubId?: string | null;
+    subId?: string;
+    newSubName?: string;
+    sourceCatId?: string;
+    targetCatId?: string;
+    memberData?: any;
+    memberId?: string;
+    categoriesList?: any[];
+  }
+): Promise<{ success: boolean; categories?: any[]; familyMembers?: any[] }> {
+  const targetCatId = payload.categoryId || payload.categoryData?.id;
+  const targetMemberId = payload.memberId || payload.memberData?.id;
+
+  if (action === 'deleteCategory' && targetCatId) {
+    recordCategoryDeletion(targetCatId);
+  } else if (action === 'deleteMember' && targetMemberId) {
+    recordMemberDeletion(targetMemberId);
+  } else if (targetCatId && (action === 'addCategory' || action === 'updateCategory')) {
+    recordPendingCategoryMutation(targetCatId, action, payload.categoryData);
+  } else if (targetMemberId && (action === 'addMember' || action === 'updateMember')) {
+    recordPendingMemberMutation(targetMemberId, action, payload.memberData);
+  }
+
+  try {
+    const response = await fetch('/api/data/transactional-structure', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        userId,
+        action,
+        categoryId: payload.categoryId,
+        categoryData: payload.categoryData,
+        subData: payload.subData,
+        parentSubId: payload.parentSubId,
+        subId: payload.subId,
+        newSubName: payload.newSubName,
+        sourceCatId: payload.sourceCatId,
+        targetCatId: payload.targetCatId,
+        memberId: payload.memberId,
+        memberData: payload.memberData,
+        categoriesList: payload.categoriesList,
+      }),
+    });
+
+    if (response.ok) {
+      const resData = await response.json();
+      if (resData && resData.success) {
+        if (targetCatId && action !== 'deleteCategory') {
+          clearPendingCategoryMutation(targetCatId);
+        }
+        if (targetMemberId && action !== 'deleteMember') {
+          clearPendingMemberMutation(targetMemberId);
+        }
+        return {
+          success: true,
+          categories: resData.categories,
+          familyMembers: resData.familyMembers,
+        };
+      }
+    }
+  } catch (err) {
+    console.warn('[Transactional Structure Server Notice] Server unreachable, using direct cloud sync:', err);
+  }
+
+  // Fallback: Direct Appwrite document transaction
+  try {
+    const cloudDoc = await loadFromCloud();
+    let existingCategories = Array.isArray(cloudDoc?.categories) ? [...cloudDoc.categories] : [];
+    let existingMembers = Array.isArray(cloudDoc?.familyMembers)
+      ? [...cloudDoc.familyMembers]
+      : (Array.isArray(cloudDoc?.members) ? [...cloudDoc.members] : []);
+
+    if (action === 'addCategory' || action === 'updateCategory') {
+      const c = payload.categoryData;
+      const idx = existingCategories.findIndex((item: any) => item.id === c.id);
+      if (idx >= 0) {
+        existingCategories[idx] = { ...existingCategories[idx], ...c, updatedAt: new Date().toISOString() };
+      } else {
+        existingCategories.push({ ...c, updatedAt: new Date().toISOString() });
+      }
+    } else if (action === 'deleteCategory') {
+      existingCategories = existingCategories.filter((item: any) => item.id !== targetCatId);
+    } else if (action === 'addSubcategory') {
+      const cIdx = existingCategories.findIndex((item: any) => item.id === payload.categoryId);
+      if (cIdx >= 0 && payload.subData) {
+        existingCategories[cIdx].subcategories = addSubcategoryToTreeClient(
+          existingCategories[cIdx].subcategories || [],
+          payload.parentSubId || null,
+          payload.subData
+        );
+        existingCategories[cIdx].updatedAt = new Date().toISOString();
+      }
+    } else if (action === 'updateSubcategory' || action === 'renameSubcategory') {
+      const cIdx = existingCategories.findIndex((item: any) => item.id === payload.categoryId);
+      if (cIdx >= 0 && payload.subId && payload.newSubName) {
+        existingCategories[cIdx].subcategories = renameSubcategoryInTreeClient(
+          existingCategories[cIdx].subcategories || [],
+          payload.subId,
+          payload.newSubName
+        );
+        existingCategories[cIdx].updatedAt = new Date().toISOString();
+      }
+    } else if (action === 'deleteSubcategory') {
+      const cIdx = existingCategories.findIndex((item: any) => item.id === payload.categoryId);
+      if (cIdx >= 0 && payload.subId) {
+        existingCategories[cIdx].subcategories = deleteSubcategoryFromTreeClient(
+          existingCategories[cIdx].subcategories || [],
+          payload.subId
+        );
+        existingCategories[cIdx].updatedAt = new Date().toISOString();
+      }
+    } else if (action === 'moveSubcategory') {
+      const srcIdx = existingCategories.findIndex((item: any) => item.id === payload.sourceCatId);
+      const tgtIdx = existingCategories.findIndex((item: any) => item.id === payload.targetCatId);
+      if (srcIdx >= 0 && tgtIdx >= 0 && payload.subData) {
+        existingCategories[srcIdx].subcategories = deleteSubcategoryFromTreeClient(
+          existingCategories[srcIdx].subcategories || [],
+          payload.subData.id
+        );
+        const movedSub = { ...payload.subData, categoryId: payload.targetCatId, parentId: undefined };
+        existingCategories[tgtIdx].subcategories = [...(existingCategories[tgtIdx].subcategories || []), movedSub];
+        existingCategories[srcIdx].updatedAt = new Date().toISOString();
+        existingCategories[tgtIdx].updatedAt = new Date().toISOString();
+      }
+    } else if (action === 'restoreDefaultCategories') {
+      if (Array.isArray(payload.categoriesList)) {
+        existingCategories = payload.categoriesList;
+      }
+    } else if (action === 'addMember' || action === 'updateMember') {
+      const m = payload.memberData;
+      const idx = existingMembers.findIndex((item: any) => item.id === m.id);
+      if (idx >= 0) {
+        existingMembers[idx] = { ...existingMembers[idx], ...m, updatedAt: new Date().toISOString() };
+      } else {
+        existingMembers.push({ ...m, updatedAt: new Date().toISOString() });
+      }
+    } else if (action === 'deleteMember') {
+      existingMembers = existingMembers.filter((item: any) => item.id !== targetMemberId);
+    }
+
+    const mergedCategories = mergeRemoteCategoriesWithOptimistic(existingCategories);
+    const mergedMembers = mergeRemoteMembersWithOptimistic(existingMembers);
+
+    const fullPayload = {
+      ...(cloudDoc || {}),
+      categories: mergedCategories,
+      familyMembers: mergedMembers,
+      members: mergedMembers,
+      familyBudget: [
+        ...(Array.isArray(cloudDoc?.goals) ? cloudDoc.goals : []),
+        ...mergedMembers,
+      ],
+      updatedAt: new Date().toISOString(),
+    };
+
+    await saveAppData(fullPayload);
+
+    if (targetCatId && action !== 'deleteCategory') {
+      clearPendingCategoryMutation(targetCatId);
+    }
+    if (targetMemberId && action !== 'deleteMember') {
+      clearPendingMemberMutation(targetMemberId);
+    }
+
+    return { success: true, categories: mergedCategories, familyMembers: mergedMembers };
+  } catch (err) {
+    console.error('[Direct Structure Sync Error]', err);
+    return { success: false };
   }
 }
 

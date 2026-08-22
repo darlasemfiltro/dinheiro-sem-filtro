@@ -546,3 +546,69 @@ export function calculateMonthlyContribution(
   };
 }
 
+/**
+ * Recursive helper to insert a new subcategory into subcategory tree
+ */
+export function addSubcategoryToTree(
+  subs: Subcategory[],
+  parentSubId: string | null,
+  newSub: Subcategory
+): Subcategory[] {
+  if (!parentSubId) {
+    return [...subs, newSub];
+  }
+  return subs.map((s) => {
+    if (s.id === parentSubId) {
+      return {
+        ...s,
+        subcategories: [...(s.subcategories || []), newSub],
+      };
+    }
+    if (s.subcategories && s.subcategories.length > 0) {
+      return {
+        ...s,
+        subcategories: addSubcategoryToTree(s.subcategories, parentSubId, newSub),
+      };
+    }
+    return s;
+  });
+}
+
+/**
+ * Recursive helper to delete a subcategory from tree
+ */
+export function deleteSubcategoryFromTree(subs: Subcategory[], targetSubId: string): Subcategory[] {
+  return subs
+    .filter((s) => s.id !== targetSubId)
+    .map((s) => ({
+      ...s,
+      subcategories: s.subcategories ? deleteSubcategoryFromTree(s.subcategories, targetSubId) : [],
+    }));
+}
+
+/**
+ * Recursive helper to rename a subcategory in tree
+ */
+export function renameSubcategoryInTree(
+  subs: Subcategory[],
+  targetSubId: string,
+  newName: string
+): Subcategory[] {
+  return subs.map((s) => {
+    if (s.id === targetSubId) {
+      return {
+        ...s,
+        name: newName,
+      };
+    }
+    if (s.subcategories && s.subcategories.length > 0) {
+      return {
+        ...s,
+        subcategories: renameSubcategoryInTree(s.subcategories, targetSubId, newName),
+      };
+    }
+    return s;
+  });
+}
+
+

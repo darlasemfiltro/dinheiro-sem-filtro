@@ -1848,6 +1848,323 @@ async function startServer() {
     }
   });
 
+  // Subcategory tree manipulation helpers on server
+  function addSubcategoryToTreeServer(
+    subs: any[] = [],
+    parentSubId: string | null = null,
+    newSub: any
+  ): any[] {
+    if (!parentSubId) {
+      return [...subs, newSub];
+    }
+    return subs.map((s) => {
+      if (s.id === parentSubId) {
+        return {
+          ...s,
+          subcategories: [...(s.subcategories || []), newSub],
+        };
+      }
+      if (s.subcategories && s.subcategories.length > 0) {
+        return {
+          ...s,
+          subcategories: addSubcategoryToTreeServer(s.subcategories, parentSubId, newSub),
+        };
+      }
+      return s;
+    });
+  }
+
+  function deleteSubcategoryFromTreeServer(subs: any[] = [], targetSubId: string): any[] {
+    return subs
+      .filter((s) => s.id !== targetSubId)
+      .map((s) => ({
+        ...s,
+        subcategories: s.subcategories ? deleteSubcategoryFromTreeServer(s.subcategories, targetSubId) : [],
+      }));
+  }
+
+  function renameSubcategoryInTreeServer(
+    subs: any[] = [],
+    targetSubId: string,
+    newName: string
+  ): any[] {
+    return subs.map((s) => {
+      if (s.id === targetSubId) {
+        return {
+          ...s,
+          name: newName,
+        };
+      }
+      if (s.subcategories && s.subcategories.length > 0) {
+        return {
+          ...s,
+          subcategories: renameSubcategoryInTreeServer(s.subcategories, targetSubId, newName),
+        };
+      }
+      return s;
+    });
+  }
+
+  // POST /api/data/transactional-structure - Atomic Server Transaction for Categories, Subcategories, and Members
+  app.post('/api/data/transactional-structure', async (req, res) => {
+    try {
+      const {
+        userId,
+        action,
+        categoryId,
+        categoryData,
+        subData,
+        parentSubId,
+        subId,
+        newSubName,
+        sourceCatId,
+        targetCatId,
+        memberId,
+        memberData,
+        categoriesList,
+      } = req.body || {};
+
+      if (!userId || !action) {
+        return res.status(400).json({ success: false, message: 'userId e action são obrigatórios.' });
+      }
+
+      const canonicalId = getCanonicalUserIdServer(userId);
+      const financials = loadServerFinancials();
+      const existing = financials[canonicalId] || {
+        accounts: [],
+        categories: [],
+        familyMembers: [],
+        transactions: [],
+        goals: [],
+        deletedIds: [],
+      };
+
+      existing.categories = existing.categories || [];
+      existing.familyMembers = existing.familyMembers || [];
+      existing.deletedIds = existing.deletedIds || [];
+
+      const deletedSet = new Set<string>(existing.deletedIds);
+
+      if (action === 'addCategory' || action === 'updateCategory') {
+        if (!categoryData || !categoryData.id) {
+          return res.status(400).json({ success: false, message: 'categoryData com id é obrigatório.' });
+        }
+        const sanitizedCat = {
+          ...categoryData,
+          id: String(categoryData.id),
+          userId: canonicalId,
+          name: String(categoryData.name || '').trim(),
+          type: categoryData.type || 'expense',
+          ruleGroup: categoryData.type === 'income' ? 'income' : (categoryData.ruleGroup || '50_essentials'),
+          color: categoryData.color || '#E11D48',
+          icon: categoryData.icon || 'Tag',
+          subcategories: Array.isArray(categoryData.subcategories) ? categoryData.subcategories : [],
+          updatedAt: new Date().toISOString(),
+        };
+        delete sanitizedCat._pendingSync;
+
+        existing.deletedIds = existing.deletedIds.filter((id: string) => id !== sanitizedCat.id);
+        deletedSet.delete(sanitizedCat.id);
+
+        const cIdx = existing.categories.findIndex((c: any) => c.id === sanitizedCat.id);
+        if (cIdx >= 0) {
+          existing.categories[cIdx] = { ...existing.categories[cIdx], ...sanitizedCat };
+        } else {
+          existing.categories.push(sanitizedCat);
+        }
+      } else if (action === 'deleteCategory') {
+        const idToDelete = categoryId || (categoryData && categoryData.id);
+        if (!idToDelete) {
+          return res.status(400).json({ success: false, message: 'categoryId é obrigatório para exclusão.' });
+        }
+        if (!existing.deletedIds.includes(idToDelete)) {
+          existing.deletedIds.push(idToDelete);
+        }
+        existing.categories = existing.categories.filter((c: any) => c.id !== idToDelete);
+      } else if (action === 'addSubcategory') {
+        const catId = categoryId || (subData && subData.categoryId);
+        if (!catId || !subData) {
+          return res.status(400).json({ success: false, message: 'categoryId e subData são obrigatórios.' });
+        }
+        const cIdx = existing.categories.findIndex((c: any) => c.id === catId);
+        if (cIdx >= 0) {
+          const newSub = {
+            id: String(subData.id || `sub_${Date.now()}_${Math.random().toString(36).substr(2, 4)}`),
+            categoryId: catId,
+            parentId: parentSubId || subData.parentId || undefined,
+            name: String(subData.name || '').trim(),
+            subcategories: Array.isArray(subData.subcategories) ? subData.subcategories : [],
+          };
+          existing.categories[cIdx].subcategories = addSubcategoryToTreeServer(
+            existing.categories[cIdx].subcategories || [],
+            parentSubId || null,
+            newSub
+          );
+          existing.categories[cIdx].updatedAt = new Date().toISOString();
+        }
+      } else if (action === 'updateSubcategory' || action === 'renameSubcategory') {
+        const catId = categoryId;
+        const targetSubId = subId || (subData && subData.id);
+        const nameToSet = String(newSubName || (subData && subData.name) || '').trim();
+        if (!catId || !targetSubId || !nameToSet) {
+          return res.status(400).json({ success: false, message: 'categoryId, subId e newSubName são obrigatórios.' });
+        }
+        const cIdx = existing.categories.findIndex((c: any) => c.id === catId);
+        if (cIdx >= 0) {
+          existing.categories[cIdx].subcategories = renameSubcategoryInTreeServer(
+            existing.categories[cIdx].subcategories || [],
+            targetSubId,
+            nameToSet
+          );
+          existing.categories[cIdx].updatedAt = new Date().toISOString();
+        }
+      } else if (action === 'deleteSubcategory') {
+        const catId = categoryId;
+        const targetSubId = subId || (subData && subData.id);
+        if (!catId || !targetSubId) {
+          return res.status(400).json({ success: false, message: 'categoryId e subId são obrigatórios.' });
+        }
+        const cIdx = existing.categories.findIndex((c: any) => c.id === catId);
+        if (cIdx >= 0) {
+          existing.categories[cIdx].subcategories = deleteSubcategoryFromTreeServer(
+            existing.categories[cIdx].subcategories || [],
+            targetSubId
+          );
+          existing.categories[cIdx].updatedAt = new Date().toISOString();
+        }
+      } else if (action === 'moveSubcategory') {
+        const srcId = sourceCatId || (categoryData && categoryData.id);
+        const tgtId = targetCatId;
+        const movingSub = subData;
+        if (!srcId || !tgtId || !movingSub) {
+          return res.status(400).json({ success: false, message: 'sourceCatId, targetCatId e subData são obrigatórios.' });
+        }
+        const srcIdx = existing.categories.findIndex((c: any) => c.id === srcId);
+        const tgtIdx = existing.categories.findIndex((c: any) => c.id === tgtId);
+        if (srcIdx >= 0 && tgtIdx >= 0) {
+          existing.categories[srcIdx].subcategories = deleteSubcategoryFromTreeServer(
+            existing.categories[srcIdx].subcategories || [],
+            movingSub.id
+          );
+          existing.categories[srcIdx].updatedAt = new Date().toISOString();
+
+          const movedSub = {
+            ...movingSub,
+            categoryId: tgtId,
+            parentId: undefined,
+          };
+          existing.categories[tgtIdx].subcategories = [
+            ...(existing.categories[tgtIdx].subcategories || []),
+            movedSub,
+          ];
+          existing.categories[tgtIdx].updatedAt = new Date().toISOString();
+        }
+      } else if (action === 'restoreDefaultCategories') {
+        if (Array.isArray(categoriesList) && categoriesList.length > 0) {
+          const sanitizedDefaults = categoriesList.map((c: any) => ({
+            ...c,
+            userId: canonicalId,
+            updatedAt: new Date().toISOString(),
+          }));
+          existing.categories = sanitizedDefaults;
+        }
+      } else if (action === 'addMember' || action === 'updateMember') {
+        if (!memberData || !memberData.id) {
+          return res.status(400).json({ success: false, message: 'memberData com id é obrigatório.' });
+        }
+        const sanitizedMember = {
+          ...memberData,
+          id: String(memberData.id),
+          userId: canonicalId,
+          name: String(memberData.name || '').trim(),
+          relationship: memberData.relationship || 'Titular',
+          color: memberData.color || '#E11D48',
+          updatedAt: new Date().toISOString(),
+        };
+        delete sanitizedMember._pendingSync;
+
+        existing.deletedIds = existing.deletedIds.filter((id: string) => id !== sanitizedMember.id);
+        deletedSet.delete(sanitizedMember.id);
+
+        const mIdx = existing.familyMembers.findIndex((m: any) => m.id === sanitizedMember.id);
+        if (mIdx >= 0) {
+          existing.familyMembers[mIdx] = { ...existing.familyMembers[mIdx], ...sanitizedMember };
+        } else {
+          existing.familyMembers.push(sanitizedMember);
+        }
+      } else if (action === 'deleteMember') {
+        const idToDelete = memberId || (memberData && memberData.id);
+        if (!idToDelete) {
+          return res.status(400).json({ success: false, message: 'memberId é obrigatório para exclusão.' });
+        }
+        if (!existing.deletedIds.includes(idToDelete)) {
+          existing.deletedIds.push(idToDelete);
+        }
+        existing.familyMembers = existing.familyMembers.filter((m: any) => m.id !== idToDelete);
+      }
+
+      existing.updatedAt = new Date().toISOString();
+      financials[canonicalId] = existing;
+      saveServerFinancials(financials);
+
+      // Direct write to Appwrite central doc
+      try {
+        const portfolioData = loadServerPortfolio();
+        const currentPortfolio = portfolioData[canonicalId] || { assets: [], transactions: [] };
+        const fullPayload = {
+          transactions: existing.transactions || [],
+          accounts: existing.accounts || [],
+          familyBudget: [...(existing.goals || []), ...(existing.familyMembers || [])],
+          investorPortfolio: currentPortfolio.assets || [],
+          investmentTransactions: currentPortfolio.transactions || [],
+          goals: existing.goals || [],
+          investorGoals: existing.goals || [],
+          categories: existing.categories || [],
+          familyMembers: existing.familyMembers || [],
+          members: existing.familyMembers || [],
+          updatedAt: existing.updatedAt,
+        };
+
+        fetch('https://sfo.cloud.appwrite.io/v1/databases/6a83aa8d0038331e040f/collections/user_financials/documents/6a849358002db9e638ce', {
+          method: 'PATCH',
+          headers: {
+            'Content-Type': 'application/json',
+            'X-Appwrite-Project': '6a83a2d30034f2dd2811',
+          },
+          body: JSON.stringify({
+            data: JSON.stringify(fullPayload),
+            userId: '6a83b38ed065c08efa49',
+          }),
+        }).catch(() => {});
+      } catch (cloudErr) {
+        console.warn('[Server Appwrite Sync Notice for Structure]', cloudErr);
+      }
+
+      // Broadcast WebSocket real-time event to all connected devices
+      broadcastRealtime('DATA_UPDATED', {
+        userId: canonicalId,
+        rawUserId: userId,
+        mutationType: 'STRUCTURE',
+        action,
+        categoryId: categoryId || (categoryData && categoryData.id),
+        memberId: memberId || (memberData && memberData.id),
+        categories: existing.categories,
+        familyMembers: existing.familyMembers,
+        updatedAt: existing.updatedAt,
+      });
+
+      return res.json({
+        success: true,
+        categories: existing.categories,
+        familyMembers: existing.familyMembers,
+        updatedAt: existing.updatedAt,
+      });
+    } catch (err) {
+      console.error('[API Transactional Structure Error]', err);
+      return res.status(500).json({ success: false, message: 'Erro ao processar transação estrutural no servidor.' });
+    }
+  });
+
   // POST /api/data/reset
   app.post('/api/data/reset', (req, res) => {
     try {

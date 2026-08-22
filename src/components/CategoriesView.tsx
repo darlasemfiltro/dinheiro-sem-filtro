@@ -291,6 +291,11 @@ interface CategoriesViewProps {
   familyMembers?: FamilyMember[];
   onSaveFamilyMember?: (member: FamilyMember) => void;
   onDeleteFamilyMember?: (id: string) => void;
+  onAddSubcategory?: (cat: Category, parentSubId: string | null, name: string) => void;
+  onRenameSubcategory?: (cat: Category, subId: string, newName: string) => void;
+  onDeleteSubcategory?: (cat: Category, subId: string) => void;
+  onMoveSubcategory?: (sub: Subcategory, sourceCat: Category, targetCat: Category) => void;
+  onRestoreDefaultCategories?: () => void;
   userId: string;
 }
 
@@ -301,6 +306,11 @@ export const CategoriesView: React.FC<CategoriesViewProps> = ({
   familyMembers = [],
   onSaveFamilyMember,
   onDeleteFamilyMember,
+  onAddSubcategory: propsOnAddSubcategory,
+  onRenameSubcategory: propsOnRenameSubcategory,
+  onDeleteSubcategory: propsOnDeleteSubcategory,
+  onMoveSubcategory: propsOnMoveSubcategory,
+  onRestoreDefaultCategories: propsOnRestoreDefaultCategories,
   userId,
 }) => {
   const [mainView, setMainView] = useState<'categories' | 'family'>('categories');
@@ -371,22 +381,26 @@ export const CategoriesView: React.FC<CategoriesViewProps> = ({
   const handleAddSubcategory = (cat: Category, parentSubId: string | null, name: string) => {
     if (!name.trim()) return;
 
-    const newSub: Subcategory = {
-      id: `sub_${Date.now()}_${Math.random().toString(36).substr(2, 4)}`,
-      categoryId: cat.id,
-      parentId: parentSubId || undefined,
-      name: name.trim(),
-      subcategories: [],
-    };
+    if (propsOnAddSubcategory) {
+      propsOnAddSubcategory(cat, parentSubId, name.trim());
+    } else {
+      const newSub: Subcategory = {
+        id: `sub_${Date.now()}_${Math.random().toString(36).substr(2, 4)}`,
+        categoryId: cat.id,
+        parentId: parentSubId || undefined,
+        name: name.trim(),
+        subcategories: [],
+      };
 
-    const updatedSubcategories = addSubcategoryToTree(cat.subcategories || [], parentSubId, newSub);
+      const updatedSubcategories = addSubcategoryToTree(cat.subcategories || [], parentSubId, newSub);
 
-    const updatedCat: Category = {
-      ...cat,
-      subcategories: updatedSubcategories,
-    };
+      const updatedCat: Category = {
+        ...cat,
+        subcategories: updatedSubcategories,
+      };
 
-    onSaveCategory(updatedCat);
+      onSaveCategory(updatedCat);
+    }
     setNewSubName('');
     setAddingParentKey(null);
   };
@@ -394,24 +408,32 @@ export const CategoriesView: React.FC<CategoriesViewProps> = ({
   const handleRenameSubcategory = (cat: Category, subId: string, newName: string) => {
     if (!newName.trim()) return;
 
-    const updatedSubcategories = renameSubcategoryInTree(cat.subcategories || [], subId, newName.trim());
-    const updatedCat: Category = {
-      ...cat,
-      subcategories: updatedSubcategories,
-    };
+    if (propsOnRenameSubcategory) {
+      propsOnRenameSubcategory(cat, subId, newName.trim());
+    } else {
+      const updatedSubcategories = renameSubcategoryInTree(cat.subcategories || [], subId, newName.trim());
+      const updatedCat: Category = {
+        ...cat,
+        subcategories: updatedSubcategories,
+      };
 
-    onSaveCategory(updatedCat);
+      onSaveCategory(updatedCat);
+    }
     setNotification(`Subcategoria renomeada para "${newName.trim()}"!`);
     setTimeout(() => setNotification(null), 3000);
   };
 
   const handleDeleteSubcategory = (cat: Category, subId: string) => {
-    const updatedSubcategories = deleteSubcategoryFromTree(cat.subcategories || [], subId);
-    const updatedCat: Category = {
-      ...cat,
-      subcategories: updatedSubcategories,
-    };
-    onSaveCategory(updatedCat);
+    if (propsOnDeleteSubcategory) {
+      propsOnDeleteSubcategory(cat, subId);
+    } else {
+      const updatedSubcategories = deleteSubcategoryFromTree(cat.subcategories || [], subId);
+      const updatedCat: Category = {
+        ...cat,
+        subcategories: updatedSubcategories,
+      };
+      onSaveCategory(updatedCat);
+    }
   };
 
   // Subcategory Move Handler
@@ -431,27 +453,31 @@ export const CategoriesView: React.FC<CategoriesViewProps> = ({
     const targetCat = categories.find((c) => c.id === targetCatId);
     if (!targetCat) return;
 
-    // Remove sub from source category
-    const updatedSourceSubs = deleteSubcategoryFromTree(sourceCat.subcategories || [], sub.id);
-    const updatedSourceCat: Category = {
-      ...sourceCat,
-      subcategories: updatedSourceSubs,
-    };
+    if (propsOnMoveSubcategory) {
+      propsOnMoveSubcategory(sub, sourceCat, targetCat);
+    } else {
+      // Remove sub from source category
+      const updatedSourceSubs = deleteSubcategoryFromTree(sourceCat.subcategories || [], sub.id);
+      const updatedSourceCat: Category = {
+        ...sourceCat,
+        subcategories: updatedSourceSubs,
+      };
 
-    // Add sub to target category
-    const movedSub: Subcategory = {
-      ...sub,
-      categoryId: targetCat.id,
-      parentId: undefined,
-    };
-    const updatedTargetSubs = [...(targetCat.subcategories || []), movedSub];
-    const updatedTargetCat: Category = {
-      ...targetCat,
-      subcategories: updatedTargetSubs,
-    };
+      // Add sub to target category
+      const movedSub: Subcategory = {
+        ...sub,
+        categoryId: targetCat.id,
+        parentId: undefined,
+      };
+      const updatedTargetSubs = [...(targetCat.subcategories || []), movedSub];
+      const updatedTargetCat: Category = {
+        ...targetCat,
+        subcategories: updatedTargetSubs,
+      };
 
-    onSaveCategory(updatedSourceCat);
-    onSaveCategory(updatedTargetCat);
+      onSaveCategory(updatedSourceCat);
+      onSaveCategory(updatedTargetCat);
+    }
     setMovingSubInfo(null);
 
     setNotification(`Subcategoria "${sub.name}" movida com sucesso para "${targetCat.name}"!`);
@@ -461,12 +487,16 @@ export const CategoriesView: React.FC<CategoriesViewProps> = ({
   // Restore Default 50/30/20 Categories
   const handleRestoreDefaults = () => {
     if (window.confirm('Deseja carregar a estrutura de Categorias padrão com base na Regra 50 / 30 / 20 e Receitas?')) {
-      SEED_CATEGORIES.forEach((cat) => {
-        onSaveCategory({
-          ...cat,
-          userId,
+      if (propsOnRestoreDefaultCategories) {
+        propsOnRestoreDefaultCategories();
+      } else {
+        SEED_CATEGORIES.forEach((cat) => {
+          onSaveCategory({
+            ...cat,
+            userId,
+          });
         });
-      });
+      }
       setNotification('Categorias padrão 50/30/20 restauradas com sucesso!');
       setTimeout(() => setNotification(null), 3500);
     }
