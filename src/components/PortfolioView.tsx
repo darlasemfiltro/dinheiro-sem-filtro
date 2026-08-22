@@ -1726,28 +1726,6 @@ export const PortfolioView: React.FC<PortfolioViewProps> = ({
       StorageService.saveGoal(goalData);
       setGoals(updatedGoals);
 
-      const fullPayload = {
-        transactions: PortfolioStorageService.getTransactions(userId),
-        accounts: PortfolioStorageService.getAssets(userId),
-        familyBudget: [...updatedGoals, ...StorageService.getFamilyMembers(userId)],
-        investmentTransactions: PortfolioStorageService.getTransactions(userId),
-        investorPortfolio: PortfolioStorageService.getAssets(userId),
-        goals: updatedGoals,
-        investorGoals: updatedGoals,
-        updatedAt: new Date().toISOString()
-      };
-
-      await databases.updateDocument(
-        '6a83aa8d0038331e040f',
-        'user_financials',
-        '6a849358002db9e638ce',
-        {
-          userId: '6a83b38ed065c08efa49',
-          data: JSON.stringify(fullPayload)
-        }
-      );
-      await saveAppData(fullPayload);
-      await PortfolioStorageService.syncPortfolioWithRemote(userId);
       await StorageService.syncUserMutationToServer(userId);
       await onDataChanged?.();
       console.log('[Investimentos] Meta salva e sincronizada com sucesso na nuvem!');
@@ -1775,35 +1753,6 @@ export const PortfolioView: React.FC<PortfolioViewProps> = ({
       StorageService.deleteGoal(deletingGoalId);
       setGoals(updatedGoals);
 
-      const fullPayload = {
-        transactions: PortfolioStorageService.getTransactions(userId),
-        accounts: PortfolioStorageService.getAssets(userId),
-        familyBudget: [...updatedGoals, ...StorageService.getFamilyMembers(userId)],
-        investmentTransactions: PortfolioStorageService.getTransactions(userId),
-        investorPortfolio: PortfolioStorageService.getAssets(userId),
-        goals: updatedGoals,
-        investorGoals: updatedGoals,
-        updatedAt: new Date().toISOString()
-      };
-
-      try {
-        await databases.updateDocument(
-          '6a83aa8d0038331e040f',
-          'user_financials',
-          '6a849358002db9e638ce',
-          {
-            userId: '6a83b38ed065c08efa49',
-            data: JSON.stringify(fullPayload)
-          }
-        );
-        await saveAppData(fullPayload);
-        await PortfolioStorageService.syncPortfolioWithRemote(userId);
-        await StorageService.syncUserMutationToServer(userId);
-        await onDataChanged?.();
-      } catch (err: any) {
-        console.warn('Cloud sync error for goal deletion:', err);
-        alert('Erro ao excluir meta: ' + (err?.message || JSON.stringify(err)));
-      }
       setDeletingGoalId(null);
       loadData();
     }
