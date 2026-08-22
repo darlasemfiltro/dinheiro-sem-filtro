@@ -7,11 +7,11 @@
     "completedWeeksHistory": [
       "2026-W34"
     ],
-    "xpTotal": 780,
-    "weeklyXP": 780,
-    "gems": 325,
+    "xpTotal": 1200,
+    "weeklyXP": 1200,
+    "gems": 500,
     "streakFreezeCount": 0,
-    "currentDivision": "Prata",
+    "currentDivision": "Ouro",
     "divisionRankPosition": 1,
     "hasCompletedWeeklyCheckIn": true,
     "weeklyQuests": [
@@ -100,6 +100,6 @@
       "doubleXpActiveUntil": null
     },
     "claimedMissions": [],
-    "updatedAt": "2026-08-22T19:00:10.698Z"
+    "updatedAt": "2026-08-22T19:00:35.629Z"
   }
 }
