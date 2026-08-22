@@ -584,20 +584,6 @@ export default function App() {
           const budgetId = StorageService.getEffectiveBudgetId(currentUser);
           (PortfolioStorageService as any).saveToAllAliasKeys('darla_portfolio_assets', budgetId, remoteData.investorPortfolio);
         }
-        if (remoteData.goals && Array.isArray(remoteData.goals)) {
-          setGoals(remoteData.goals);
-          StorageService.setGoals(remoteData.goals);
-          const budgetId = StorageService.getEffectiveBudgetId(currentUser);
-          (PortfolioStorageService as any).saveToAllAliasKeys('darla_portfolio_goals', budgetId, remoteData.goals);
-        } else if (remoteData.familyBudget && Array.isArray(remoteData.familyBudget)) {
-          const goalsList = remoteData.familyBudget.filter((item: any) => item.targetAmount !== undefined || item.targetDate !== undefined);
-          if (goalsList.length > 0) {
-            setGoals(goalsList);
-            StorageService.setGoals(goalsList);
-            const budgetId = StorageService.getEffectiveBudgetId(currentUser);
-            (PortfolioStorageService as any).saveToAllAliasKeys('darla_portfolio_goals', budgetId, goalsList);
-          }
-        }
       }
       refreshData(currentUser, false);
       window.dispatchEvent(new Event('portfolio_updated'));
@@ -650,8 +636,8 @@ export default function App() {
     window.addEventListener('user_deleted_event', handleUserDeleted);
 
     const pollInterval = setInterval(() => {
-      refreshData(currentUser, false);
-    }, 60000);
+      syncFn();
+    }, 15000);
 
     return () => {
       unsubscribeFirestore();
