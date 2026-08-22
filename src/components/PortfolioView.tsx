@@ -709,11 +709,7 @@ export const PortfolioView: React.FC<PortfolioViewProps> = ({
       loadData();
     });
 
-    const handlePortfolioUpdate = () => {
-      PortfolioStorageService.loadPortfolioFromRemote(userId).then(() => {
-        loadData();
-      });
-    };
+    const handlePortfolioUpdate = () => {      loadData();    };
 
     window.addEventListener('portfolio_updated', handlePortfolioUpdate);
     window.addEventListener('remote_data_updated', handlePortfolioUpdate);
