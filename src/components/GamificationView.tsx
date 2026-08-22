@@ -25,10 +25,20 @@ export const GamificationView: React.FC<GamificationViewProps> = ({ userId }) =>
     const handleGamificationUpdated = (e: any) => {
       if (e?.detail) {
         if (e.detail.xpTotal !== undefined || e.detail.gems !== undefined || e.detail.weeklyStreakCount !== undefined) {
-          setGameState(e.detail);
+          setGameState({
+            ...e.detail,
+            xpTotal: Number(e.detail.xpTotal) || 0,
+            gems: Number(e.detail.gems) || 0,
+            weeklyStreakCount: Number(e.detail.weeklyStreakCount) || 0,
+          });
         } else if (e.detail.gamificationProfile || e.detail.gamificationState) {
-          const remote = e.detail.gamificationState || e.detail.gamificationProfile;
-          const s = GamificationService.fromGamificationProfile(remote, userId);
+          const remoteProfile = e.detail.gamificationProfile || e.detail.gamificationState;
+          const sanitizedProfile = {
+            ...remoteProfile,
+            xp: Number(remoteProfile.xp ?? remoteProfile.xpTotal) || 0,
+            gems: Number(remoteProfile.gems) || 0,
+          };
+          const s = GamificationService.fromGamificationProfile(sanitizedProfile, userId);
           setGameState(s);
         } else {
           setGameState(GamificationService.getGamificationState(userId));
@@ -40,8 +50,13 @@ export const GamificationView: React.FC<GamificationViewProps> = ({ userId }) =>
 
     const handleRemoteDataUpdated = (e: any) => {
       if (e?.detail?.gamificationProfile || e?.detail?.gamificationState || e?.detail?.gamification) {
-        const remote = e.detail.gamificationState || e.detail.gamificationProfile || e.detail.gamification;
-        const s = GamificationService.fromGamificationProfile(remote, userId);
+        const remoteProfile = e.detail.gamificationProfile || e.detail.gamificationState || e.detail.gamification;
+        const sanitizedProfile = {
+          ...remoteProfile,
+          xp: Number(remoteProfile.xp ?? remoteProfile.xpTotal) || 0,
+          gems: Number(remoteProfile.gems) || 0,
+        };
+        const s = GamificationService.fromGamificationProfile(sanitizedProfile, userId);
         setGameState(s);
       }
     };
