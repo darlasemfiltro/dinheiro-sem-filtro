@@ -193,6 +193,12 @@ export default function App() {
             const mergedTargets = mergeRemoteTargetAllocationsWithOptimistic(remoteData.targetAllocations);
             (PortfolioStorageService as any).saveToAllAliasKeys('darla_target_allocations', bId, mergedTargets);
           }
+          if (remoteData.budgetGoals || remoteData.budgetStrategy) {
+            const incomingBudgetGoals = remoteData.budgetGoals || remoteData.budgetStrategy;
+            const mergedBudgetGoals = mergeRemoteBudgetGoalsWithOptimistic(incomingBudgetGoals);
+            StorageService.saveBudgetGoals(mergedBudgetGoals, bId);
+            window.dispatchEvent(new CustomEvent('budget_goals_updated', { detail: { budgetGoals: mergedBudgetGoals } }));
+          }
           window.dispatchEvent(new Event('portfolio_updated'));
         }
       } catch (err: any) {
@@ -282,6 +288,12 @@ export default function App() {
             if (remote.targetAllocations && Array.isArray(remote.targetAllocations)) {
               const mergedTargets = mergeRemoteTargetAllocationsWithOptimistic(remote.targetAllocations);
               (PortfolioStorageService as any).saveToAllAliasKeys('darla_target_allocations', bId, mergedTargets);
+            }
+            if (remote.budgetGoals || remote.budgetStrategy) {
+              const incomingBudgetGoals = remote.budgetGoals || remote.budgetStrategy;
+              const mergedBudgetGoals = mergeRemoteBudgetGoalsWithOptimistic(incomingBudgetGoals);
+              StorageService.saveBudgetGoals(mergedBudgetGoals, bId);
+              window.dispatchEvent(new CustomEvent('budget_goals_updated', { detail: { budgetGoals: mergedBudgetGoals } }));
             }
             window.dispatchEvent(new Event('portfolio_updated'));
             window.dispatchEvent(new Event('remote_data_updated'));
