@@ -772,6 +772,7 @@ export class StorageService {
       if (rawUser) {
         try {
           _inMemoryStore.currentUser = JSON.parse(rawUser);
+          StorageService.isCloudSynced = true;
         } catch (e) {}
       }
 
@@ -1238,7 +1239,8 @@ export class StorageService {
   }
 
   static async syncUserDataWithRemote(userId: string): Promise<boolean> {
-    if (!userId || !this.isCloudSynced) return false;
+    if (!userId) return false;
+    this.isCloudSynced = true;
     this.initialize();
 
     const canonicalId = getCanonicalUserId(userId);
