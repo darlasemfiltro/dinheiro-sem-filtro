@@ -252,13 +252,13 @@ export default function App() {
     };
     window.addEventListener('sync-error', handleSyncError);
 
-    // Auto-sync interval for multi-device real-time updates (every 6 seconds)
+    // Auto-sync interval for multi-device real-time updates (every 2 seconds)
     const syncInterval = setInterval(() => {
       const user = StorageService.getCurrentUser();
       if (user) {
         refreshData(user, false);
       }
-    }, 6000);
+    }, 2000);
 
     return () => {
       window.removeEventListener('sync-error', handleSyncError);

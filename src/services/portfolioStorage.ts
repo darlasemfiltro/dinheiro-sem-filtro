@@ -8,7 +8,7 @@ import {
   AssetCategory,
   RebalancingSuggestion,
 } from '../types';
-import { getCanonicalUserId } from './storage';
+import { getCanonicalUserId, StorageService } from './storage';
 import {
   pushPortfolioAssetToFirestore,
   deletePortfolioAssetFromFirestore,
@@ -2032,6 +2032,9 @@ export class PortfolioStorageService {
     goals.push(newGoal);
     this.saveGoals(goals, userId);
     pushPortfolioGoalToFirestore(newGoal);
+    try {
+      StorageService.syncUserMutationToServer(userId);
+    } catch {}
     return newGoal;
   }
 
@@ -2056,6 +2059,9 @@ export class PortfolioStorageService {
     }
     this.saveGoals(goals, userId);
     pushPortfolioGoalToFirestore(updatedGoal);
+    try {
+      StorageService.syncUserMutationToServer(userId);
+    } catch {}
   }
 
   static deleteGoal(id: string, userId = 'default') {
@@ -2066,6 +2072,9 @@ export class PortfolioStorageService {
     this.notifyUpdate();
       
     this.syncPortfolioWithRemote(userId);
+    try {
+      StorageService.syncUserMutationToServer(userId);
+    } catch {}
   }
 
   static deleteDividend(id: string, userId = 'default') {
