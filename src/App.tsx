@@ -407,6 +407,11 @@ export default function App() {
           if (remoteState.goals && remoteState.goals.length > 0) {
             setGoals(remoteState.goals);
           }
+          if (remoteState.investorGoals && Array.isArray(remoteState.investorGoals)) {
+            const budgetId = StorageService.getEffectiveBudgetId(currentUser || { email: 'default' });
+            (PortfolioStorageService as any).saveToAllAliasKeys('darla_portfolio_goals', budgetId, remoteState.investorGoals);
+            setGoals(remoteState.investorGoals);
+          }
         }
       } catch (e) {}
 
@@ -582,6 +587,11 @@ export default function App() {
         if (remoteData.investorPortfolio) {
           const budgetId = StorageService.getEffectiveBudgetId(currentUser);
           (PortfolioStorageService as any).saveToAllAliasKeys('darla_portfolio_assets', budgetId, remoteData.investorPortfolio);
+        }
+        if (remoteData.investorGoals && Array.isArray(remoteData.investorGoals)) {
+          const budgetId = StorageService.getEffectiveBudgetId(currentUser);
+          (PortfolioStorageService as any).saveToAllAliasKeys('darla_portfolio_goals', budgetId, remoteData.investorGoals);
+          setGoals(remoteData.investorGoals);
         }
         if (remoteData.goals && Array.isArray(remoteData.goals)) {
           setGoals(remoteData.goals);

@@ -1707,12 +1707,17 @@ export const PortfolioView: React.FC<PortfolioViewProps> = ({
       title: goalForm.title,
       targetAmount: parseFloat(goalForm.targetAmount),
       currentAmount: parseFloat(goalForm.currentAmount || '0'),
-      startDate: goalForm.startDate,
-      targetDate: goalForm.targetDate,
-      category: goalForm.category,
+      startDate: goalForm.startDate || new Date().toISOString().split('T')[0],
+      targetDate: goalForm.targetDate || '',
+      deadline: goalForm.targetDate || '',
+      category: goalForm.category || 'Patrimônio Total',
       color: '#D4AF37',
       icon: 'Target',
     };
+
+    const updatedGoals = editingGoal
+      ? goals.map((g: any) => g.id === goalData.id ? goalData : g)
+      : [...goals, goalData];
 
     if (editingGoal) {
       PortfolioStorageService.updateGoal(goalData, userId);
@@ -1721,21 +1726,36 @@ export const PortfolioView: React.FC<PortfolioViewProps> = ({
       PortfolioStorageService.addGoal(goalData, userId);
       StorageService.saveGoal(goalData);
     }
+    setGoals(updatedGoals);
+
+    const fullPayload = {
+      transactions: PortfolioStorageService.getTransactions(userId),
+      accounts: PortfolioStorageService.getAssets(userId),
+      familyBudget: [...updatedGoals, ...StorageService.getFamilyMembers(userId)],
+      investmentTransactions: PortfolioStorageService.getTransactions(userId),
+      investorPortfolio: PortfolioStorageService.getAssets(userId),
+      goals: updatedGoals,
+      investorGoals: updatedGoals,
+      updatedAt: new Date().toISOString()
+    };
 
     try {
+      await databases.updateDocument(
+        '6a83aa8d0038331e040f',
+        'user_financials',
+        '6a849358002db9e638ce',
+        {
+          userId: '6a83b38ed065c08efa49',
+          data: JSON.stringify(fullPayload)
+        }
+      );
+      await saveAppData(fullPayload);
       await PortfolioStorageService.syncPortfolioWithRemote(userId);
       await StorageService.syncUserMutationToServer(userId);
-      await saveAppData({
-        transactions: PortfolioStorageService.getTransactions(userId),
-        accounts: PortfolioStorageService.getAssets(userId),
-        investorPortfolio: PortfolioStorageService.getAssets(userId),
-        investmentTransactions: PortfolioStorageService.getTransactions(userId),
-        goals: PortfolioStorageService.getGoals(userId),
-        familyBudget: [...PortfolioStorageService.getGoals(userId), ...StorageService.getFamilyMembers(userId)],
-      });
       await onDataChanged?.();
-    } catch (err) {
-      console.warn('Cloud sync error for goal:', err);
+    } catch (err: any) {
+      console.error('Erro ao salvar meta no Appwrite:', err);
+      alert('Erro ao salvar meta: ' + (err?.message || JSON.stringify(err)));
     }
 
     setIsGoalModalOpen(false);
@@ -1748,22 +1768,39 @@ export const PortfolioView: React.FC<PortfolioViewProps> = ({
 
   const confirmDeleteGoal = async () => {
     if (deletingGoalId) {
+      const updatedGoals = goals.filter((g: any) => g.id !== deletingGoalId);
       PortfolioStorageService.deleteGoal(deletingGoalId, userId);
       StorageService.deleteGoal(deletingGoalId);
+      setGoals(updatedGoals);
+
+      const fullPayload = {
+        transactions: PortfolioStorageService.getTransactions(userId),
+        accounts: PortfolioStorageService.getAssets(userId),
+        familyBudget: [...updatedGoals, ...StorageService.getFamilyMembers(userId)],
+        investmentTransactions: PortfolioStorageService.getTransactions(userId),
+        investorPortfolio: PortfolioStorageService.getAssets(userId),
+        goals: updatedGoals,
+        investorGoals: updatedGoals,
+        updatedAt: new Date().toISOString()
+      };
+
       try {
+        await databases.updateDocument(
+          '6a83aa8d0038331e040f',
+          'user_financials',
+          '6a849358002db9e638ce',
+          {
+            userId: '6a83b38ed065c08efa49',
+            data: JSON.stringify(fullPayload)
+          }
+        );
+        await saveAppData(fullPayload);
         await PortfolioStorageService.syncPortfolioWithRemote(userId);
         await StorageService.syncUserMutationToServer(userId);
-        await saveAppData({
-          transactions: PortfolioStorageService.getTransactions(userId),
-          accounts: PortfolioStorageService.getAssets(userId),
-          investorPortfolio: PortfolioStorageService.getAssets(userId),
-          investmentTransactions: PortfolioStorageService.getTransactions(userId),
-          goals: PortfolioStorageService.getGoals(userId),
-          familyBudget: [...PortfolioStorageService.getGoals(userId), ...StorageService.getFamilyMembers(userId)],
-        });
         await onDataChanged?.();
-      } catch (err) {
+      } catch (err: any) {
         console.warn('Cloud sync error for goal deletion:', err);
+        alert('Erro ao excluir meta: ' + (err?.message || JSON.stringify(err)));
       }
       setDeletingGoalId(null);
       loadData();
