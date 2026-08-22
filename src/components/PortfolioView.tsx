@@ -605,7 +605,7 @@ export const PortfolioView: React.FC<PortfolioViewProps> = ({
       ? investmentTransactions
       : PortfolioStorageService.getTransactions(userId);
     const loadedDivs = PortfolioStorageService.getDividends(userId);
-    const loadedGoals = PortfolioStorageService.getGoals(userId);
+    const loadedGoals = StorageService.getGoals(userId);
     const loadedQuotes = PortfolioStorageService.getMarketQuotes();
     const savedAdvice = PortfolioStorageService.getAIAdvice(userId);
 
@@ -1723,13 +1723,7 @@ export const PortfolioView: React.FC<PortfolioViewProps> = ({
         ? goals.map((g: any) => g.id === goalData.id ? goalData : g)
         : [...goals, goalData];
 
-      if (editingGoal) {
-        PortfolioStorageService.updateGoal(goalData, userId);
-        StorageService.saveGoal(goalData);
-      } else {
-        PortfolioStorageService.addGoal(goalData, userId);
-        StorageService.saveGoal(goalData);
-      }
+      StorageService.saveGoal(goalData);
       setGoals(updatedGoals);
 
       const fullPayload = {
@@ -1778,7 +1772,6 @@ export const PortfolioView: React.FC<PortfolioViewProps> = ({
   const confirmDeleteGoal = async () => {
     if (deletingGoalId) {
       const updatedGoals = goals.filter((g: any) => g.id !== deletingGoalId);
-      PortfolioStorageService.deleteGoal(deletingGoalId, userId);
       StorageService.deleteGoal(deletingGoalId);
       setGoals(updatedGoals);
 
