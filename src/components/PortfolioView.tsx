@@ -511,6 +511,7 @@ export const PortfolioView: React.FC<PortfolioViewProps> = ({
 
   // Goal Modal State
   const [isGoalModalOpen, setIsGoalModalOpen] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
   const [editingGoal, setEditingGoal] = useState<PortfolioGoal | null>(null);
   const [goalForm, setGoalForm] = useState({
     title: '',
@@ -1699,47 +1700,50 @@ export const PortfolioView: React.FC<PortfolioViewProps> = ({
 
   const handleSaveGoalForm = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (isSubmitting) return;
     if (!goalForm.title || !goalForm.targetAmount) return;
 
-    const goalData = {
-      id: editingGoal ? editingGoal.id : `goal_${Date.now()}`,
-      userId,
-      title: goalForm.title,
-      targetAmount: parseFloat(goalForm.targetAmount),
-      currentAmount: parseFloat(goalForm.currentAmount || '0'),
-      startDate: goalForm.startDate || new Date().toISOString().split('T')[0],
-      targetDate: goalForm.targetDate || '',
-      deadline: goalForm.targetDate || '',
-      category: goalForm.category || 'Patrimônio Total',
-      color: '#D4AF37',
-      icon: 'Target',
-    };
-
-    const updatedGoals = editingGoal
-      ? goals.map((g: any) => g.id === goalData.id ? goalData : g)
-      : [...goals, goalData];
-
-    if (editingGoal) {
-      PortfolioStorageService.updateGoal(goalData, userId);
-      StorageService.saveGoal(goalData);
-    } else {
-      PortfolioStorageService.addGoal(goalData, userId);
-      StorageService.saveGoal(goalData);
-    }
-    setGoals(updatedGoals);
-
-    const fullPayload = {
-      transactions: PortfolioStorageService.getTransactions(userId),
-      accounts: PortfolioStorageService.getAssets(userId),
-      familyBudget: [...updatedGoals, ...StorageService.getFamilyMembers(userId)],
-      investmentTransactions: PortfolioStorageService.getTransactions(userId),
-      investorPortfolio: PortfolioStorageService.getAssets(userId),
-      goals: updatedGoals,
-      investorGoals: updatedGoals,
-      updatedAt: new Date().toISOString()
-    };
+    setIsSubmitting(true);
 
     try {
+      const goalData = {
+        id: editingGoal ? editingGoal.id : `goal_${Date.now()}`,
+        userId,
+        title: goalForm.title,
+        targetAmount: parseFloat(goalForm.targetAmount),
+        currentAmount: parseFloat(goalForm.currentAmount || '0'),
+        startDate: goalForm.startDate || new Date().toISOString().split('T')[0],
+        targetDate: goalForm.targetDate || '',
+        deadline: goalForm.targetDate || '',
+        category: goalForm.category || 'Patrimônio Total',
+        color: '#D4AF37',
+        icon: 'Target',
+      };
+
+      const updatedGoals = editingGoal
+        ? goals.map((g: any) => g.id === goalData.id ? goalData : g)
+        : [...goals, goalData];
+
+      if (editingGoal) {
+        PortfolioStorageService.updateGoal(goalData, userId);
+        StorageService.saveGoal(goalData);
+      } else {
+        PortfolioStorageService.addGoal(goalData, userId);
+        StorageService.saveGoal(goalData);
+      }
+      setGoals(updatedGoals);
+
+      const fullPayload = {
+        transactions: PortfolioStorageService.getTransactions(userId),
+        accounts: PortfolioStorageService.getAssets(userId),
+        familyBudget: [...updatedGoals, ...StorageService.getFamilyMembers(userId)],
+        investmentTransactions: PortfolioStorageService.getTransactions(userId),
+        investorPortfolio: PortfolioStorageService.getAssets(userId),
+        goals: updatedGoals,
+        investorGoals: updatedGoals,
+        updatedAt: new Date().toISOString()
+      };
+
       await databases.updateDocument(
         '6a83aa8d0038331e040f',
         'user_financials',
@@ -1753,13 +1757,19 @@ export const PortfolioView: React.FC<PortfolioViewProps> = ({
       await PortfolioStorageService.syncPortfolioWithRemote(userId);
       await StorageService.syncUserMutationToServer(userId);
       await onDataChanged?.();
+      console.log('[Investimentos] Meta salva e sincronizada com sucesso na nuvem!');
+      setIsGoalModalOpen(false);
+      loadData();
     } catch (err: any) {
       console.error('Erro ao salvar meta no Appwrite:', err);
-      alert('Erro ao salvar meta: ' + (err?.message || JSON.stringify(err)));
+      if (err?.code === 429 || err?.message?.includes('Rate limit')) {
+        alert('O servidor está processando muitas requisições. Aguarde 30 segundos e tente salvar novamente.');
+      } else {
+        alert('Erro ao salvar meta: ' + (err?.message || JSON.stringify(err)));
+      }
+    } finally {
+      setIsSubmitting(false);
     }
-
-    setIsGoalModalOpen(false);
-    loadData();
   };
 
   const handleDeleteGoal = (id: string) => {
@@ -5243,9 +5253,10 @@ export const PortfolioView: React.FC<PortfolioViewProps> = ({
                 </button>
                 <button
                   type="submit"
-                  className="px-4 py-2 bg-[#D4AF37] hover:bg-[#FACC15] text-[#121212] font-black rounded-xl"
+                  disabled={isSubmitting}
+                  className={`px-4 py-2 bg-[#D4AF37] hover:bg-[#FACC15] text-[#121212] font-black rounded-xl ${isSubmitting ? 'opacity-50 cursor-not-allowed' : ''}`}
                 >
-                  Salvar Meta
+                  {isSubmitting ? 'Salvando...' : 'Salvar Meta'}
                 </button>
               </div>
             </form>
