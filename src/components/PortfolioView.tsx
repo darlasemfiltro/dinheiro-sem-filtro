@@ -784,8 +784,8 @@ export const PortfolioView: React.FC<PortfolioViewProps> = ({
   const activeAssetsMap = useMemo(() => {
     const map = new Map<string, InvestmentAsset>();
     assets.forEach((a) => {
-      if (a.quantity > 0) {
-        map.set(a.ticker.trim().toUpperCase(), a);
+      if (a && a.quantity > 0) {
+        map.set(String(a.ticker || '').trim().toUpperCase(), a);
       }
     });
     return map;
@@ -834,9 +834,14 @@ export const PortfolioView: React.FC<PortfolioViewProps> = ({
 
   const activeDividends = useMemo(() => {
     return dividends
-      .filter((d) => activeAssetsMap.has(d.assetTicker.trim().toUpperCase()))
+      .filter((d) => {
+        if (!d) return false;
+        const ticker = String(d.assetTicker || d.ticker || d.asset || '').trim().toUpperCase();
+        return activeAssetsMap.has(ticker);
+      })
       .map((d) => {
-        const asset = activeAssetsMap.get(d.assetTicker.trim().toUpperCase());
+        const ticker = String(d.assetTicker || d.ticker || d.asset || '').trim().toUpperCase();
+        const asset = activeAssetsMap.get(ticker);
         if (asset && asset.quantity > 0) {
           const qty = asset.quantity;
           const totalVal = d.valuePerShare > 0 ? d.valuePerShare * qty : d.totalValue;
@@ -978,9 +983,11 @@ export const PortfolioView: React.FC<PortfolioViewProps> = ({
     }> = {};
 
     list.forEach((d) => {
-      const ticker = d.assetTicker.trim().toUpperCase();
+      if (!d) return;
+      const rawTicker = d.assetTicker || d.ticker || d.asset || '';
+      const ticker = String(rawTicker).trim().toUpperCase();
       if (!map[ticker]) {
-        const assetObj = activeAssetsMap.get(ticker) || assets.find((a) => a.ticker.trim().toUpperCase() === ticker);
+        const assetObj = activeAssetsMap.get(ticker) || assets.find((a) => String(a.ticker || '').trim().toUpperCase() === ticker);
         map[ticker] = {
           ticker,
           category: d.assetCategory || assetObj?.category,
@@ -1037,8 +1044,9 @@ export const PortfolioView: React.FC<PortfolioViewProps> = ({
     let criptoAlt = 0;
 
     assets.forEach((a) => {
-      const valBrl = a.currency === 'USD' ? a.currentPrice * usdRate * a.quantity : a.currentPrice * a.quantity;
-      const tickerUpper = a.ticker.toUpperCase();
+      if (!a) return;
+      const valBrl = a.currency === 'USD' ? (a.currentPrice || 0) * usdRate * (a.quantity || 0) : (a.currentPrice || 0) * (a.quantity || 0);
+      const tickerUpper = String(a.ticker || '').toUpperCase();
       const cat = a.category;
 
       if (cat === 'tesouro') {
@@ -3993,13 +4001,13 @@ export const PortfolioView: React.FC<PortfolioViewProps> = ({
                         const current = a.currentPrice || 0;
                         const capGainPct = avg > 0 ? ((current - avg) / avg) * 100 : (a.returnPct || 0);
 
-                        const tickerUpper = a.ticker.trim().toUpperCase();
+                        const tickerUpper = String(a.ticker || '').trim().toUpperCase();
                         const usdRate = quotes.find((q) => q.symbol === 'USD/BRL')?.price || 5.06;
                         const mult = a.currency === 'USD' ? usdRate : 1;
                         const totalInvestedBrl = avg * a.quantity * mult;
 
                         let divs = activeDividends.filter(
-                          (d) => d.assetTicker.trim().toUpperCase() === tickerUpper && d.status === 'received'
+                          (d) => String(d.assetTicker || d.ticker || '').trim().toUpperCase() === tickerUpper && d.status === 'received'
                         );
 
                         if (rentPeriod === '1M') {

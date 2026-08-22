@@ -7,6 +7,7 @@ interface Props {
 
 interface State {
   hasError: boolean;
+  error?: Error;
 }
 
 export class ErrorBoundary extends Component<Props, State> {
@@ -21,9 +22,9 @@ export class ErrorBoundary extends Component<Props, State> {
     this.state = { hasError: false };
   }
 
-  public static getDerivedStateFromError(_: Error): State {
+  public static getDerivedStateFromError(error: Error): State {
     // Update state so the next render will show the fallback UI.
-    return { hasError: true };
+    return { hasError: true, error };
   }
 
   public componentDidCatch(error: Error, errorInfo: ErrorInfo) {
@@ -46,9 +47,12 @@ export class ErrorBoundary extends Component<Props, State> {
           <p className="text-gray-600 mb-4 text-sm">
             Tivemos um problema ao carregar esta seção. Isso pode acontecer devido a dados inconsistentes.
           </p>
+          <div className="bg-red-100 p-2 text-left text-xs text-red-800 rounded w-full overflow-auto mb-4" id="error-boundary-details">
+            {this.state.error && this.state.error.message}
+          </div>
           <button
             // @ts-ignore
-            onClick={() => this.setState({ hasError: false })}
+            onClick={() => this.setState({ hasError: false, error: undefined })}
             className="px-4 py-2 bg-blue-600 text-white rounded-lg font-medium hover:bg-blue-700 transition-colors"
           >
             Tentar Novamente
