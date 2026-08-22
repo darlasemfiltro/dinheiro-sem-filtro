@@ -1064,9 +1064,9 @@ export const PortfolioView: React.FC<PortfolioViewProps> = ({
       } else if (cat === 'stocks') {
         acoesUsd += valBrl;
       } else if (cat === 'cripto') {
-        if (tickerUpper === 'ETH' || a.name.toLowerCase().includes('ethereum')) {
+        if (tickerUpper === 'ETH' || (a.name || '').toLowerCase().includes('ethereum')) {
           criptoEth += valBrl;
-        } else if (tickerUpper === 'BTC' || a.name.toLowerCase().includes('bitcoin')) {
+        } else if (tickerUpper === 'BTC' || (a.name || '').toLowerCase().includes('bitcoin')) {
           criptoBtc += valBrl;
         } else {
           criptoAlt += valBrl;
@@ -2061,10 +2061,11 @@ export const PortfolioView: React.FC<PortfolioViewProps> = ({
 
   // Filter Transactions
   const filteredTransactions = transactions.filter((tx) => {
+    const search = (txSearchTerm || '').toLowerCase();
     const matchesSearch =
-      tx.assetTicker.toLowerCase().includes(txSearchTerm.toLowerCase()) ||
-      tx.broker.toLowerCase().includes(txSearchTerm.toLowerCase()) ||
-      (tx.notes && tx.notes.toLowerCase().includes(txSearchTerm.toLowerCase()));
+      String(tx.assetTicker || '').toLowerCase().includes(search) ||
+      String(tx.broker || '').toLowerCase().includes(search) ||
+      (tx.notes && String(tx.notes).toLowerCase().includes(search));
     const matchesCat =
       txCategoryFilter === 'all' ||
       tx.assetCategory === txCategoryFilter ||
@@ -5249,7 +5250,7 @@ export const PortfolioView: React.FC<PortfolioViewProps> = ({
                         'Renda Fixa',
                         'Outros'
                       ]
-                        .filter((cat) => cat.toLowerCase().includes(goalCategorySearch.toLowerCase()))
+                        .filter((cat) => cat.toLowerCase().includes((goalCategorySearch || '').toLowerCase()))
                         .map((cat) => (
                           <button
                             key={cat}
