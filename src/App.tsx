@@ -938,8 +938,9 @@ export default function App() {
   // Investment Transaction Handlers
   const saveInvestmentTransaction = async (newTx: any) => {
     const budgetId = currentUser ? StorageService.getEffectiveBudgetId(currentUser) : 'default';
+    const tempId = newTx.id || `tx_inv_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
     const txItem = {
-      id: newTx.id || `tx_inv_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
+      id: tempId,
       userId: budgetId,
       assetTicker: (newTx.assetTicker || newTx.ticker || '').toUpperCase().trim(),
       assetCategory: newTx.assetCategory || newTx.category || 'acoes',
@@ -954,74 +955,96 @@ export default function App() {
       updatedAt: new Date().toISOString(),
     };
 
-    // Optimistic Local UI Update
+    // 1. Snapshot previous state for rollback in case of network failure
+    const previousList = [...investmentTransactions];
+
+    // 2. OPTIMISTIC UI: Update state immediately (0ms delay)
+    setInvestmentTransactions(prev => {
+      const exists = prev.some(t => t.id === txItem.id);
+      const next = exists ? prev.map(t => (t.id === txItem.id ? txItem : t)) : [txItem, ...prev];
+      (PortfolioStorageService as any).saveToAllAliasKeys('darla_portfolio_transactions', budgetId, next);
+      return next;
+    });
+
     if (newTx.id) {
       PortfolioStorageService.updateTransaction(txItem, budgetId);
     } else {
       PortfolioStorageService.addTransaction(txItem, budgetId);
     }
 
-    const updatedList = [txItem, ...investmentTransactions.filter(t => t.id !== txItem.id)];
-    setInvestmentTransactions(updatedList);
-    (PortfolioStorageService as any).saveToAllAliasKeys('darla_portfolio_transactions', budgetId, updatedList);
-
+    // Trigger instant visual recalculations across components
     window.dispatchEvent(new Event('portfolio_updated'));
     window.dispatchEvent(new Event('remote_data_updated'));
     window.dispatchEvent(new CustomEvent('financial_data_mutated', { detail: { userId: budgetId } }));
 
-    try {
-      const action = newTx.id ? 'updateInvestmentTransaction' : 'addInvestmentTransaction';
-      const result = await executeTransactionalInvestmentTransaction(budgetId, action, {
-        transactionData: txItem,
-        transactionId: txItem.id,
-      });
+    // 3. Process cloud sync in background (non-blocking)
+    (async () => {
+      try {
+        const action = newTx.id ? 'updateInvestmentTransaction' : 'addInvestmentTransaction';
+        const result = await executeTransactionalInvestmentTransaction(budgetId, action, {
+          transactionData: txItem,
+          transactionId: txItem.id,
+        });
 
-      if (result.success && result.investmentTransactions) {
-        const merged = mergeRemoteInvestmentTransactionsWithOptimistic(result.investmentTransactions);
-        setInvestmentTransactions(merged);
-        (PortfolioStorageService as any).saveToAllAliasKeys('darla_portfolio_transactions', budgetId, merged);
+        if (result.success && result.investmentTransactions) {
+          const merged = mergeRemoteInvestmentTransactionsWithOptimistic(result.investmentTransactions);
+          setInvestmentTransactions(merged);
+          (PortfolioStorageService as any).saveToAllAliasKeys('darla_portfolio_transactions', budgetId, merged);
+        }
+      } catch (error: any) {
+        console.error('Falha na sincronização em background, revertendo estado...', error);
+        // 4. ROLLBACK if background sync fails
+        setInvestmentTransactions(previousList);
+        (PortfolioStorageService as any).saveToAllAliasKeys('darla_portfolio_transactions', budgetId, previousList);
+        setGlobalAlert({ isOpen: true, message: 'Erro ao salvar transação de investimento na nuvem. Verifique sua conexão.', type: 'error' });
       }
-      setGlobalAlert({ isOpen: true, message: 'Transação de investimento salva no banco!', type: 'success' });
-      return true;
-    } catch (error: any) {
-      console.error('Erro ao sincronizar investimento:', error);
-      setGlobalAlert({ isOpen: true, message: 'Transação salva localmente com sucesso!', type: 'success' });
-      return true;
-    }
+    })();
+
+    return true;
   };
 
   const deleteInvestmentTransaction = async (txId: string) => {
     const budgetId = currentUser ? StorageService.getEffectiveBudgetId(currentUser) : 'default';
     
-    // Guard against race resurrection
+    // 1. Snapshot previous state for rollback
+    const previousList = [...investmentTransactions];
+
+    // 2. OPTIMISTIC UI: Remove from UI immediately (0ms delay)
     recordInvestmentTxDeletion(txId);
     PortfolioStorageService.deleteTransaction(txId, budgetId);
 
-    const updatedList = investmentTransactions.filter(t => t.id !== txId);
-    setInvestmentTransactions(updatedList);
-    (PortfolioStorageService as any).saveToAllAliasKeys('darla_portfolio_transactions', budgetId, updatedList);
+    setInvestmentTransactions(prev => {
+      const next = prev.filter(t => t.id !== txId);
+      (PortfolioStorageService as any).saveToAllAliasKeys('darla_portfolio_transactions', budgetId, next);
+      return next;
+    });
 
     window.dispatchEvent(new Event('portfolio_updated'));
     window.dispatchEvent(new Event('remote_data_updated'));
     window.dispatchEvent(new CustomEvent('financial_data_mutated', { detail: { userId: budgetId } }));
 
-    try {
-      const result = await executeTransactionalInvestmentTransaction(budgetId, 'deleteInvestmentTransaction', {
-        transactionId: txId,
-      });
+    // 3. Process deletion in background (non-blocking)
+    (async () => {
+      try {
+        const result = await executeTransactionalInvestmentTransaction(budgetId, 'deleteInvestmentTransaction', {
+          transactionId: txId,
+        });
 
-      if (result.success && result.investmentTransactions) {
-        const merged = mergeRemoteInvestmentTransactionsWithOptimistic(result.investmentTransactions);
-        setInvestmentTransactions(merged);
-        (PortfolioStorageService as any).saveToAllAliasKeys('darla_portfolio_transactions', budgetId, merged);
+        if (result.success && result.investmentTransactions) {
+          const merged = mergeRemoteInvestmentTransactionsWithOptimistic(result.investmentTransactions);
+          setInvestmentTransactions(merged);
+          (PortfolioStorageService as any).saveToAllAliasKeys('darla_portfolio_transactions', budgetId, merged);
+        }
+      } catch (error: any) {
+        console.error('Falha ao excluir na nuvem, revertendo estado...', error);
+        // 4. ROLLBACK
+        setInvestmentTransactions(previousList);
+        (PortfolioStorageService as any).saveToAllAliasKeys('darla_portfolio_transactions', budgetId, previousList);
+        setGlobalAlert({ isOpen: true, message: 'Erro ao excluir transação na nuvem. Verifique sua conexão.', type: 'error' });
       }
-      setGlobalAlert({ isOpen: true, message: 'Transação de investimento excluída com sucesso!', type: 'success' });
-      return true;
-    } catch (error: any) {
-      console.error('Erro ao deletar investimento:', error);
-      setGlobalAlert({ isOpen: true, message: 'Transação removida localmente com sucesso!', type: 'success' });
-      return true;
-    }
+    })();
+
+    return true;
   };
 
   // Account Handlers

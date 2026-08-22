@@ -792,36 +792,67 @@ export const PortfolioView: React.FC<PortfolioViewProps> = ({
   }, []);
 
   // Add / Edit Asset / Transaction via AddAssetModal
-  const handleSaveAssetTransaction = async (tx: Omit<InvestmentTransaction, 'id' | 'createdAt'> | InvestmentTransaction) => {
-    try {
-      if (onSaveInvestmentTransaction) {
-        await onSaveInvestmentTransaction(tx);
-      } else {
-        if ('id' in tx && tx.id) {
-          PortfolioStorageService.updateTransaction(tx as InvestmentTransaction, userId);
-        } else {
-          PortfolioStorageService.addTransaction(tx, userId);
-        }
-      }
+  const handleSaveAssetTransaction = (tx: Omit<InvestmentTransaction, 'id' | 'createdAt'> | InvestmentTransaction) => {
+    const tempId = ('id' in tx && tx.id) ? tx.id : `tx_inv_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
+    const txItem: InvestmentTransaction = {
+      ...tx,
+      id: tempId,
+      userId,
+      assetTicker: ((tx as any).assetTicker || (tx as any).ticker || '').toUpperCase().trim(),
+      assetCategory: (tx as any).assetCategory || (tx as any).category || 'acoes',
+      type: tx.type || 'buy',
+      quantity: Number(tx.quantity) || 0,
+      unitPrice: Number(tx.unitPrice) || Number((tx as any).price) || 0,
+      totalAmount: Number(tx.totalAmount) || Number((tx as any).totalValue) || (Number(tx.quantity) * Number(tx.unitPrice || (tx as any).price)) || 0,
+      broker: (tx as any).broker || (tx as any).institution || 'RICO INVESTIMENTOS',
+      date: tx.date || new Date().toISOString().split('T')[0],
+      notes: tx.notes || '',
+      createdAt: (tx as any).createdAt || new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    };
 
-      setPortfolioAlert({ isOpen: true, message: 'Transação de investimento salva no banco!', type: 'success' });
-    } catch (err: any) {
-      console.error('Erro ao gravar investimento:', err);
-      const isRateLimit = err?.message?.includes('Rate limit') || err?.code === 429 || err?.status === 429;
-      if (isRateLimit) {
-        setPortfolioAlert({ isOpen: true, message: 'Transação salva localmente com sucesso! (Limite de requisições temporário na nuvem atingido, a sincronização ocorrerá em breve).', type: 'success' });
-      } else {
-        setPortfolioAlert({ isOpen: true, message: 'Erro ao gravar investimento: ' + (err?.message || JSON.stringify(err)), type: 'error' });
-      }
+    // 1. Snapshot previous state for rollback
+    const previousTxs = [...transactions];
+
+    // 2. OPTIMISTIC UI: Update local state immediately (0ms delay)
+    setTransactions(prev => {
+      const exists = prev.some(t => t.id === txItem.id);
+      return exists ? prev.map(t => (t.id === txItem.id ? txItem : t)) : [txItem, ...prev];
+    });
+
+    if ('id' in tx && tx.id) {
+      PortfolioStorageService.updateTransaction(txItem, userId);
+    } else {
+      PortfolioStorageService.addTransaction(txItem, userId);
     }
 
+    // 3. Instant modal close & visual event triggers (0ms delay)
     setEditingTx(null);
     setIsAddModalOpen(false);
     setIsTxModalOpen(false);
-    loadData();
     window.dispatchEvent(new Event('portfolio_updated'));
     window.dispatchEvent(new Event('remote_data_updated'));
     window.dispatchEvent(new CustomEvent('financial_data_mutated'));
+
+    // 4. Background Sync without freezing UI
+    (async () => {
+      try {
+        if (onSaveInvestmentTransaction) {
+          await onSaveInvestmentTransaction(txItem);
+        } else {
+          const action = ('id' in tx && tx.id) ? 'updateInvestmentTransaction' : 'addInvestmentTransaction';
+          await executeTransactionalInvestmentTransaction(userId, action, {
+            transactionData: txItem,
+            transactionId: txItem.id,
+          });
+        }
+      } catch (err: any) {
+        console.error('Erro na sincronização de investimento em background:', err);
+        // Rollback on failure
+        setTransactions(previousTxs);
+        setPortfolioAlert({ isOpen: true, message: 'Falha ao sincronizar com a nuvem. Alteração revertida.', type: 'error' });
+      }
+    })();
   };
 
   // Calculations
@@ -1927,59 +1958,91 @@ export const PortfolioView: React.FC<PortfolioViewProps> = ({
       updatedAt: new Date().toISOString()
     };
 
-    try {
-      if (onSaveInvestmentTransaction) {
-        await onSaveInvestmentTransaction(formData);
-      } else {
-        if (editingTx) {
-          PortfolioStorageService.updateTransaction(formData as any, userId);
-        } else {
-          PortfolioStorageService.addTransaction(formData as any, userId);
-        }
-        const action = editingTx ? 'updateInvestmentTransaction' : 'addInvestmentTransaction';
-        await executeTransactionalInvestmentTransaction(userId, action, {
-          transactionData: formData,
-          transactionId: formData.id,
-        });
-      }
+    // 1. Snapshot previous state for rollback
+    const previousTxs = [...transactions];
 
-      setPortfolioAlert({ isOpen: true, message: 'Transação de investimento salva no banco!', type: 'success' });
-    } catch (err: any) {
-      console.error('Erro ao gravar investimento:', err);
-      setPortfolioAlert({ isOpen: true, message: 'Transação salva localmente com sucesso!', type: 'success' });
+    // 2. OPTIMISTIC UI: Update local state immediately (0ms delay)
+    setTransactions(prev => {
+      const exists = prev.some(t => t.id === formData.id);
+      return exists ? prev.map(t => (t.id === formData.id ? (formData as any) : t)) : [(formData as any), ...prev];
+    });
+
+    if (editingTx) {
+      PortfolioStorageService.updateTransaction(formData as any, userId);
+    } else {
+      PortfolioStorageService.addTransaction(formData as any, userId);
     }
 
+    // 3. Instant modal close & visual event triggers (0ms delay)
     setIsTxModalOpen(false);
-    loadData();
+    setEditingTx(null);
     window.dispatchEvent(new Event('portfolio_updated'));
     window.dispatchEvent(new Event('remote_data_updated'));
     window.dispatchEvent(new CustomEvent('financial_data_mutated'));
+
+    // 4. Background Sync without freezing UI
+    (async () => {
+      try {
+        if (onSaveInvestmentTransaction) {
+          await onSaveInvestmentTransaction(formData);
+        } else {
+          const action = editingTx ? 'updateInvestmentTransaction' : 'addInvestmentTransaction';
+          await executeTransactionalInvestmentTransaction(userId, action, {
+            transactionData: formData,
+            transactionId: formData.id,
+          });
+        }
+      } catch (err: any) {
+        console.error('Erro na sincronização de investimento em background:', err);
+        // Rollback on failure
+        setTransactions(previousTxs);
+        setPortfolioAlert({ isOpen: true, message: 'Falha ao sincronizar com a nuvem. Alteração revertida.', type: 'error' });
+      }
+    })();
   };
 
   const handleDeleteTx = (id: string) => {
     setDeletingTxId(id);
   };
 
-  const confirmDeleteTx = async () => {
-    if (deletingTxId) {
-      if (onDeleteInvestmentTransaction) {
-        await onDeleteInvestmentTransaction(deletingTxId);
-      } else {
-        recordInvestmentTxDeletion(deletingTxId);
-        PortfolioStorageService.deleteTransaction(deletingTxId, userId);
-        await executeTransactionalInvestmentTransaction(userId, 'deleteInvestmentTransaction', {
-          transactionId: deletingTxId,
-        });
-        if (onDataChanged) {
-          await onDataChanged();
+  const confirmDeleteTx = () => {
+    if (!deletingTxId) return;
+    const targetId = deletingTxId;
+
+    // 1. Snapshot previous state for rollback
+    const previousTxs = [...transactions];
+
+    // 2. OPTIMISTIC UI: Remove from local state immediately (0ms delay)
+    recordInvestmentTxDeletion(targetId);
+    PortfolioStorageService.deleteTransaction(targetId, userId);
+    setTransactions(prev => prev.filter(t => t.id !== targetId));
+
+    // 3. Instant modal close & visual event triggers (0ms delay)
+    setDeletingTxId(null);
+    window.dispatchEvent(new Event('portfolio_updated'));
+    window.dispatchEvent(new Event('remote_data_updated'));
+    window.dispatchEvent(new CustomEvent('financial_data_mutated'));
+
+    // 4. Background Deletion Sync without freezing UI
+    (async () => {
+      try {
+        if (onDeleteInvestmentTransaction) {
+          await onDeleteInvestmentTransaction(targetId);
+        } else {
+          await executeTransactionalInvestmentTransaction(userId, 'deleteInvestmentTransaction', {
+            transactionId: targetId,
+          });
+          if (onDataChanged) {
+            await onDataChanged();
+          }
         }
+      } catch (err: any) {
+        console.error('Erro ao excluir investimento na nuvem em background:', err);
+        // Rollback on failure
+        setTransactions(previousTxs);
+        setPortfolioAlert({ isOpen: true, message: 'Falha ao excluir na nuvem. Alteração revertida.', type: 'error' });
       }
-      setDeletingTxId(null);
-      loadData();
-      window.dispatchEvent(new Event('portfolio_updated'));
-      window.dispatchEvent(new Event('remote_data_updated'));
-      window.dispatchEvent(new CustomEvent('financial_data_mutated'));
-    }
+    })();
   };
 
   const loadLogoAsDataUrl = (): Promise<string | null> => {
