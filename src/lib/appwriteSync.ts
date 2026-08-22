@@ -241,7 +241,6 @@ export async function saveAppData(updatedData: any): Promise<boolean> {
       investorPortfolio: updatedData.investorPortfolio || [],
       investmentTransactions: updatedData.investmentTransactions || [],
       goals: updatedData.goals || [],
-      investorGoals: updatedData.investorGoals || [],
       updatedAt: new Date().toISOString()
     };
 

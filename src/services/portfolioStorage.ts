@@ -1158,7 +1158,6 @@ export class PortfolioStorageService {
       const transactions = this.getTransactions(canonicalId);
       const dividends = this.getDividends(canonicalId);
       const targetAllocations = this.getTargetAllocations(canonicalId);
-      const goals = this.getGoals(canonicalId);
 
       // Push to Cloud Appwrite in background
       syncPortfolioWithAppwrite(canonicalId, {
@@ -1166,7 +1165,6 @@ export class PortfolioStorageService {
         transactions,
         dividends,
         targetAllocations,
-        goals,
       }).catch(() => {});
 
       // Optionally sync to Firestore concurrently
@@ -1174,13 +1172,11 @@ export class PortfolioStorageService {
         const pendingAssets = assets.filter((a: any) => a._pendingSync);
         const pendingTxs = transactions.filter((t: any) => t._pendingSync);
         const pendingDivs = dividends.filter((d: any) => d._pendingSync);
-        const pendingGoals = goals.filter((g: any) => g._pendingSync);
         
         await Promise.all([
           ...pendingAssets.map(a => pushPortfolioAssetToFirestore(a)),
           ...pendingTxs.map(t => pushPortfolioTransactionToFirestore(t)),
           ...pendingDivs.map(d => pushPortfolioDividendToFirestore(d)),
-          ...pendingGoals.map(g => pushPortfolioGoalToFirestore(g))
         ]);
       } catch (e) {
         console.warn('[Firestore Sync Error in syncPortfolioWithRemote]', e);
@@ -1195,7 +1191,6 @@ export class PortfolioStorageService {
           transactions,
           dividends,
           targetAllocations,
-          goals,
         }),
       });
 
@@ -1207,8 +1202,6 @@ export class PortfolioStorageService {
           this.saveToAllAliasKeys(STORAGE_KEYS.TRANSACTIONS, canonicalId, cleanTxs);
           const cleanDivs = this.getDividends(canonicalId).map(d => ({ ...d, _pendingSync: false }));
           this.saveToAllAliasKeys(STORAGE_KEYS.DIVIDENDS, canonicalId, cleanDivs);
-          const cleanGoals = this.getGoals(canonicalId).map(g => ({ ...g, _pendingSync: false }));
-          this.saveToAllAliasKeys(STORAGE_KEYS.GOALS, canonicalId, cleanGoals);
         } catch {}
 
         // Load clean merged state back instead of blind overwrite
@@ -1342,7 +1335,7 @@ export class PortfolioStorageService {
 
       let needsPush = false;
 
-        const hasRemoteData = !!(assets || transactions || dividends || goals);
+        const hasRemoteData = !!(assets || transactions || dividends);
         const reconcileItems = (localArr: any[], remoteArr: any[], keyGetter: (item: any) => string) => {
           const map = new Map<string, any>();
           (remoteArr || []).forEach((item) => {
@@ -1440,11 +1433,6 @@ export class PortfolioStorageService {
         }
         if (Array.isArray(targetAllocations) && targetAllocations.length > 0) {
           this.saveToAllAliasKeys('darla_target_allocations', canonicalId, targetAllocations);
-        }
-        if (Array.isArray(goals)) {
-          const localGoals = this.getGoals(canonicalId);
-          const allGoals = reconcileItems(localGoals, goals, (g) => g.id);
-          this.saveToAllAliasKeys(STORAGE_KEYS.GOALS, canonicalId, allGoals);
         }
 
         localStorage.setItem(`darla_portfolio_deleted_ids_${canonicalId}`, JSON.stringify(Array.from(deletedIds)));
@@ -2133,7 +2121,6 @@ export class PortfolioStorageService {
       _pendingSync: true,
     };
     goals.push(newGoal);
-    this.saveGoals(goals, userId);
     pushPortfolioGoalToFirestore(newGoal);
     try {
       StorageService.syncUserMutationToServer(userId);
@@ -2160,7 +2147,6 @@ export class PortfolioStorageService {
       };
       goals.push(updatedGoal);
     }
-    this.saveGoals(goals, userId);
     pushPortfolioGoalToFirestore(updatedGoal);
     try {
       StorageService.syncUserMutationToServer(userId);
@@ -2169,7 +2155,6 @@ export class PortfolioStorageService {
 
   static deleteGoal(id: string, userId = 'default') {
     const goals = this.getGoals(userId).filter((g) => g.id !== id);
-    this.saveGoals(goals, userId);
     this.markPortfolioItemAsDeleted(id, 'goals', userId);
     deletePortfolioGoalFromFirestore(id);
     this.notifyUpdate();
