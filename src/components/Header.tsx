@@ -412,11 +412,11 @@ export const Header: React.FC<HeaderProps> = ({
                         setShowUserMenu(false);
                         onLogout();
                       }}
-                      className="w-full text-left p-3 bg-red-50 hover:bg-red-100 text-[#FF3D00] border border-red-200 rounded-2xl text-xs font-black transition flex items-center gap-3 cursor-pointer shadow-xs"
+                      className="btn-saida w-full text-left flex items-center gap-3 justify-center"
                       id="user-drawer-logout-btn"
                     >
-                      <LogOut className="w-4 h-4 text-[#FF3D00] shrink-0 stroke-[2.5]" />
-                      <span>SAIR DA CONTA</span>
+                      <LogOut className="w-4 h-4 shrink-0 stroke-[2.5]" />
+                      <span>Sair da Conta</span>
                     </button>
 
                     {/* 2. Alterar Informações do Usuário */}

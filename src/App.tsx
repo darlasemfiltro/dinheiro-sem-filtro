@@ -747,10 +747,10 @@ export default function App() {
     return false;
   };
 
-  const buildAppFinancialState = (overrideTxs?: Transaction[]) => {
+  const buildAppFinancialState = (overrideTxs?: Transaction[], overrideAccounts?: Account[]) => {
     const budgetId = currentUser ? StorageService.getEffectiveBudgetId(currentUser) : 'default';
     const currentTxs = overrideTxs || transactions;
-    const currentAccounts = accounts;
+    const currentAccounts = overrideAccounts || accounts;
     const currentGoals = goals;
     const currentFamily = familyMembers;
     const budgets = StorageService.deduplicateSharedBudgets();
@@ -777,9 +777,9 @@ export default function App() {
     };
   };
 
-  const syncCurrentStateToCloud = async (overrideTxs?: Transaction[]) => {
+  const syncCurrentStateToCloud = async (overrideTxs?: Transaction[], overrideAccounts?: Account[]) => {
     try {
-      const fullState = buildAppFinancialState(overrideTxs);
+      const fullState = buildAppFinancialState(overrideTxs, overrideAccounts);
       await saveAppData(fullState);
     } catch (e) {
       console.error('Erro ao sincronizar estado com Appwrite:', e);
@@ -986,9 +986,8 @@ export default function App() {
     const transactionsToPersist = updatedTransactions || transactions;
     
     const budgetId = currentUser ? StorageService.getEffectiveBudgetId(currentUser) : 'default';
-    const currentGoals = goals;
-    const currentFamily = familyMembers;
 
+    // 1. Instant React state update
     setAccounts(accountsToPersist);
     StorageService.setAccounts(accountsToPersist);
     setTransactions(transactionsToPersist);
@@ -998,14 +997,29 @@ export default function App() {
       setInvestmentTransactions(updatedInvestmentTransactions);
     }
 
+    // 2. Cloud Persistence to Appwrite Document '6a849358002db9e638ce'
+    try {
+      const fullState = buildAppFinancialState(transactionsToPersist, accountsToPersist);
+      await saveAppData(fullState);
+      console.log('[Appwrite Sync] Dados e contas sincronizados na nuvem (doc 6a849358002db9e638ce)!');
+    } catch (appwriteErr) {
+      console.warn('[Appwrite Sync Notice]', appwriteErr);
+    }
+
+    // 3. Server-side / Firestore sync
     try {
       await StorageService.syncUserMutationToServer(budgetId);
       console.log('[Sync] Dados e transações sincronizados online com sucesso!');
-      return true;
     } catch (error: any) {
       console.warn('[Sync Notice] Salvo localmente. A sincronização online ocorrerá em segundo plano.', error?.message || error);
-      return true;
     }
+
+    // 4. Dispatch events for instant UI reactivity
+    window.dispatchEvent(new Event('portfolio_updated'));
+    window.dispatchEvent(new Event('remote_data_updated'));
+    window.dispatchEvent(new CustomEvent('financial_data_mutated'));
+
+    return true;
   };
 
   const handleSaveAccount = async (acc: Account, updatedAccounts?: Account[]): Promise<boolean> => {

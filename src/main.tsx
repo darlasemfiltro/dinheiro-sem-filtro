@@ -1,6 +1,7 @@
 import {StrictMode} from 'react';
 import {createRoot} from 'react-dom/client';
 import App from './App.tsx';
+import { AppProvider } from './context/AppContext.tsx';
 import './index.css';
 
 const originalConsoleError = console.error;
@@ -49,6 +50,8 @@ window.addEventListener('unhandledrejection', (event) => {
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
-    <App />
+    <AppProvider>
+      <App />
+    </AppProvider>
   </StrictMode>,
 );

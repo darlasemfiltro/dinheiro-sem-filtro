@@ -125,3 +125,18 @@ button svg, a svg {
   }
 }
 
+
+.btn-saida {
+  background-color: #FF3D00;
+  color: #FAFAFA;
+  font-weight: 900;
+  padding: 0.5rem 1rem;
+  border-radius: 0.5rem;
+  transition: all 0.2s ease;
+  cursor: pointer;
+  border: 1px solid #D32F2F;
+}
+.btn-saida:hover {
+  background-color: #D32F2F;
+  box-shadow: 0 4px 12px rgba(255, 61, 0, 0.35);
+}

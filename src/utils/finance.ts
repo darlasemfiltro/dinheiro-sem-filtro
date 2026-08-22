@@ -280,45 +280,155 @@ export function calculateMonthSummary(
 }
 
 /**
- * Calculate present actual balance per account
+ * Motor de Cálculo de Saldo Dinâmico por Conta
+ * Calcula o saldo inicial da conta + a soma de todas as transações efetivadas / consolidadas.
+ * Suporta assinatura flexível: (transactions, accounts) ou (accounts, transactions).
  */
 export function calculateAccountBalances(
-  accounts: Account[],
-  transactions: Transaction[]
+  arg1: any[],
+  arg2: any[]
 ): Record<string, { currentBalance: number; consolidatedBalance: number }> {
+  const list1 = Array.isArray(arg1) ? arg1 : [];
+  const list2 = Array.isArray(arg2) ? arg2 : [];
+
+  // Detect which argument is accounts and which is transactions
+  let accounts: Account[] = [];
+  let transactions: Transaction[] = [];
+
+  const isList1Accounts = list1.some(
+    (item) => item && (item.initialBalance !== undefined || (item.type && ['checking', 'credit', 'cash', 'savings', 'other'].includes(item.type)))
+  );
+  const isList2Accounts = list2.some(
+    (item) => item && (item.initialBalance !== undefined || (item.type && ['checking', 'credit', 'cash', 'savings', 'other'].includes(item.type)))
+  );
+
+  if (isList1Accounts || (!isList2Accounts && list2.length > 0 && list2[0]?.amount !== undefined)) {
+    accounts = list1;
+    transactions = list2;
+  } else if (isList2Accounts || (!isList1Accounts && list1.length > 0 && list1[0]?.amount !== undefined)) {
+    transactions = list1;
+    accounts = list2;
+  } else {
+    accounts = list1;
+    transactions = list2;
+  }
+
   const balances: Record<string, { currentBalance: number; consolidatedBalance: number }> = {};
 
+  // 1. Inicializa com o saldo inicial das contas
   for (const acc of accounts) {
+    if (!acc || !acc.id) continue;
+    const initial = typeof acc.initialBalance === 'number'
+      ? acc.initialBalance
+      : parseFloat(String(acc.initialBalance || 0).replace(',', '.')) || 0;
+
     balances[acc.id] = {
-      currentBalance: acc.initialBalance || 0,
-      consolidatedBalance: acc.initialBalance || 0,
+      currentBalance: initial,
+      consolidatedBalance: initial,
     };
   }
 
+  // 2. Soma / subtrai as transações
   for (const t of transactions) {
-    if (t.type === 'transfer' && t.targetAccountId) {
-      // Outflow from accountId
-      if (balances[t.accountId]) {
-        balances[t.accountId].currentBalance -= t.amount;
-        if (t.isConsolidated) balances[t.accountId].consolidatedBalance -= t.amount;
+    if (!t) continue;
+    const tx = t as any;
+    const amount = typeof tx.amount === 'number'
+      ? tx.amount
+      : parseFloat(String(tx.amount || 0).replace(',', '.')) || 0;
+
+    if (isNaN(amount) || amount === 0) continue;
+
+    // Check if transaction is settled/effected/consolidated
+    const isEfetivado =
+      tx.isConsolidated === true ||
+      tx.status === 'efetivado' ||
+      tx.status === 'consolidated' ||
+      tx.status === 'paid' ||
+      tx.status === 'completed' ||
+      tx.status === 'efetuado';
+
+    const isIncome = tx.type === 'income' || tx.type === 'receita';
+    const isExpense = tx.type === 'expense' || tx.type === 'despesa';
+    const isTransfer = tx.type === 'transfer' || tx.type === 'transferencia';
+
+    if (isTransfer && tx.targetAccountId) {
+      // Outflow from origin accountId
+      if (tx.accountId && balances[tx.accountId]) {
+        balances[tx.accountId].currentBalance -= amount;
+        if (isEfetivado) balances[tx.accountId].consolidatedBalance -= amount;
       }
-      // Inflow to targetAccountId
-      if (balances[t.targetAccountId]) {
-        balances[t.targetAccountId].currentBalance += t.amount;
-        if (t.isConsolidated) balances[t.targetAccountId].consolidatedBalance += t.amount;
+      // Inflow to destination targetAccountId
+      if (tx.targetAccountId && balances[tx.targetAccountId]) {
+        balances[tx.targetAccountId].currentBalance += amount;
+        if (isEfetivado) balances[tx.targetAccountId].consolidatedBalance += amount;
       }
-    } else if (balances[t.accountId]) {
-      if (t.type === 'income') {
-        balances[t.accountId].currentBalance += t.amount;
-        if (t.isConsolidated) balances[t.accountId].consolidatedBalance += t.amount;
-      } else if (t.type === 'expense') {
-        balances[t.accountId].currentBalance -= t.amount;
-        if (t.isConsolidated) balances[t.accountId].consolidatedBalance -= t.amount;
+    } else if (tx.accountId && balances[tx.accountId]) {
+      if (isIncome) {
+        balances[tx.accountId].currentBalance += amount;
+        if (isEfetivado) balances[tx.accountId].consolidatedBalance += amount;
+      } else if (isExpense) {
+        balances[tx.accountId].currentBalance -= amount;
+        if (isEfetivado) balances[tx.accountId].consolidatedBalance -= amount;
       }
     }
   }
 
   return balances;
+}
+
+/**
+ * Lógica de Cálculo de Saldo (retorna Record<string, number> com o saldo efetivado)
+ */
+export function calculateAccountBalancesMap(
+  transactions: any[],
+  accounts: any[]
+): Record<string, number> {
+  const balancesMap: Record<string, number> = {};
+
+  const accList = Array.isArray(accounts) ? accounts : [];
+  const txList = Array.isArray(transactions) ? transactions : [];
+
+  // Inicializa com o saldo inicial das contas
+  accList.forEach((acc) => {
+    if (acc && acc.id) {
+      balancesMap[acc.id] = typeof acc.initialBalance === 'number'
+        ? acc.initialBalance
+        : parseFloat(String(acc.initialBalance || 0).replace(',', '.')) || 0;
+    }
+  });
+
+  // Soma as transações efetivadas
+  txList.forEach((tx) => {
+    if (!tx) return;
+    const isEfetivado =
+      tx.isConsolidated === true ||
+      tx.status === 'efetivado' ||
+      tx.status === 'consolidated' ||
+      tx.status === 'paid' ||
+      tx.status === 'completed' ||
+      tx.status === 'efetuado';
+
+    const amount = typeof tx.amount === 'number'
+      ? tx.amount
+      : parseFloat(String(tx.amount || 0).replace(',', '.')) || 0;
+
+    if (isEfetivado && tx.accountId && balancesMap[tx.accountId] !== undefined) {
+      if (tx.type === 'income' || tx.type === 'receita') {
+        balancesMap[tx.accountId] += amount;
+      } else if (tx.type === 'expense' || tx.type === 'despesa') {
+        balancesMap[tx.accountId] -= amount;
+      } else if (
+        (tx.type === 'transfer' || tx.type === 'transferencia') &&
+        tx.targetAccountId &&
+        balancesMap[tx.targetAccountId] !== undefined
+      ) {
+        balancesMap[tx.accountId] -= amount;
+        balancesMap[tx.targetAccountId] += amount;
+      }
+    }
+  });
+
+  return balancesMap;
 }
 
 /**

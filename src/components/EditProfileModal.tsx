@@ -489,10 +489,10 @@ export const EditProfileModal: React.FC<EditProfileModalProps> = ({
                   onClose();
                   onLogout();
                 }}
-                className="min-h-[48px] py-2.5 px-3.5 bg-red-50 hover:bg-red-100 text-[#FF3D00] text-xs sm:text-sm font-extrabold rounded-xl transition flex items-center gap-2 cursor-pointer border border-red-200"
+                className="btn-saida min-h-[48px] text-xs sm:text-sm font-extrabold rounded-xl flex items-center gap-2"
                 title="Sair da Conta do Aplicativo"
               >
-                <LogOut className="w-4 h-4 text-[#FF3D00] shrink-0" />
+                <LogOut className="w-4 h-4 shrink-0" />
                 <span>Sair da Conta</span>
               </button>
             )}
