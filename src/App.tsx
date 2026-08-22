@@ -182,7 +182,10 @@ export default function App() {
         `databases.${DATABASE_ID}.collections.${COLLECTION_ID}.documents.${DOCUMENT_ID}`,
         (response: any) => {
           if (response.payload?.data) {
-            const remote = JSON.parse(response.payload.data);
+            const remote = typeof response.payload.data === 'string' ? JSON.parse(response.payload.data) : response.payload.data;
+            const user = StorageService.getCurrentUser();
+            const bId = user ? StorageService.getEffectiveBudgetId(user) : 'default';
+
             if (remote.transactions) {
               setTransactions(remote.transactions);
               StorageService.setTransactions(remote.transactions);
@@ -200,18 +203,25 @@ export default function App() {
             if (remote.budgets) {
               setBudgets(remote.budgets);
             }
-            if (remote.familyBudget) {
+
+            const remoteGoals = remote.investorGoals || remote.goals;
+            if (Array.isArray(remoteGoals) && remoteGoals.length > 0) {
+              setGoals(remoteGoals);
+              StorageService.setGoals(remoteGoals as any);
+              PortfolioStorageService.saveGoals(remoteGoals, bId);
+            } else if (remote.familyBudget) {
               const goalsList = remote.familyBudget.filter((item: any) => item.targetAmount !== undefined || item.targetDate !== undefined);
               const familyList = remote.familyBudget.filter((item: any) => item.relationship !== undefined || (item.name && item.color && !item.targetAmount));
               if (goalsList.length > 0) {
                 setGoals(goalsList);
+                StorageService.setGoals(goalsList as any);
+                PortfolioStorageService.saveGoals(goalsList, bId);
               }
               if (familyList.length > 0) {
                 setFamilyMembers(familyList);
               }
             }
-            const user = StorageService.getCurrentUser();
-            const bId = user ? StorageService.getEffectiveBudgetId(user) : 'default';
+
             if (remote.investorPortfolio) {
               PortfolioStorageService.saveAssets(remote.investorPortfolio, bId);
             }
@@ -223,6 +233,8 @@ export default function App() {
               (PortfolioStorageService as any).saveToAllAliasKeys('darla_portfolio_transactions', bId, []);
             }
             window.dispatchEvent(new Event('portfolio_updated'));
+            window.dispatchEvent(new Event('remote_data_updated'));
+            window.dispatchEvent(new CustomEvent('financial_data_mutated', { detail: { userId: bId } }));
           }
         }
       );
@@ -584,9 +596,12 @@ export default function App() {
           const budgetId = StorageService.getEffectiveBudgetId(currentUser);
           (PortfolioStorageService as any).saveToAllAliasKeys('darla_portfolio_assets', budgetId, remoteData.investorPortfolio);
         }
-        if (remoteData.goals) {
-          setGoals(remoteData.goals);
-          StorageService.setGoals(remoteData.goals);
+        const incomingGoals = remoteData.investorGoals || remoteData.goals;
+        if (incomingGoals && Array.isArray(incomingGoals)) {
+          const budgetId = StorageService.getEffectiveBudgetId(currentUser);
+          setGoals(incomingGoals);
+          StorageService.setGoals(incomingGoals as any);
+          PortfolioStorageService.saveGoals(incomingGoals, budgetId);
         }
       }
       refreshData(currentUser, false);

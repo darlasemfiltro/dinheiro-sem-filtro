@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { StorageService } from '../services/storage';
 import { usePrivacyMode } from '../utils/finance';
-import { appwriteDatabases as databases } from '../lib/appwrite';
+import { appwriteDatabases as databases, appwriteClient as client } from '../lib/appwrite';
 import { saveAppData } from '../lib/appwriteSync';
 import { CustomAlertModal } from './CustomAlertModal';
 import {
@@ -709,16 +709,54 @@ export const PortfolioView: React.FC<PortfolioViewProps> = ({
       loadData();
     });
 
-    const handlePortfolioUpdate = () => {      loadData();    };
+    const handlePortfolioUpdate = () => {
+      loadData();
+    };
 
     window.addEventListener('portfolio_updated', handlePortfolioUpdate);
     window.addEventListener('remote_data_updated', handlePortfolioUpdate);
     window.addEventListener('financial_data_mutated', handlePortfolioUpdate);
 
+    // Active Appwrite Realtime WebSocket subscription for instant cross-device goal updates
+    let unsubscribeAppwrite: (() => void) | null = null;
+    try {
+      const centralChannel = `databases.6a83aa8d0038331e040f.collections.user_financials.documents.6a849358002db9e638ce`;
+      unsubscribeAppwrite = client.subscribe(centralChannel, (response: any) => {
+        if (response.payload?.data) {
+          try {
+            const raw = response.payload.data;
+            const remoteData = typeof raw === 'string' ? JSON.parse(raw) : raw;
+            const remoteGoals = remoteData.investorGoals || remoteData.goals;
+            if (Array.isArray(remoteGoals)) {
+              setGoals(remoteGoals);
+              StorageService.setGoals(remoteGoals as any);
+              PortfolioStorageService.saveGoals(remoteGoals, userId);
+            }
+            if (Array.isArray(remoteData.investmentTransactions)) {
+              setTransactions(remoteData.investmentTransactions);
+              (PortfolioStorageService as any).saveToAllAliasKeys('darla_portfolio_transactions', userId, remoteData.investmentTransactions);
+            }
+            if (Array.isArray(remoteData.investorPortfolio)) {
+              PortfolioStorageService.saveAssets(remoteData.investorPortfolio, userId);
+            }
+          } catch (e) {
+            console.error('[PortfolioView Realtime Parse Error]', e);
+          }
+        }
+      });
+    } catch (subErr) {
+      console.warn('[PortfolioView Realtime Sub Notice]', subErr);
+    }
+
     // Auto-update asset prices and market quotes on mount
     handleRefreshPrices();
 
     return () => {
+      if (unsubscribeAppwrite) {
+        try {
+          unsubscribeAppwrite();
+        } catch {}
+      }
       window.removeEventListener('portfolio_updated', handlePortfolioUpdate);
       window.removeEventListener('remote_data_updated', handlePortfolioUpdate);
       window.removeEventListener('financial_data_mutated', handlePortfolioUpdate);
@@ -1701,38 +1739,112 @@ export const PortfolioView: React.FC<PortfolioViewProps> = ({
     setIsSubmitting(true);
 
     try {
-      const goalData = {
-        id: editingGoal ? editingGoal.id : `goal_${Date.now()}`,
+      // a) Garanta a conversão numérica do valor-alvo (parseFloat ou Number) para evitar NaNs
+      const rawTarget = typeof goalForm.targetAmount === 'string'
+        ? goalForm.targetAmount.replace(/\s/g, '').replace(/\./g, '').replace(',', '.')
+        : String(goalForm.targetAmount);
+      const parsedTargetAmount = parseFloat(rawTarget) || 0;
+
+      const rawCurrent = typeof goalForm.currentAmount === 'string'
+        ? goalForm.currentAmount.replace(/\s/g, '').replace(/\./g, '').replace(',', '.')
+        : String(goalForm.currentAmount || '0');
+      const parsedCurrentAmount = parseFloat(rawCurrent) || 0;
+
+      // b) Crie o objeto da meta atualizada
+      const goalData: PortfolioGoal = {
+        id: editingGoal ? editingGoal.id : `goal_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
         userId,
-        title: goalForm.title,
-        targetAmount: parseFloat(goalForm.targetAmount),
-        currentAmount: parseFloat(goalForm.currentAmount || '0'),
+        title: goalForm.title.trim(),
+        targetAmount: parsedTargetAmount,
+        currentAmount: parsedCurrentAmount,
         startDate: goalForm.startDate || new Date().toISOString().split('T')[0],
         targetDate: goalForm.targetDate || '',
         deadline: goalForm.targetDate || '',
         category: goalForm.category || 'Patrimônio Total',
         color: '#D4AF37',
         icon: 'Target',
+        updatedAt: new Date().toISOString(),
       };
 
+      // c) Crie a nova lista unificada de metas no estado local
+      const currentList = StorageService.getGoals(userId);
       const updatedGoals = editingGoal
-        ? goals.map((g: any) => g.id === goalData.id ? goalData : g)
-        : [...goals, goalData];
+        ? currentList.map((g: any) => (g.id === goalData.id ? goalData : g))
+        : [...currentList.filter((g: any) => g.id !== goalData.id), goalData];
 
-      StorageService.saveGoal(goalData);
+      // Update local storage and in-memory caches
+      StorageService.saveGoal(goalData as any);
       if (editingGoal) {
         PortfolioStorageService.updateGoal(goalData, userId);
       } else {
         PortfolioStorageService.addGoal(goalData, userId);
       }
-      
+      StorageService.setGoals(updatedGoals as any);
+      PortfolioStorageService.saveGoals(updatedGoals, userId);
+
+      // Instant React state update
       setGoals(updatedGoals);
 
+      // Prepare global full payload and send IMMEDIATELY to Appwrite databases.updateDocument
+      const currentTxs = StorageService.getTransactions(userId);
+      const currentAccs = StorageService.getAccounts(userId);
+      const currentFamily = StorageService.getFamilyMembers(userId);
+      const sharedBudgets = StorageService.deduplicateSharedBudgets();
+      const assets = PortfolioStorageService.getAssets(userId);
+      const invTxs = investmentTransactions !== undefined ? investmentTransactions : PortfolioStorageService.getTransactions(userId);
+
+      const fullPayload = {
+        transactions: currentTxs,
+        accounts: currentAccs,
+        familyBudget: [...updatedGoals, ...currentFamily, ...sharedBudgets],
+        investorPortfolio: assets,
+        investmentTransactions: invTxs,
+        goals: updatedGoals,
+        investorGoals: updatedGoals,
+        updatedAt: new Date().toISOString(),
+      };
+
+      // Direct write to Appwrite central doc
+      try {
+        await databases.updateDocument(
+          '6a83aa8d0038331e040f',
+          'user_financials',
+          '6a849358002db9e638ce',
+          {
+            userId: '6a83b38ed065c08efa49',
+            data: JSON.stringify(fullPayload),
+          }
+        );
+        console.log('[Appwrite Sync] Metas do investidor gravadas diretamente no Appwrite!');
+      } catch (appwriteErr: any) {
+        if (appwriteErr?.code === 404 || appwriteErr?.message?.includes('not found')) {
+          try {
+            await databases.createDocument(
+              '6a83aa8d0038331e040f',
+              'user_financials',
+              '6a849358002db9e638ce',
+              {
+                userId: '6a83b38ed065c08efa49',
+                data: JSON.stringify(fullPayload),
+              }
+            );
+          } catch {}
+        } else {
+          console.warn('[Appwrite Direct Update Warning]', appwriteErr);
+        }
+      }
+
+      // Sync with server mutation & Firestore
       await StorageService.syncUserMutationToServer(userId);
       await onDataChanged?.();
-      console.log('[Investimentos] Meta salva e sincronizada com sucesso na nuvem!');
+
+      window.dispatchEvent(new Event('portfolio_updated'));
+      window.dispatchEvent(new Event('remote_data_updated'));
+      window.dispatchEvent(new CustomEvent('financial_data_mutated', { detail: { userId } }));
+
+      // Close modal and reset form
       setIsGoalModalOpen(false);
-      loadData();
+      setEditingGoal(null);
     } catch (err: any) {
       console.error('Erro ao salvar meta no Appwrite:', err);
       if (err?.code === 429 || err?.message?.includes('Rate limit')) {
@@ -1753,12 +1865,52 @@ export const PortfolioView: React.FC<PortfolioViewProps> = ({
     if (deletingGoalId) {
       const idToDelete = deletingGoalId;
       setDeletingGoalId(null);
-      const updatedGoals = goals.filter((g: any) => g.id !== idToDelete);
-      setGoals(updatedGoals);
+      
+      const currentList = StorageService.getGoals(userId);
+      const updatedGoals = currentList.filter((g: any) => g.id !== idToDelete);
+      
       StorageService.deleteGoal(idToDelete);
       PortfolioStorageService.deleteGoal(idToDelete, userId);
+      StorageService.setGoals(updatedGoals as any);
+      PortfolioStorageService.saveGoals(updatedGoals, userId);
+      setGoals(updatedGoals);
+
+      // Direct Appwrite update
+      const currentTxs = StorageService.getTransactions(userId);
+      const currentAccs = StorageService.getAccounts(userId);
+      const currentFamily = StorageService.getFamilyMembers(userId);
+      const sharedBudgets = StorageService.deduplicateSharedBudgets();
+      const assets = PortfolioStorageService.getAssets(userId);
+      const invTxs = investmentTransactions !== undefined ? investmentTransactions : PortfolioStorageService.getTransactions(userId);
+
+      const fullPayload = {
+        transactions: currentTxs,
+        accounts: currentAccs,
+        familyBudget: [...updatedGoals, ...currentFamily, ...sharedBudgets],
+        investorPortfolio: assets,
+        investmentTransactions: invTxs,
+        goals: updatedGoals,
+        investorGoals: updatedGoals,
+        updatedAt: new Date().toISOString(),
+      };
+
+      try {
+        await databases.updateDocument(
+          '6a83aa8d0038331e040f',
+          'user_financials',
+          '6a849358002db9e638ce',
+          {
+            userId: '6a83b38ed065c08efa49',
+            data: JSON.stringify(fullPayload),
+          }
+        );
+      } catch (e) {}
+
       await StorageService.syncUserMutationToServer(userId);
       await onDataChanged?.();
+      window.dispatchEvent(new Event('portfolio_updated'));
+      window.dispatchEvent(new Event('remote_data_updated'));
+      window.dispatchEvent(new CustomEvent('financial_data_mutated', { detail: { userId } }));
       loadData();
     }
   };
