@@ -720,8 +720,8 @@ export const SharedBudgetModal: React.FC<SharedBudgetModalProps> = ({
           </div>
 
           {/* SEÇÃO 2: MEMBROS QUE ACESSAM ESTE ORÇAMENTO */}
-          <div style={{ marginBottom: '20px' }}>
-            <h4 style={{ color: '#333', fontSize: '14px', fontWeight: 'bold', marginBottom: '15px' }}>
+          <div className="mb-5">
+            <h4 className="text-[#333] text-xs sm:text-sm font-bold mb-3 uppercase tracking-wider">
               MEMBROS QUE ACESSAM ESTE ORÇAMENTO:
             </h4>
             
@@ -730,11 +730,11 @@ export const SharedBudgetModal: React.FC<SharedBudgetModalProps> = ({
                 const gState = getMemberGamification(email);
                 const perm = permissoesLocais[email] || 'leitura';
                 return (
-                  <div key={idx} style={{ padding: '15px', border: '1px solid #e0e0e0', borderRadius: '10px', marginBottom: '10px', backgroundColor: '#f9f9f9' }}>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px' }}>
-                      <p style={{ margin: 0, fontWeight: 'bold', color: '#333', fontSize: '15px' }}>{email}</p>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                        <span style={{ padding: '4px 8px', backgroundColor: '#e8f5e9', color: '#2e7d32', borderRadius: '6px', fontSize: '11px', fontWeight: 'bold' }}>✓ Concedido</span>
+                  <div key={idx} className="p-3.5 sm:p-4 border border-gray-200 rounded-xl mb-3 bg-gray-50 space-y-3">
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                      <p className="font-bold text-[#333] text-xs sm:text-sm truncate select-all">{email}</p>
+                      <div className="flex items-center gap-2 shrink-0">
+                        <span className="px-2 py-1 bg-emerald-50 text-emerald-700 rounded-lg text-[10px] sm:text-xs font-bold border border-emerald-200">✓ Concedido</span>
                         {isOwner && (
                           <button
                             type="button"
@@ -745,19 +745,19 @@ export const SharedBudgetModal: React.FC<SharedBudgetModalProps> = ({
                                 handleRemoveCollaborator(email);
                               }
                             }}
-                            style={{ padding: '4px 8px', backgroundColor: '#d32f2f', color: '#fff', borderRadius: '6px', fontSize: '11px', fontWeight: 'bold', border: 'none', cursor: 'pointer' }}
+                            className="py-1 px-2.5 bg-red-600 text-white rounded-lg text-[10px] sm:text-xs font-bold hover:bg-red-700 transition cursor-pointer"
                           >
                             Excluir
                           </button>
                         )}
                       </div>
                     </div>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                      <label style={{ fontSize: '12px', fontWeight: 'bold', color: '#555' }}>Permissão:</label>
+                    <div className="flex flex-col sm:flex-row sm:items-center gap-1.5 sm:gap-2 pt-1 border-t border-gray-200">
+                      <label className="text-[11px] font-bold text-gray-600 shrink-0">Permissão:</label>
                       <select 
                         value={perm}
                         onChange={(e) => atualizarPermissao(email, e.target.value)}
-                        style={{ padding: '8px', borderRadius: '5px', border: '1px solid #ccc', flex: 1, backgroundColor: '#fff', fontSize: '13px' }}
+                        className="w-full sm:flex-1 py-1.5 px-2.5 rounded-lg border border-gray-300 bg-white text-xs font-medium text-gray-800 focus:outline-none focus:ring-2 focus:ring-[#D4AF37]"
                       >
                         <option value="leitura">Leitura (Apenas Visualizar)</option>
                         <option value="edicao">Edição (Completo)</option>
@@ -765,7 +765,7 @@ export const SharedBudgetModal: React.FC<SharedBudgetModalProps> = ({
                     </div>
 
                     {/* Gamification Bar */}
-                    <div className="flex items-center flex-wrap gap-2 pt-2 mt-2 border-t border-gray-200 text-[11px]">
+                    <div className="flex items-center flex-wrap gap-1.5 pt-2 border-t border-gray-200 text-[11px]">
                       <span className="font-bold text-gray-500 text-[10px] uppercase tracking-wider">Gamificação:</span>
                       <span className="px-2 py-0.5 bg-pink-50 border border-pink-200 text-pink-900 font-extrabold rounded-md flex items-center gap-1">
                         <span>{gState.division.icon}</span>
