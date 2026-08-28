@@ -175,8 +175,8 @@ export async function loadFromCloud(userId?: string, userEmail?: string): Promis
   const databaseId = '6a83aa8d0038331e040f';
   const collectionId = 'user_financials';
   const currentUserId = userId || 'default';
-  const currentUserEmail = userEmail || getStoredUserEmail();
-  const emailSanitizado = (currentUserEmail || '').toLowerCase().trim();
+  const targetEmail = (userId && userId.includes('@')) ? userId : (userEmail || getStoredUserEmail());
+  const emailSanitizado = (targetEmail || '').toLowerCase().trim();
 
   try {
     let response: any = { documents: [], total: 0 };

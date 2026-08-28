@@ -1747,7 +1747,8 @@ export class StorageService {
             try {
               const cur = JSON.parse(currentUserStr);
               if ((cur.email || '').toLowerCase() === cleanEmail) {
-                localStorage.setItem(STORAGE_KEYS.CURRENT_USER, JSON.stringify({ ...cur, ...serverUser }));
+                const preservedBudgetId = cur.budgetId;
+                localStorage.setItem(STORAGE_KEYS.CURRENT_USER, JSON.stringify({ ...cur, ...serverUser, budgetId: preservedBudgetId || serverUser.budgetId }));
               }
             } catch (e) {}
           }
@@ -1914,6 +1915,15 @@ export class StorageService {
     const appUser = appwriteConnData?.user;
     const isDarla = isDarlaAccount(cleanEmail);
 
+    const existingBudgetId = existingUser?.budgetId || _inMemoryStore.currentUser?.budgetId || (() => {
+      try {
+        const cur = JSON.parse(localStorage.getItem(STORAGE_KEYS.CURRENT_USER) || '{}');
+        return cur.budgetId;
+      } catch (e) {
+        return undefined;
+      }
+    })();
+
     const userToSave: User = {
       id: deterministicId,
       name: name || appUser?.name || serverUser?.name || existingUser?.name || cleanEmail.split('@')[0],
@@ -1925,6 +1935,7 @@ export class StorageService {
       isPro: isDarla ? true : (appUser?.isPro ?? serverUser?.isPro ?? existingUser?.isPro ?? false),
       plan: isDarla ? 'lifetime' : (appUser?.plan ?? serverUser?.plan ?? existingUser?.plan ?? 'free'),
       subscriptionStatus: isDarla ? 'active' : (appUser?.subscriptionStatus ?? serverUser?.subscriptionStatus ?? existingUser?.subscriptionStatus ?? 'trial'),
+      budgetId: existingBudgetId,
     };
 
     _inMemoryStore.currentUser = userToSave;

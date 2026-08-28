@@ -671,7 +671,9 @@ export default function App() {
 
       // Load remote state from Appwrite Cloud on start
       try {
-        const remoteState = await loadFromCloud();
+        const savedUser = StorageService.getCurrentUser();
+        const effectiveBudgetId = savedUser ? StorageService.getEffectiveBudgetId(savedUser) : undefined;
+        const remoteState = await loadFromCloud(effectiveBudgetId, savedUser?.email);
         if (remoteState && mounted) {
           if (remoteState.transactions && remoteState.transactions.length > 0) {
             setTransactions(remoteState.transactions);
