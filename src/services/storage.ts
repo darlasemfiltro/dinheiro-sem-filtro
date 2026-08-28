@@ -2788,10 +2788,19 @@ export class StorageService {
           if (!existing) {
             map.set(key, b);
           } else {
-            // Merge collaborators
+            // Merge collaborators, keeping the latest accessMode from server
             const collabsMap = new Map<string, BudgetCollaborator>();
             (existing.collaborators || []).forEach((c) => collabsMap.set(c.email.toLowerCase(), c));
-            (b.collaborators || []).forEach((c) => collabsMap.set(c.email.toLowerCase(), c));
+            (b.collaborators || []).forEach((c) => {
+              const email = c.email.toLowerCase();
+              const prev = collabsMap.get(email);
+              if (prev) {
+                // overwrite with server version (which has the updated accessMode)
+                collabsMap.set(email, c);
+              } else {
+                collabsMap.set(email, c);
+              }
+            });
             existing.collaborators = Array.from(collabsMap.values());
             map.set(key, existing);
           }
