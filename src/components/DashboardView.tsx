@@ -320,23 +320,25 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
 
       {/* Active Connected Budget Info Card */}
       {user && (
-        <div className="bg-gradient-to-r from-emerald-50 via-teal-50 to-emerald-50 border-2 border-emerald-300 rounded-2xl p-3 sm:p-4 shadow-sm flex items-center justify-between gap-3">
+        <div className="bg-gradient-to-r from-emerald-50 via-teal-50 to-emerald-50 border-2 border-emerald-300 rounded-2xl p-3.5 sm:p-4 shadow-sm flex flex-col sm:flex-row sm:items-center justify-between gap-3">
           <div className="flex items-center gap-3 min-w-0">
-            <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-xl bg-emerald-600 text-white flex items-center justify-center font-black shrink-0 shadow-sm">
+            <div className="w-10 h-10 sm:w-11 sm:h-11 rounded-xl bg-emerald-600 text-white flex items-center justify-center font-black shrink-0 shadow-sm">
               <Wallet className="w-5 h-5 text-white" />
             </div>
-            <div className="min-w-0">
+            <div className="min-w-0 space-y-0.5">
               <div className="text-[10px] sm:text-xs font-black text-emerald-800 uppercase tracking-wider flex items-center gap-1.5">
                 <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
                 Orçamento Conectado Ativo
               </div>
-              <div className="text-sm sm:text-base font-black text-gray-900 truncate font-serif">
+              <div className="text-xs sm:text-sm font-bold text-gray-900 font-serif whitespace-normal break-words leading-snug">
                 {(() => {
                   const effectiveId = StorageService.getEffectiveBudgetId(user);
                   const shared = StorageService.getSharedBudget(effectiveId, user);
-                  return shared.ownerName || StorageService.getUserNameByEmail(shared.ownerEmail) || 'Orçamento Pessoal';
+                  const name = shared.ownerName || StorageService.getUserNameByEmail(shared.ownerEmail) || 'Orçamento';
+                  const email = shared.ownerEmail || '';
+                  return email ? `${name} (${email})` : name;
                 })()}
-                <span className="ml-2 text-xs font-extrabold text-emerald-700 bg-emerald-100 px-2 py-0.5 rounded-lg border border-emerald-300">
+                <span className="ml-2 inline-block text-[11px] font-extrabold text-emerald-700 bg-emerald-100 px-2 py-0.5 rounded-lg border border-emerald-300">
                   {(() => {
                     const effectiveId = StorageService.getEffectiveBudgetId(user);
                     const shared = StorageService.getSharedBudget(effectiveId, user);
@@ -350,9 +352,9 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
             onClick={() => {
               window.dispatchEvent(new CustomEvent('open_shared_budget_modal'));
             }}
-            className="px-3 py-1.5 bg-[#121212] hover:bg-black text-[#D4AF37] font-black text-xs rounded-xl transition shadow-sm cursor-pointer whitespace-nowrap shrink-0 flex items-center gap-1.5 border border-[#D4AF37]"
+            className="w-full sm:w-auto px-4 py-2 bg-[#121212] hover:bg-black text-[#D4AF37] font-black text-xs rounded-xl transition shadow-sm cursor-pointer whitespace-nowrap shrink-0 flex items-center justify-center gap-1.5 border border-[#D4AF37]"
           >
-            <Users className="w-3.5 h-3.5 text-[#D4AF37]" />
+            <Users className="w-4 h-4 text-[#D4AF37]" />
             <span>Trocar / Gerenciar</span>
           </button>
         </div>

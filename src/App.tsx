@@ -986,6 +986,16 @@ export default function App() {
       // Multi-device concurrent sessions are active and synchronized in real-time
     };
 
+    const handleOpenSharedBudgetModalEvent = () => {
+      if (currentUser && StorageService.isFeatureAllowed(currentUser, 'shared_budget')) {
+        setIsSharedBudgetModalOpen(true);
+      } else if (currentUser) {
+        setFeatureLockTitle('Orçamento Compartilhado Bloqueado');
+        setFeatureLockDesc('Seus 90 dias de teste grátis terminaram. O recurso de Orçamento Compartilhado em Família é exclusivo para assinantes dos planos Pro (a partir de R$ 6,90/mês).');
+        setIsFeatureLockModalOpen(true);
+      }
+    };
+
     const handleUserDeleted = (evt: any) => {
       const payload = evt?.detail;
       const userEmail = currentUser?.email ? currentUser.email.trim().toLowerCase() : '';
@@ -1002,6 +1012,8 @@ export default function App() {
         setCurrentUser(null);
       }
     };
+
+    window.addEventListener('open_shared_budget_modal', handleOpenSharedBudgetModalEvent);
 
     window.addEventListener('focus', handleFocus);
     window.addEventListener('visibilitychange', handleFocus);
@@ -1024,6 +1036,7 @@ export default function App() {
       unsubscribeFirestore();
       unsubscribeAppwrite();
       clearInterval(pollInterval);
+      window.removeEventListener('open_shared_budget_modal', handleOpenSharedBudgetModalEvent);
       window.removeEventListener('focus', handleFocus);
       window.removeEventListener('visibilitychange', handleFocus);
       window.removeEventListener('pageshow', handleFocus);
