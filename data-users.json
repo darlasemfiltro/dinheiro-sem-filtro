@@ -1,0 +1,27 @@
+[
+  {
+    "id": "darla.semfiltro@gmail.com",
+    "name": "darla.semfiltro",
+    "email": "darla.semfiltro@gmail.com",
+    "password": "demo123",
+    "authProvider": "email",
+    "avatarUrl": "/logo.png",
+    "createdAt": "2026-08-12T10:00:00.000Z",
+    "isPro": true,
+    "plan": "lifetime",
+    "subscriptionStatus": "active",
+    "sharedBudgetCode": "DARLA-8704"
+  },
+  {
+    "id": "carvalho.darlla@gmail.com",
+    "name": "Darlla Carvalho",
+    "email": "carvalho.darlla@gmail.com",
+    "authProvider": "email",
+    "avatarUrl": "https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150",
+    "createdAt": "2026-08-12T10:00:00.000Z",
+    "isPro": true,
+    "plan": "lifetime",
+    "subscriptionStatus": "active",
+    "sharedBudgetCode": "DARLLA-5921"
+  }
+]
