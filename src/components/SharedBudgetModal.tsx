@@ -257,10 +257,10 @@ export const SharedBudgetModal: React.FC<SharedBudgetModalProps> = ({
         type: 'success',
         msg: `Orçamento alterado com sucesso! Você agora está visualizando o orçamento de: ${targetObj.ownerName}`,
       });
-      setTimeout(() => {
-        setIsSwitchingBudget(false);
-        onClose();
-      }, 400);
+      // Keep popup open for a brief moment to ensure all state updates and renders are fully settled without flashing
+      await new Promise(resolve => setTimeout(resolve, 800));
+      setIsSwitchingBudget(false);
+      onClose();
     } catch (e) {
       console.error(e);
       setIsSwitchingBudget(false);
@@ -339,10 +339,9 @@ export const SharedBudgetModal: React.FC<SharedBudgetModalProps> = ({
       setSharedBudget(StorageService.getSharedBudget(user.id, updated));
       setAvailableBudgets(StorageService.getAvailableBudgetsForUser(updated));
       setFeedback({ type: 'success', msg: 'Você retornou ao seu orçamento pessoal.' });
-      setTimeout(() => {
-        setIsSwitchingBudget(false);
-        onClose();
-      }, 400);
+      await new Promise(resolve => setTimeout(resolve, 800));
+      setIsSwitchingBudget(false);
+      onClose();
     } catch (e) {
       console.error(e);
       setIsSwitchingBudget(false);
