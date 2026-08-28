@@ -66,6 +66,8 @@ export const SharedBudgetModal: React.FC<SharedBudgetModalProps> = ({
   const [membrosLocais, setMembrosLocais] = useState<string[]>([]);
   const [permissoesLocais, setPermissoesLocais] = useState<Record<string, string>>({});
   const [compartilhadosComigo, setCompartilhadosComigo] = useState<string[]>([]);
+  const [draftPermissoes, setDraftPermissoes] = useState<Record<string, string>>({});
+  const [loadingPermEmail, setLoadingPermEmail] = useState<string | null>(null);
 
   // Busca à prova de falhas via listDocuments / getDocument
   useEffect(() => {
@@ -201,6 +203,7 @@ export const SharedBudgetModal: React.FC<SharedBudgetModalProps> = ({
   };
 
   const atualizarPermissao = async (emailMembro: string, nivel: string) => {
+    setLoadingPermEmail(emailMembro);
     try {
       const config = getAppwriteConfig();
       const meuEmail = currentUser.email.toLowerCase().trim();
@@ -212,10 +215,28 @@ export const SharedBudgetModal: React.FC<SharedBudgetModalProps> = ({
         json.member_permissions = json.member_permissions || {};
         json.member_permissions[emailMembro] = nivel;
         await databases.updateDocument(config.databaseId, 'user_financials', meuDoc.$id, { userId: meuEmail, data: JSON.stringify(json) });
-        setPermissoesLocais(prev => ({ ...prev, [emailMembro]: nivel }));
       }
+
+      if (sharedBudget && sharedBudget.budgetId) {
+        StorageService.updateCollaboratorAccessMode(sharedBudget.budgetId, emailMembro, nivel === 'leitura' ? 'read' : 'edit');
+      }
+
+      setPermissoesLocais(prev => ({ ...prev, [emailMembro]: nivel }));
+      setDraftPermissoes(prev => {
+        const copy = { ...prev };
+        delete copy[emailMembro];
+        return copy;
+      });
+
+      setFeedback({
+        type: 'success',
+        msg: `Permissão de ${emailMembro} atualizada para ${nivel === 'leitura' ? 'Leitura (Apenas Visualizar)' : 'Edição (Completo)'} e sincronizada na conta do convidado com sucesso!`
+      });
     } catch (e) {
-      alert("Erro ao atualizar permissão.");
+      console.error(e);
+      setFeedback({ type: 'error', msg: 'Erro ao atualizar permissão.' });
+    } finally {
+      setLoadingPermEmail(null);
     }
   };
 
@@ -728,7 +749,8 @@ export const SharedBudgetModal: React.FC<SharedBudgetModalProps> = ({
             {membrosLocais.length > 0 ? (
               membrosLocais.map((email, idx) => {
                 const gState = getMemberGamification(email);
-                const perm = permissoesLocais[email] || 'leitura';
+                const currentDraft = draftPermissoes[email];
+                const perm = currentDraft !== undefined ? currentDraft : (permissoesLocais[email] || 'leitura');
                 return (
                   <div key={idx} className="p-3.5 sm:p-4 border border-gray-200 rounded-xl mb-3 bg-gray-50 space-y-3">
                     <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
@@ -752,8 +774,18 @@ export const SharedBudgetModal: React.FC<SharedBudgetModalProps> = ({
                         )}
                       </div>
                     </div>
-                    <div className="flex flex-col gap-1.5 pt-1 border-t border-gray-200">
-                      <span className="text-[11px] font-bold text-gray-600">Permissão:</span>
+                    <div className="flex flex-col gap-2 pt-1 border-t border-gray-200">
+                      <div className="flex items-center justify-between">
+                        <span className="text-[11px] font-bold text-gray-600">Permissão:</span>
+                        <button
+                          type="button"
+                          disabled={loadingPermEmail === email}
+                          onClick={() => atualizarPermissao(email, perm)}
+                          className="py-1 px-3 bg-[#121212] text-[#D4AF37] hover:bg-black rounded-lg text-[11px] font-bold transition flex items-center gap-1 shadow-xs cursor-pointer border border-[#D4AF37] disabled:opacity-50"
+                        >
+                          {loadingPermEmail === email ? 'Salvando...' : 'Confirmar Permissão'}
+                        </button>
+                      </div>
                       <div className="flex flex-wrap items-center gap-2">
                         <label className="flex items-center gap-1.5 text-xs cursor-pointer bg-white px-2.5 py-1.5 rounded-lg border border-gray-200 shadow-2xs hover:border-amber-400 transition flex-1 sm:flex-initial">
                           <input
@@ -761,7 +793,7 @@ export const SharedBudgetModal: React.FC<SharedBudgetModalProps> = ({
                             name={`perm-${idx}-${email}`}
                             value="leitura"
                             checked={perm === 'leitura'}
-                            onChange={() => atualizarPermissao(email, 'leitura')}
+                            onChange={() => setDraftPermissoes(prev => ({ ...prev, [email]: 'leitura' }))}
                             className="accent-[#D4AF37]"
                           />
                           <Eye className="w-3.5 h-3.5 text-blue-600 shrink-0" />
@@ -773,7 +805,7 @@ export const SharedBudgetModal: React.FC<SharedBudgetModalProps> = ({
                             name={`perm-${idx}-${email}`}
                             value="edicao"
                             checked={perm === 'edicao'}
-                            onChange={() => atualizarPermissao(email, 'edicao')}
+                            onChange={() => setDraftPermissoes(prev => ({ ...prev, [email]: 'edicao' }))}
                             className="accent-[#D4AF37]"
                           />
                           <Edit3 className="w-3.5 h-3.5 text-amber-700 shrink-0" />
