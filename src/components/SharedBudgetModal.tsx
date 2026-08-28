@@ -752,16 +752,34 @@ export const SharedBudgetModal: React.FC<SharedBudgetModalProps> = ({
                         )}
                       </div>
                     </div>
-                    <div className="flex flex-col sm:flex-row sm:items-center gap-1.5 sm:gap-2 pt-1 border-t border-gray-200">
-                      <label className="text-[11px] font-bold text-gray-600 shrink-0">Permissão:</label>
-                      <select 
-                        value={perm}
-                        onChange={(e) => atualizarPermissao(email, e.target.value)}
-                        className="w-full sm:flex-1 py-1.5 px-2.5 rounded-lg border border-gray-300 bg-white text-xs font-medium text-gray-800 focus:outline-none focus:ring-2 focus:ring-[#D4AF37]"
-                      >
-                        <option value="leitura">Leitura (Apenas Visualizar)</option>
-                        <option value="edicao">Edição (Completo)</option>
-                      </select>
+                    <div className="flex flex-col gap-1.5 pt-1 border-t border-gray-200">
+                      <span className="text-[11px] font-bold text-gray-600">Permissão:</span>
+                      <div className="flex flex-wrap items-center gap-2">
+                        <label className="flex items-center gap-1.5 text-xs cursor-pointer bg-white px-2.5 py-1.5 rounded-lg border border-gray-200 shadow-2xs hover:border-amber-400 transition flex-1 sm:flex-initial">
+                          <input
+                            type="radio"
+                            name={`perm-${idx}-${email}`}
+                            value="leitura"
+                            checked={perm === 'leitura'}
+                            onChange={() => atualizarPermissao(email, 'leitura')}
+                            className="accent-[#D4AF37]"
+                          />
+                          <Eye className="w-3.5 h-3.5 text-blue-600 shrink-0" />
+                          <span className="font-bold text-[#121212] text-[11px]">Leitura</span>
+                        </label>
+                        <label className="flex items-center gap-1.5 text-xs cursor-pointer bg-white px-2.5 py-1.5 rounded-lg border border-gray-200 shadow-2xs hover:border-amber-400 transition flex-1 sm:flex-initial">
+                          <input
+                            type="radio"
+                            name={`perm-${idx}-${email}`}
+                            value="edicao"
+                            checked={perm === 'edicao'}
+                            onChange={() => atualizarPermissao(email, 'edicao')}
+                            className="accent-[#D4AF37]"
+                          />
+                          <Edit3 className="w-3.5 h-3.5 text-amber-700 shrink-0" />
+                          <span className="font-bold text-[#121212] text-[11px]">Edição</span>
+                        </label>
+                      </div>
                     </div>
 
                     {/* Gamification Bar */}
