@@ -516,12 +516,14 @@ export const SharedBudgetModal: React.FC<SharedBudgetModalProps> = ({
             {compartilhadosComigo.length > 0 ? (
               compartilhadosComigo.map((emailTitular: string, idx: number) => {
                 const isSelected = !isOwner && sharedBudget.ownerEmail?.toLowerCase() === emailTitular.toLowerCase();
+                const targetBudget = availableBudgets.find(item => item.budget.ownerEmail.toLowerCase() === emailTitular.toLowerCase());
+                const collabRecord = targetBudget?.budget.collaborators.find(c => c.email.toLowerCase() === user.email.toLowerCase());
+                const accessModeLabel = collabRecord?.accessMode === 'read' ? '📖 Modo Leitura' : '✏️ Modo Edição';
                 return (
                   <button
                     key={idx}
                     type="button"
                     onClick={() => {
-                      const targetBudget = availableBudgets.find(item => item.budget.ownerEmail.toLowerCase() === emailTitular.toLowerCase());
                       const budgetIdToSwitch = targetBudget ? targetBudget.budget.budgetId : getCanonicalUserId(emailTitular);
                       handleSwitchToBudget(budgetIdToSwitch);
                     }}
@@ -544,6 +546,9 @@ export const SharedBudgetModal: React.FC<SharedBudgetModalProps> = ({
                         Orçamento Compartilhado ({emailTitular.split('@')[0]})
                       </p>
                       <p style={{ margin: 0, fontSize: '12px', color: isSelected ? '#e0e0e0' : '#555' }}>Titular: {emailTitular}</p>
+                      <p style={{ margin: '3px 0 0 0', fontSize: '11px', fontWeight: 'bold', color: isSelected ? '#a5d6a7' : '#2e7d32' }}>
+                        Permissão: {accessModeLabel}
+                      </p>
                     </div>
                     <span style={{
                       backgroundColor: isSelected ? '#fff' : 'transparent',
