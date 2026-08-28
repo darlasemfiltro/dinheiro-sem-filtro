@@ -336,15 +336,21 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
                   const shared = StorageService.getSharedBudget(effectiveId, user);
                   const name = shared.ownerName || StorageService.getUserNameByEmail(shared.ownerEmail) || 'Orçamento';
                   const email = shared.ownerEmail || '';
-                  return email ? `${name} (${email})` : name;
+                  const isReadOnly = StorageService.isCurrentUserReadOnly(user);
+                  return (
+                    <div className="flex flex-col gap-1 mt-0.5">
+                      <div>{email ? `${name} (${email})` : name}</div>
+                      <div className="flex items-center gap-1.5 flex-wrap">
+                        <span className="inline-block text-[10px] font-extrabold text-emerald-700 bg-emerald-100 px-2 py-0.5 rounded-lg border border-emerald-300">
+                          {shared.code || 'ORCAMENTO'}
+                        </span>
+                        <span className={`inline-flex items-center gap-1 text-[10px] font-extrabold px-2 py-0.5 rounded-lg border ${isReadOnly ? 'bg-blue-50 text-blue-800 border-blue-200' : 'bg-amber-50 text-amber-900 border-amber-200'}`}>
+                          {isReadOnly ? '👁️ Permissão: Apenas Leitura' : '✏️ Permissão: Edição Completa'}
+                        </span>
+                      </div>
+                    </div>
+                  );
                 })()}
-                <span className="ml-2 inline-block text-[11px] font-extrabold text-emerald-700 bg-emerald-100 px-2 py-0.5 rounded-lg border border-emerald-300">
-                  {(() => {
-                    const effectiveId = StorageService.getEffectiveBudgetId(user);
-                    const shared = StorageService.getSharedBudget(effectiveId, user);
-                    return shared.code || 'ORCAMENTO';
-                  })()}
-                </span>
               </div>
             </div>
           </div>
