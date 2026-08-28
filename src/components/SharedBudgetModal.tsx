@@ -618,14 +618,14 @@ export const SharedBudgetModal: React.FC<SharedBudgetModalProps> = ({
                     type="email"
                     value={inviteEmail}
                     onChange={(e) => setInviteEmail(e.target.value)}
-                    placeholder="E-mail do Convidado (Ex: convidado@exemplo.com)"
+                    placeholder="E-mail do Convidado"
                     className="w-full pl-9 pr-3 py-2.5 bg-white border border-gray-300 rounded-xl text-xs font-bold text-[#121212] focus:outline-none focus:ring-2 focus:ring-[#D4AF37]"
                   />
                 </div>
                 <button
                   type="submit"
                   disabled={isLoading}
-                  className="py-2.5 px-4 bg-[#121212] text-[#D4AF37] font-bold text-xs rounded-xl hover:bg-black transition flex items-center justify-center gap-1.5 cursor-pointer shrink-0 min-h-[38px] border border-[#D4AF37] disabled:opacity-50"
+                  className="py-2.5 px-4 bg-[#121212] text-[#D4AF37] font-bold text-xs rounded-xl hover:bg-black transition flex items-center justify-center gap-1.5 cursor-pointer shrink-0 min-h-[38px] border border-[#D4AF37] disabled:opacity-50 w-full sm:w-auto"
                 >
                   <UserPlus className="w-4 h-4 shrink-0" />
                   <span>{isLoading ? 'Processando...' : 'Conceder Acesso'}</span>
@@ -633,9 +633,9 @@ export const SharedBudgetModal: React.FC<SharedBudgetModalProps> = ({
               </div>
 
               {/* Mode Selection */}
-              <div className="flex items-center gap-3 pt-1">
-                <span className="text-[11px] font-bold text-gray-700">Modo de Acesso:</span>
-                <label className="flex items-center gap-1 text-xs cursor-pointer">
+              <div className="flex flex-wrap items-center gap-x-4 gap-y-2 pt-1">
+                <span className="text-[11px] font-bold text-gray-700 w-full sm:w-auto">Modo de Acesso:</span>
+                <label className="flex items-center gap-1.5 text-xs cursor-pointer">
                   <input
                     type="radio"
                     name="inviteMode"
@@ -644,10 +644,10 @@ export const SharedBudgetModal: React.FC<SharedBudgetModalProps> = ({
                     onChange={() => setInviteAccessMode('edit')}
                     className="accent-[#D4AF37]"
                   />
-                  <Edit3 className="w-3.5 h-3.5 text-amber-700" />
+                  <Edit3 className="w-3.5 h-3.5 text-amber-700 shrink-0" />
                   <span className="font-bold text-[#121212]">Edição (Completo)</span>
                 </label>
-                <label className="flex items-center gap-1 text-xs cursor-pointer">
+                <label className="flex items-center gap-1.5 text-xs cursor-pointer">
                   <input
                     type="radio"
                     name="inviteMode"
@@ -656,7 +656,7 @@ export const SharedBudgetModal: React.FC<SharedBudgetModalProps> = ({
                     onChange={() => setInviteAccessMode('read')}
                     className="accent-[#D4AF37]"
                   />
-                  <Eye className="w-3.5 h-3.5 text-blue-600" />
+                  <Eye className="w-3.5 h-3.5 text-blue-600 shrink-0" />
                   <span className="font-bold text-[#121212]">Leitura (Apenas Visualizar)</span>
                 </label>
               </div>
