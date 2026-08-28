@@ -1942,9 +1942,9 @@ export default function App() {
         onAcceptInvite={handleAcceptInvite}
         onRejectInvite={handleRejectInvite}
         loadingInviteId={loadingInviteId}
-        onUserUpdated={(updatedUser) => {
+        onUserUpdated={async (updatedUser) => {
           setCurrentUser(updatedUser);
-          refreshData(updatedUser);
+          await refreshData(updatedUser);
         }}
       />
 

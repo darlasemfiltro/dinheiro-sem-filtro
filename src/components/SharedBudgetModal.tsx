@@ -31,7 +31,7 @@ interface SharedBudgetModalProps {
   user: User;
   isOpen: boolean;
   onClose: () => void;
-  onUserUpdated: (user: User) => void;
+  onUserUpdated: (user: User) => Promise<void> | void;
   pendingInvites?: any[];
   onAcceptInvite?: (invite: any) => void;
   onRejectInvite?: (invite: any) => void;
@@ -239,18 +239,33 @@ export const SharedBudgetModal: React.FC<SharedBudgetModalProps> = ({
     }
   }, [isOpen, user]);
 
-  const handleSwitchToBudget = (budgetIdToAccess: string) => {
+  const [isSwitchingBudget, setIsSwitchingBudget] = useState(false);
+  const [switchLoadingMessage, setSwitchLoadingMessage] = useState('');
+
+  const handleSwitchToBudget = async (budgetIdToAccess: string) => {
     console.log('[DEDO-DURO] handleSwitchToBudget', { budgetIdToAccess, currentUser: user });
-    const updated = StorageService.switchBudget(user, budgetIdToAccess);
-    onUserUpdated(updated);
-    const newBudgetId = StorageService.getEffectiveBudgetId(updated);
-    const targetObj = StorageService.getSharedBudget(newBudgetId);
-    setSharedBudget(targetObj);
-    setAvailableBudgets(StorageService.getAvailableBudgetsForUser(updated));
-    setFeedback({
-      type: 'success',
-      msg: `Orçamento alterado com sucesso! Você agora está visualizando o orçamento de: ${targetObj.ownerName}`,
-    });
+    setIsSwitchingBudget(true);
+    setSwitchLoadingMessage('Sincronizando contas, transações e carregando orçamento...');
+    try {
+      const updated = StorageService.switchBudget(user, budgetIdToAccess);
+      await onUserUpdated(updated);
+      const newBudgetId = StorageService.getEffectiveBudgetId(updated);
+      const targetObj = StorageService.getSharedBudget(newBudgetId);
+      setSharedBudget(targetObj);
+      setAvailableBudgets(StorageService.getAvailableBudgetsForUser(updated));
+      setFeedback({
+        type: 'success',
+        msg: `Orçamento alterado com sucesso! Você agora está visualizando o orçamento de: ${targetObj.ownerName}`,
+      });
+      setTimeout(() => {
+        setIsSwitchingBudget(false);
+        onClose();
+      }, 400);
+    } catch (e) {
+      console.error(e);
+      setIsSwitchingBudget(false);
+      setFeedback({ type: 'error', msg: 'Erro ao alternar orçamento.' });
+    }
   };
 
   const [joinCodeOrEmail, setJoinCodeOrEmail] = useState('');
@@ -298,7 +313,7 @@ export const SharedBudgetModal: React.FC<SharedBudgetModalProps> = ({
       if (res.success) {
         setJoinCodeOrEmail('');
         if (res.updatedUser) {
-          onUserUpdated(res.updatedUser);
+          await onUserUpdated(res.updatedUser);
           const newBudgetId = StorageService.getEffectiveBudgetId(res.updatedUser);
           setSharedBudget(StorageService.getSharedBudget(newBudgetId, res.updatedUser));
           setAvailableBudgets(StorageService.getAvailableBudgetsForUser(res.updatedUser));
@@ -315,12 +330,23 @@ export const SharedBudgetModal: React.FC<SharedBudgetModalProps> = ({
     }
   };
 
-  const handleSwitchToPersonal = () => {
-    const updated = StorageService.switchBudget(user, user.id);
-    onUserUpdated(updated);
-    setSharedBudget(StorageService.getSharedBudget(user.id, updated));
-    setAvailableBudgets(StorageService.getAvailableBudgetsForUser(updated));
-    setFeedback({ type: 'success', msg: 'Você retornou ao seu orçamento pessoal.' });
+  const handleSwitchToPersonal = async () => {
+    setIsSwitchingBudget(true);
+    setSwitchLoadingMessage('Sincronizando e carregando orçamento pessoal...');
+    try {
+      const updated = StorageService.switchBudget(user, user.id);
+      await onUserUpdated(updated);
+      setSharedBudget(StorageService.getSharedBudget(user.id, updated));
+      setAvailableBudgets(StorageService.getAvailableBudgetsForUser(updated));
+      setFeedback({ type: 'success', msg: 'Você retornou ao seu orçamento pessoal.' });
+      setTimeout(() => {
+        setIsSwitchingBudget(false);
+        onClose();
+      }, 400);
+    } catch (e) {
+      console.error(e);
+      setIsSwitchingBudget(false);
+    }
   };
 
   const handleRemoveCollaborator = (email: string) => {
@@ -347,6 +373,15 @@ export const SharedBudgetModal: React.FC<SharedBudgetModalProps> = ({
 
   return (
     <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-2 sm:p-4 overflow-y-auto">
+      {isSwitchingBudget && (
+        <div className="absolute inset-0 z-[60] bg-black/75 backdrop-blur-sm flex flex-col items-center justify-center p-6 text-center animate-in fade-in">
+          <div className="bg-white rounded-2xl p-8 max-w-sm w-full shadow-2xl flex flex-col items-center space-y-4 border border-emerald-100">
+            <div className="w-12 h-12 border-4 border-emerald-600 border-t-transparent rounded-full animate-spin"></div>
+            <h3 className="text-lg font-bold text-gray-900 font-serif">Carregando Orçamento</h3>
+            <p className="text-sm text-gray-600 leading-relaxed">{switchLoadingMessage}</p>
+          </div>
+        </div>
+      )}
       <div className="bg-white border border-gray-200 rounded-2xl sm:rounded-3xl shadow-2xl w-full max-w-xl max-h-[92vh] sm:max-h-[88vh] flex flex-col my-auto overflow-hidden animate-in fade-in">
         {/* Modal Header */}
         <div className="flex items-center justify-between border-b border-gray-200 p-4 sm:p-5 bg-white shrink-0">
