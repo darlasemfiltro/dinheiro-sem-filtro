@@ -535,6 +535,14 @@ export default function App() {
     };
     window.addEventListener('app-toast', handleAppToast);
 
+    const handleSharedBudgetsUpdated = () => {
+      const user = StorageService.getCurrentUser();
+      if (user) {
+        refreshData(user, false);
+      }
+    };
+    window.addEventListener('shared_budgets_updated', handleSharedBudgetsUpdated);
+
     // Auto-sync interval for multi-device real-time updates (every 2 seconds)
     const syncInterval = setInterval(() => {
       const user = StorageService.getCurrentUser();
@@ -546,6 +554,7 @@ export default function App() {
     return () => {
       window.removeEventListener('sync-error', handleSyncError);
       window.removeEventListener('app-toast', handleAppToast);
+      window.removeEventListener('shared_budgets_updated', handleSharedBudgetsUpdated);
       clearInterval(syncInterval);
     };
   }, []);

@@ -2798,7 +2798,12 @@ export class StorageService {
         });
 
         const merged = Array.from(map.values());
-        localStorage.setItem(STORAGE_KEYS.SHARED_BUDGETS, JSON.stringify(merged));
+        const oldStr = localStorage.getItem(STORAGE_KEYS.SHARED_BUDGETS) || '[]';
+        const newStr = JSON.stringify(merged);
+        localStorage.setItem(STORAGE_KEYS.SHARED_BUDGETS, newStr);
+        if (oldStr !== newStr && typeof window !== 'undefined') {
+          window.dispatchEvent(new CustomEvent('shared_budgets_updated'));
+        }
         return this.deduplicateSharedBudgets();
       }
     } catch (err) {
@@ -3773,12 +3778,27 @@ export class StorageService {
     const allStr = localStorage.getItem(STORAGE_KEYS.SHARED_BUDGETS) || '[]';
     const allBudgets: SharedBudget[] = JSON.parse(allStr);
 
-    const budget = allBudgets.find((b) => b.budgetId === budgetId);
-    if (!budget) return null;
+    let budget = allBudgets.find((b) => b.budgetId === budgetId);
+    if (!budget) {
+      budget = allBudgets.find((b) => b.ownerEmail?.toLowerCase() === budgetId.toLowerCase());
+    }
+    if (!budget && allBudgets.length > 0) {
+      budget = allBudgets[0];
+    }
 
-    const collab = budget.collaborators.find((c) => c.email.toLowerCase() === emailToUpdate.trim().toLowerCase());
-    if (collab) {
-      collab.accessMode = accessMode;
+    if (budget) {
+      let collab = budget.collaborators.find((c) => c.email.toLowerCase() === emailToUpdate.trim().toLowerCase());
+      if (collab) {
+        collab.accessMode = accessMode;
+      } else {
+        budget.collaborators.push({
+          email: emailToUpdate.trim().toLowerCase(),
+          name: emailToUpdate.split('@')[0],
+          addedAt: new Date().toISOString(),
+          role: 'collaborator',
+          accessMode
+        });
+      }
       localStorage.setItem(STORAGE_KEYS.SHARED_BUDGETS, JSON.stringify(allBudgets));
 
       fetch('/api/shared-budgets', {
@@ -3786,9 +3806,13 @@ export class StorageService {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(budget),
       }).catch(() => {});
+
+      if (typeof window !== 'undefined') {
+        window.dispatchEvent(new CustomEvent('shared_budgets_updated'));
+      }
     }
 
-    return budget;
+    return budget || null;
   }
 
   static isCurrentUserReadOnly(user: User): boolean {
