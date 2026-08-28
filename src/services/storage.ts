@@ -3708,12 +3708,24 @@ export class StorageService {
 
     localStorage.setItem(STORAGE_KEYS.CURRENT_USER, JSON.stringify(updatedUser));
     const usersStr = localStorage.getItem(STORAGE_KEYS.USERS) || '[]';
-    const users: User[] = JSON.parse(usersStr);
-    const uIdx = users.findIndex((u) => u.id === currentUser.id);
-    if (uIdx >= 0) {
-      users[uIdx] = updatedUser;
-      localStorage.setItem(STORAGE_KEYS.USERS, JSON.stringify(users));
-    }
+    try {
+      const users: User[] = JSON.parse(usersStr);
+      const uIdx = users.findIndex((u) => u.email?.toLowerCase() === currentUser.email?.toLowerCase() || u.id === currentUser.id);
+      if (uIdx >= 0) {
+        users[uIdx] = updatedUser;
+        localStorage.setItem(STORAGE_KEYS.USERS, JSON.stringify(users));
+      } else {
+        users.push(updatedUser);
+        localStorage.setItem(STORAGE_KEYS.USERS, JSON.stringify(users));
+      }
+    } catch (e) {}
+
+    pushUserToFirestore(updatedUser);
+    fetch('/api/users/sync', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(updatedUser),
+    }).catch(() => {});
 
     return updatedUser;
   }
