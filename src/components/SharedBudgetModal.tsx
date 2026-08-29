@@ -205,46 +205,60 @@ export const SharedBudgetModal: React.FC<SharedBudgetModalProps> = ({
   const atualizarPermissao = async (emailMembro: string, nivel: string) => {
     console.log("🕵️ [DEDO-DURO] atualizarPermissao called:", { emailMembro, nivel, sharedBudgetId: sharedBudget?.budgetId, ownerEmail: sharedBudget?.ownerEmail });
     setLoadingPermEmail(emailMembro);
+    setIsLoading(true);
     try {
       const config = getAppwriteConfig();
       const meuEmail = currentUser.email.toLowerCase().trim();
       const meuDocId = getCanonicalAppwriteDocId(meuEmail);
+      const emailAlvo = emailMembro.toLowerCase().trim();
+      const alvoDocId = getCanonicalAppwriteDocId(emailAlvo);
+
       const lista = await databases.listDocuments(config.databaseId, 'user_financials');
       const meuDoc = lista.documents.find((d: any) => d.userId === meuEmail || d.email === meuEmail || d.$id === meuDocId);
+      const docAlvo = lista.documents.find((d: any) => d.userId === emailAlvo || d.email === emailAlvo || d.$id === alvoDocId);
+
       if (meuDoc) {
         const json = typeof meuDoc.data === 'string' ? JSON.parse(meuDoc.data || '{}') : (meuDoc.data || {});
         json.member_permissions = json.member_permissions || {};
-        json.member_permissions[emailMembro] = nivel;
+        json.member_permissions[emailAlvo] = nivel;
         await databases.updateDocument(config.databaseId, 'user_financials', meuDoc.$id, { userId: meuEmail, data: JSON.stringify(json) });
         console.log("🕵️ [DEDO-DURO] Appwrite user_financials updated successfully with member_permissions:", json.member_permissions);
       }
 
+      if (docAlvo) {
+        const jsonAlvo = typeof docAlvo.data === 'string' ? JSON.parse(docAlvo.data || '{}') : (docAlvo.data || {});
+        jsonAlvo.member_permissions = jsonAlvo.member_permissions || {};
+        jsonAlvo.member_permissions[meuEmail] = nivel;
+        await databases.updateDocument(config.databaseId, 'user_financials', docAlvo.$id, { userId: emailAlvo, data: JSON.stringify(jsonAlvo) });
+      }
+
       if (sharedBudget && sharedBudget.budgetId) {
-        const resBudget = StorageService.updateCollaboratorAccessMode(sharedBudget.budgetId, emailMembro, nivel === 'leitura' ? 'read' : 'edit');
+        const resBudget = StorageService.updateCollaboratorAccessMode(sharedBudget.budgetId, emailAlvo, nivel === 'leitura' ? 'read' : 'edit');
         console.log("🕵️ [DEDO-DURO] StorageService.updateCollaboratorAccessMode returned:", resBudget);
       } else {
         console.warn("🕵️ [DEDO-DURO] sharedBudget or sharedBudget.budgetId is missing!", sharedBudget);
       }
 
-      setPermissoesLocais(prev => ({ ...prev, [emailMembro]: nivel }));
+      setPermissoesLocais(prev => ({ ...prev, [emailAlvo]: nivel }));
       setDraftPermissoes(prev => {
         const copy = { ...prev };
-        delete copy[emailMembro];
+        delete copy[emailAlvo];
         return copy;
       });
 
-      alert(`[DEDO-DURO SUCESSO] Permissão de ${emailMembro} alterada para ${nivel} confirmada com sucesso!`);
-
+      alert(`Permissão de ${emailMembro} alterada para ${nivel === 'leitura' ? 'Leitura' : 'Edição'} confirmada com sucesso!`);
       setFeedback({
         type: 'success',
-        msg: `Permissão de ${emailMembro} atualizada para ${nivel === 'leitura' ? 'Leitura (Apenas Visualizar)' : 'Edição (Completo)'} e sincronizada na conta do convidado com sucesso!`
+        msg: `Permissão de ${emailMembro} atualizada e sincronizada com sucesso no Appwrite!`
       });
+      window.location.reload();
     } catch (e) {
       console.error("🕵️ [DEDO-DURO] Erro em atualizarPermissao:", e);
       alert(`[DEDO-DURO ERRO] Falha ao atualizar permissão: ${e instanceof Error ? e.message : e}`);
       setFeedback({ type: 'error', msg: 'Erro ao atualizar permissão.' });
     } finally {
       setLoadingPermEmail(null);
+      setIsLoading(false);
     }
   };
 
@@ -377,13 +391,58 @@ export const SharedBudgetModal: React.FC<SharedBudgetModalProps> = ({
     }
   };
 
-  const handleRemoveCollaborator = (email: string) => {
+  const handleRemoveCollaborator = async (email: string) => {
     if (window.confirm(`Tem certeza que deseja EXCLUIR o acesso do membro ${email}?`)) {
-      const targetBudgetId = sharedBudget.budgetId || effectiveBudgetId;
-      const updated = StorageService.removeCollaborator(targetBudgetId, email);
-      if (updated) {
-        setSharedBudget(updated);
-        setFeedback({ type: 'success', msg: `Acesso do membro ${email} excluído com sucesso.` });
+      setIsLoading(true);
+      try {
+        const config = getAppwriteConfig();
+        const meuEmail = currentUser.email.toLowerCase().trim();
+        const meuDocId = getCanonicalAppwriteDocId(meuEmail);
+        const emailAlvo = email.toLowerCase().trim();
+        const alvoDocId = getCanonicalAppwriteDocId(emailAlvo);
+
+        const lista = await databases.listDocuments(config.databaseId, 'user_financials');
+        const meuDoc = lista.documents.find((d: any) => d.userId === meuEmail || d.email === meuEmail || d.$id === meuDocId);
+        const docAlvo = lista.documents.find((d: any) => d.userId === emailAlvo || d.email === emailAlvo || d.$id === alvoDocId);
+
+        if (meuDoc) {
+          const json = typeof meuDoc.data === 'string' ? JSON.parse(meuDoc.data || '{}') : (meuDoc.data || {});
+          if (Array.isArray(json.allowed_users)) {
+            json.allowed_users = json.allowed_users.filter((m: string) => m.toLowerCase() !== emailAlvo);
+          }
+          if (Array.isArray(json.shared_members)) {
+            json.shared_members = json.shared_members.filter((m: string) => m.toLowerCase() !== emailAlvo);
+          }
+          if (json.member_permissions) {
+            delete json.member_permissions[emailAlvo];
+          }
+          await databases.updateDocument(config.databaseId, 'user_financials', meuDoc.$id, { userId: meuEmail, data: JSON.stringify(json) });
+        }
+
+        if (docAlvo) {
+          const jsonAlvo = typeof docAlvo.data === 'string' ? JSON.parse(docAlvo.data || '{}') : (docAlvo.data || {});
+          if (Array.isArray(jsonAlvo.shared_with_me)) {
+            jsonAlvo.shared_with_me = jsonAlvo.shared_with_me.filter((owner: string) => owner.toLowerCase() !== meuEmail);
+          }
+          if (jsonAlvo.active_budget_owner === meuDocId || jsonAlvo.active_budget_owner === meuEmail || jsonAlvo.active_budget_owner === currentUser.email) {
+            jsonAlvo.active_budget_owner = null;
+          }
+          await databases.updateDocument(config.databaseId, 'user_financials', docAlvo.$id, { userId: emailAlvo, data: JSON.stringify(jsonAlvo) });
+        }
+
+        const targetBudgetId = sharedBudget.budgetId || effectiveBudgetId;
+        const updated = StorageService.removeCollaborator(targetBudgetId, email);
+        if (updated) {
+          setSharedBudget(updated);
+          setFeedback({ type: 'success', msg: `Acesso do membro ${email} excluído e sincronizado com sucesso no Appwrite.` });
+        }
+        alert(`Membro ${email} excluído com sucesso!`);
+        window.location.reload();
+      } catch (err) {
+        console.error("Erro ao remover colaborador no Appwrite:", err);
+        alert("Erro ao excluir membro no Appwrite.");
+      } finally {
+        setIsLoading(false);
       }
     }
   };
