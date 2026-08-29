@@ -281,6 +281,86 @@ export const SharedBudgetModal: React.FC<SharedBudgetModalProps> = ({
     }
   };
 
+  const removerMembro = async (emailMembro: string) => {
+    if(!window.confirm(`Tem certeza que deseja excluir ${emailMembro} do seu orçamento?`)) return;
+    try {
+      const config = getAppwriteConfig();
+      const meuId = getCanonicalAppwriteDocId(currentUser.email);
+      const docMe = await databases.getDocument(config.databaseId, 'user_financials', meuId);
+      const jsonMe = docMe.data ? (typeof docMe.data === 'string' ? JSON.parse(docMe.data) : docMe.data) : {};
+
+      // Remove das listas
+      jsonMe.allowed_users = (jsonMe.allowed_users || []).filter((e: string) => e.toLowerCase() !== emailMembro.toLowerCase());
+      if (jsonMe.shared_members) {
+        jsonMe.shared_members = jsonMe.shared_members.filter((e: string) => e.toLowerCase() !== emailMembro.toLowerCase());
+      }
+      if (jsonMe.member_permissions) delete jsonMe.member_permissions[emailMembro];
+      await databases.updateDocument(config.databaseId, 'user_financials', meuId, { userId: currentUser.email.toLowerCase().trim(), data: JSON.stringify(jsonMe) });
+
+      // Remove o vínculo no convidado
+      const emailAlvo = emailMembro.toLowerCase().trim();
+      const idConvidado = getCanonicalAppwriteDocId(emailAlvo);
+      try {
+        const docConv = await databases.getDocument(config.databaseId, 'user_financials', idConvidado);
+        const jsonConv = docConv.data ? (typeof docConv.data === 'string' ? JSON.parse(docConv.data) : docConv.data) : {};
+        if (Array.isArray(jsonConv.shared_with_me)) {
+          jsonConv.shared_with_me = jsonConv.shared_with_me.filter((e: string) => e.toLowerCase() !== currentUser.email.toLowerCase());
+        }
+        if (jsonConv.active_budget_owner === meuId || jsonConv.active_budget_owner === currentUser.email) {
+          jsonConv.active_budget_owner = null;
+        }
+        await databases.updateDocument(config.databaseId, 'user_financials', idConvidado, { userId: emailAlvo, data: JSON.stringify(jsonConv) });
+      } catch(e) { console.warn("Convidado não sincronizado na exclusão."); }
+
+      const targetBudgetId = sharedBudget?.budgetId || effectiveBudgetId;
+      StorageService.removeCollaborator(targetBudgetId, emailMembro);
+
+      alert("Membro removido com sucesso!");
+      window.location.reload();
+    } catch (error) { 
+      console.error("Erro ao excluir membro:", error);
+      alert("Erro ao excluir membro."); 
+    }
+  };
+
+  const confirmarPermissao = async (emailMembro: string) => {
+    try {
+      const permissaoEscolhida = draftPermissoes[emailMembro] || permissoesLocais[emailMembro] || 'leitura';
+      const config = getAppwriteConfig();
+      const meuId = getCanonicalAppwriteDocId(currentUser.email);
+      const docMe = await databases.getDocument(config.databaseId, 'user_financials', meuId);
+      const jsonMe = docMe.data ? (typeof docMe.data === 'string' ? JSON.parse(docMe.data) : docMe.data) : {};
+
+      jsonMe.member_permissions = jsonMe.member_permissions || {};
+      jsonMe.member_permissions[emailMembro.toLowerCase().trim()] = permissaoEscolhida;
+
+      await databases.updateDocument(config.databaseId, 'user_financials', meuId, { userId: currentUser.email.toLowerCase().trim(), data: JSON.stringify(jsonMe) });
+      
+      const accessMode = (permissaoEscolhida === 'edicao' || permissaoEscolhida === 'edit' || permissaoEscolhida === 'edição') ? 'edit' : 'read';
+      if (sharedBudget && sharedBudget.budgetId) {
+        StorageService.updateCollaboratorAccessMode(sharedBudget.budgetId, emailMembro, accessMode);
+      }
+
+      setPermissoesLocais(prev => ({ ...prev, [emailMembro]: permissaoEscolhida }));
+      setDraftPermissoes(prev => {
+        const copy = { ...prev };
+        delete copy[emailMembro];
+        return copy;
+      });
+
+      alert(`Permissão salva com sucesso: ${permissaoEscolhida === 'edicao' ? 'Edição Completa' : 'Apenas Leitura'}`);
+      window.location.reload();
+    } catch(e) { 
+      console.error("Erro ao confirmar permissão:", e);
+      alert("Erro ao confirmar permissão."); 
+    }
+  };
+
+  const togglePermissao = (emailMembro: string, tipo: string) => {
+    setPermissoesLocais(prev => ({ ...prev, [emailMembro]: tipo }));
+    setDraftPermissoes(prev => ({ ...prev, [emailMembro]: tipo }));
+  };
+
   useEffect(() => {
     if (isOpen) {
       const currentBudgetId = StorageService.getEffectiveBudgetId(user);
@@ -846,13 +926,7 @@ export const SharedBudgetModal: React.FC<SharedBudgetModalProps> = ({
                         {isOwner && (
                           <button
                             type="button"
-                            onClick={() => {
-                              if (window.confirm(`Deseja remover o acesso de ${email}?`)) {
-                                const newMembros = membrosLocais.filter(m => m !== email);
-                                setMembrosLocais(newMembros);
-                                handleRemoveCollaborator(email);
-                              }
-                            }}
+                            onClick={() => removerMembro(email)}
                             className="py-1 px-2.5 bg-red-600 text-white rounded-lg text-[10px] sm:text-xs font-bold hover:bg-red-700 transition cursor-pointer"
                           >
                             Excluir
@@ -866,7 +940,7 @@ export const SharedBudgetModal: React.FC<SharedBudgetModalProps> = ({
                         <button
                           type="button"
                           disabled={loadingPermEmail === email}
-                          onClick={() => atualizarPermissao(email, perm)}
+                          onClick={() => confirmarPermissao(email)}
                           className="py-1 px-3 bg-[#121212] text-[#D4AF37] hover:bg-black rounded-lg text-[11px] font-bold transition flex items-center gap-1 shadow-xs cursor-pointer border border-[#D4AF37] disabled:opacity-50"
                         >
                           {loadingPermEmail === email ? 'Salvando...' : 'Confirmar Permissão'}
@@ -879,7 +953,7 @@ export const SharedBudgetModal: React.FC<SharedBudgetModalProps> = ({
                             name={`perm-${idx}-${email}`}
                             value="leitura"
                             checked={perm === 'leitura'}
-                            onChange={() => setDraftPermissoes(prev => ({ ...prev, [email]: 'leitura' }))}
+                            onChange={() => togglePermissao(email, 'leitura')}
                             className="accent-[#D4AF37]"
                           />
                           <Eye className="w-3.5 h-3.5 text-blue-600 shrink-0" />
@@ -891,7 +965,7 @@ export const SharedBudgetModal: React.FC<SharedBudgetModalProps> = ({
                             name={`perm-${idx}-${email}`}
                             value="edicao"
                             checked={perm === 'edicao'}
-                            onChange={() => setDraftPermissoes(prev => ({ ...prev, [email]: 'edicao' }))}
+                            onChange={() => togglePermissao(email, 'edicao')}
                             className="accent-[#D4AF37]"
                           />
                           <Edit3 className="w-3.5 h-3.5 text-amber-700 shrink-0" />
