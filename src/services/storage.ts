@@ -2777,36 +2777,33 @@ export class StorageService {
         const serverBudgets: SharedBudget[] = await res.json();
         const localBudgets = this.deduplicateSharedBudgets();
 
+        const cleanEmail = userEmail.trim().toLowerCase();
         const map = new Map<string, SharedBudget>();
+
         localBudgets.forEach((b) => {
           const key = (b.ownerEmail || '').toLowerCase() || b.budgetId;
           map.set(key, b);
         });
+
         serverBudgets.forEach((b) => {
           const key = (b.ownerEmail || '').toLowerCase() || b.budgetId;
-          const existing = map.get(key);
-          if (!existing) {
-            map.set(key, b);
-          } else {
-            // Merge collaborators, keeping the latest accessMode from server
-            const collabsMap = new Map<string, BudgetCollaborator>();
-            (existing.collaborators || []).forEach((c) => collabsMap.set(c.email.toLowerCase(), c));
-            (b.collaborators || []).forEach((c) => {
-              const email = c.email.toLowerCase();
-              const prev = collabsMap.get(email);
-              if (prev) {
-                // overwrite with server version (which has the updated accessMode)
-                collabsMap.set(email, c);
-              } else {
-                collabsMap.set(email, c);
-              }
-            });
-            existing.collaborators = Array.from(collabsMap.values());
-            map.set(key, existing);
-          }
+          // Server version is authoritative for shared budgets
+          map.set(key, {
+            ...b,
+            collaborators: b.collaborators || []
+          });
         });
 
-        const merged = Array.from(map.values());
+        // Filter out shared budgets where user is guest but owner removed them (not in serverBudgets)
+        const merged = Array.from(map.values()).filter((b) => {
+          const isOwner = (b.ownerEmail || '').toLowerCase() === cleanEmail;
+          const inServer = serverBudgets.some((sb) => sb.budgetId === b.budgetId || (sb.ownerEmail || '').toLowerCase() === (b.ownerEmail || '').toLowerCase());
+          if (!isOwner && !inServer) {
+            return false;
+          }
+          return true;
+        });
+
         const oldStr = localStorage.getItem(STORAGE_KEYS.SHARED_BUDGETS) || '[]';
         const newStr = JSON.stringify(merged);
         localStorage.setItem(STORAGE_KEYS.SHARED_BUDGETS, newStr);

@@ -3367,15 +3367,13 @@ async function startServer() {
       );
 
       if (idx >= 0) {
-        const existingCollabs = allBudgets[idx].collaborators || [];
-        const newCollabs = budget.collaborators || [];
-        const map = new Map<string, any>();
-        existingCollabs.forEach((c) => map.set((c.email || '').toLowerCase(), c));
-        newCollabs.forEach((c) => map.set((c.email || '').toLowerCase(), c));
-        budget.collaborators = Array.from(map.values());
-
-        allBudgets[idx] = { ...allBudgets[idx], ...budget };
-        console.log('🕵️ [DEDO-DURO SERVER] Updated existing server shared budget at index:', idx, 'collaborators:', budget.collaborators);
+        const newCollabs = budget.collaborators || allBudgets[idx].collaborators || [];
+        allBudgets[idx] = {
+          ...allBudgets[idx],
+          ...budget,
+          collaborators: newCollabs
+        };
+        console.log('🕵️ [DEDO-DURO SERVER] Updated existing server shared budget at index:', idx, 'collaborators:', newCollabs);
       } else {
         allBudgets.push(budget);
         console.log('🕵️ [DEDO-DURO SERVER] Pushed new server shared budget, total:', allBudgets.length);
