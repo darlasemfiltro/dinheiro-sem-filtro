@@ -3353,7 +3353,9 @@ async function startServer() {
   app.post('/api/shared-budgets', (req, res) => {
     try {
       const budget: ServerSharedBudget = req.body;
+      console.log('🕵️ [DEDO-DURO SERVER] POST /api/shared-budgets received:', { budgetId: budget?.budgetId, ownerEmail: budget?.ownerEmail, collaborators: budget?.collaborators });
       if (!budget || !budget.budgetId) {
+        console.warn('🕵️ [DEDO-DURO SERVER] Invalid shared budget payload');
         return res.status(400).json({ success: false, message: 'Orçamento compartilhado inválido.' });
       }
 
@@ -3373,8 +3375,10 @@ async function startServer() {
         budget.collaborators = Array.from(map.values());
 
         allBudgets[idx] = { ...allBudgets[idx], ...budget };
+        console.log('🕵️ [DEDO-DURO SERVER] Updated existing server shared budget at index:', idx, 'collaborators:', budget.collaborators);
       } else {
         allBudgets.push(budget);
+        console.log('🕵️ [DEDO-DURO SERVER] Pushed new server shared budget, total:', allBudgets.length);
       }
       saveServerBudgets(allBudgets);
 

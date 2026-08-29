@@ -3784,6 +3784,7 @@ export class StorageService {
     accessMode: 'edit' | 'read'
   ): SharedBudget | null {
     this.initialize();
+    console.log("🕵️ [DEDO-DURO] updateCollaboratorAccessMode called:", { budgetId, emailToUpdate, accessMode });
     const allStr = localStorage.getItem(STORAGE_KEYS.SHARED_BUDGETS) || '[]';
     const allBudgets: SharedBudget[] = JSON.parse(allStr);
 
@@ -3799,6 +3800,7 @@ export class StorageService {
       let collab = budget.collaborators.find((c) => c.email.toLowerCase() === emailToUpdate.trim().toLowerCase());
       if (collab) {
         collab.accessMode = accessMode;
+        console.log("🕵️ [DEDO-DURO] Updated existing collaborator accessMode to:", accessMode);
       } else {
         budget.collaborators.push({
           email: emailToUpdate.trim().toLowerCase(),
@@ -3807,6 +3809,7 @@ export class StorageService {
           role: 'collaborator',
           accessMode
         });
+        console.log("🕵️ [DEDO-DURO] Pushed new collaborator with accessMode:", accessMode);
       }
       localStorage.setItem(STORAGE_KEYS.SHARED_BUDGETS, JSON.stringify(allBudgets));
 
@@ -3814,11 +3817,17 @@ export class StorageService {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(budget),
-      }).catch(() => {});
+      }).then(res => res.json()).then(data => {
+        console.log("🕵️ [DEDO-DURO] POST /api/shared-budgets response:", data);
+      }).catch(err => {
+        console.error("🕵️ [DEDO-DURO] POST /api/shared-budgets error:", err);
+      });
 
       if (typeof window !== 'undefined') {
         window.dispatchEvent(new CustomEvent('shared_budgets_updated'));
       }
+    } else {
+      console.warn("🕵️ [DEDO-DURO] updateCollaboratorAccessMode: budget not found for budgetId:", budgetId);
     }
 
     return budget || null;
@@ -3833,7 +3842,9 @@ export class StorageService {
     if (budget.ownerEmail.toLowerCase() === user.email.toLowerCase()) return false;
 
     const collab = budget.collaborators.find((c) => c.email.toLowerCase() === user.email.toLowerCase());
-    if (collab && collab.accessMode === 'read') {
+    const isRead = collab && collab.accessMode === 'read';
+    console.log("🕵️ [DEDO-DURO] isCurrentUserReadOnly check:", { userEmail: user.email, effectiveBudgetId, ownerEmail: budget.ownerEmail, collabAccessMode: collab?.accessMode, isRead });
+    if (isRead) {
       return true;
     }
     return false;

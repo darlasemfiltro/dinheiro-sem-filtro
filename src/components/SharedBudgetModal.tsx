@@ -203,6 +203,7 @@ export const SharedBudgetModal: React.FC<SharedBudgetModalProps> = ({
   };
 
   const atualizarPermissao = async (emailMembro: string, nivel: string) => {
+    console.log("🕵️ [DEDO-DURO] atualizarPermissao called:", { emailMembro, nivel, sharedBudgetId: sharedBudget?.budgetId, ownerEmail: sharedBudget?.ownerEmail });
     setLoadingPermEmail(emailMembro);
     try {
       const config = getAppwriteConfig();
@@ -215,10 +216,14 @@ export const SharedBudgetModal: React.FC<SharedBudgetModalProps> = ({
         json.member_permissions = json.member_permissions || {};
         json.member_permissions[emailMembro] = nivel;
         await databases.updateDocument(config.databaseId, 'user_financials', meuDoc.$id, { userId: meuEmail, data: JSON.stringify(json) });
+        console.log("🕵️ [DEDO-DURO] Appwrite user_financials updated successfully with member_permissions:", json.member_permissions);
       }
 
       if (sharedBudget && sharedBudget.budgetId) {
-        StorageService.updateCollaboratorAccessMode(sharedBudget.budgetId, emailMembro, nivel === 'leitura' ? 'read' : 'edit');
+        const resBudget = StorageService.updateCollaboratorAccessMode(sharedBudget.budgetId, emailMembro, nivel === 'leitura' ? 'read' : 'edit');
+        console.log("🕵️ [DEDO-DURO] StorageService.updateCollaboratorAccessMode returned:", resBudget);
+      } else {
+        console.warn("🕵️ [DEDO-DURO] sharedBudget or sharedBudget.budgetId is missing!", sharedBudget);
       }
 
       setPermissoesLocais(prev => ({ ...prev, [emailMembro]: nivel }));
@@ -228,12 +233,15 @@ export const SharedBudgetModal: React.FC<SharedBudgetModalProps> = ({
         return copy;
       });
 
+      alert(`[DEDO-DURO SUCESSO] Permissão de ${emailMembro} alterada para ${nivel} confirmada com sucesso!`);
+
       setFeedback({
         type: 'success',
         msg: `Permissão de ${emailMembro} atualizada para ${nivel === 'leitura' ? 'Leitura (Apenas Visualizar)' : 'Edição (Completo)'} e sincronizada na conta do convidado com sucesso!`
       });
     } catch (e) {
-      console.error(e);
+      console.error("🕵️ [DEDO-DURO] Erro em atualizarPermissao:", e);
+      alert(`[DEDO-DURO ERRO] Falha ao atualizar permissão: ${e instanceof Error ? e.message : e}`);
       setFeedback({ type: 'error', msg: 'Erro ao atualizar permissão.' });
     } finally {
       setLoadingPermEmail(null);
