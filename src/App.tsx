@@ -1147,7 +1147,7 @@ export default function App() {
   // Read-Only Guard Helper
   const checkReadOnlyPermission = (): boolean => {
     if (currentUser && StorageService.isCurrentUserReadOnly(currentUser)) {
-      setGlobalAlert({ isOpen: true, message: '🔒 Você está no Modo Leitura (Apenas Visualização) neste orçamento compartilhado e não tem permissão para fazer alterações.', type: 'warning' });
+      alert("Ação bloqueada: Você possui apenas permissão de LEITURA neste orçamento.");
       return true;
     }
     return false;
