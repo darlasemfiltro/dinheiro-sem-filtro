@@ -551,11 +551,24 @@ export default function App() {
       }
     }, 2000);
 
+    // Dedicated shared budgets sync interval (every 2 seconds) so guest permissions update instantly across devices
+    const sharedBudgetSyncInterval = setInterval(async () => {
+      const user = StorageService.getCurrentUser();
+      if (user?.email) {
+        try {
+          await StorageService.syncSharedBudgetsWithServer(user.email);
+        } catch (e) {
+          // ignore
+        }
+      }
+    }, 2000);
+
     return () => {
       window.removeEventListener('sync-error', handleSyncError);
       window.removeEventListener('app-toast', handleAppToast);
       window.removeEventListener('shared_budgets_updated', handleSharedBudgetsUpdated);
       clearInterval(syncInterval);
+      clearInterval(sharedBudgetSyncInterval);
     };
   }, []);
 
