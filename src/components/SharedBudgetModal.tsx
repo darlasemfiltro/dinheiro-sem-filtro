@@ -918,87 +918,62 @@ export const SharedBudgetModal: React.FC<SharedBudgetModalProps> = ({
                 const currentDraft = draftPermissoes[email];
                 const perm = currentDraft !== undefined ? currentDraft : (permissoesLocais[email] || 'leitura');
                 return (
-                  <div key={idx} className="p-3.5 sm:p-4 border border-gray-200 rounded-xl mb-3 bg-gray-50 space-y-3">
-                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
-                      <p className="font-bold text-[#333] text-xs sm:text-sm truncate select-all">{email}</p>
-                      <div className="flex items-center gap-2 shrink-0">
-                        <span className="px-2 py-1 bg-emerald-50 text-emerald-700 rounded-lg text-[10px] sm:text-xs font-bold border border-emerald-200">✓ Concedido</span>
-                        {isOwner && (
-                          <button
-                            type="button"
-                            onClick={() => removerMembro(email)}
-                            className="py-1 px-2.5 bg-red-600 text-white rounded-lg text-[10px] sm:text-xs font-bold hover:bg-red-700 transition cursor-pointer"
-                          >
-                            Excluir
-                          </button>
-                        )}
+                  <div key={idx} style={{ padding: '15px', border: '1px solid #e0e0e0', borderRadius: '12px', marginBottom: '15px', backgroundColor: '#f9f9f9' }}>
+                      <p style={{ margin: 0, fontWeight: 'bold', color: '#333', fontSize: '15px', marginBottom: '10px' }}>{email}</p>
+                      
+                      {/* BOTÕES DE STATUS E EXCLUSÃO */}
+                      <div style={{ display: 'flex', gap: '10px', marginBottom: '15px' }}>
+                          <span style={{ padding: '6px 12px', backgroundColor: '#e8f5e9', color: '#2e7d32', borderRadius: '20px', fontSize: '12px', fontWeight: 'bold', border: '1px solid #4CAF50' }}>✓ Concedido</span>
+                          {isOwner && (
+                            <button type="button" onClick={() => removerMembro(email)} style={{ padding: '6px 12px', backgroundColor: '#ffebee', color: '#c62828', borderRadius: '20px', fontSize: '12px', fontWeight: 'bold', border: '1px solid #f44336', cursor: 'pointer' }}>Excluir</button>
+                          )}
                       </div>
-                    </div>
-                    <div className="flex flex-col gap-2 pt-1 border-t border-gray-200">
-                      <div className="flex items-center justify-between">
-                        <span className="text-[11px] font-bold text-gray-600">Permissão:</span>
-                        <button
-                          type="button"
-                          disabled={loadingPermEmail === email}
-                          onClick={() => confirmarPermissao(email)}
-                          className="py-1 px-3 bg-[#121212] text-[#D4AF37] hover:bg-black rounded-lg text-[11px] font-bold transition flex items-center gap-1 shadow-xs cursor-pointer border border-[#D4AF37] disabled:opacity-50"
-                        >
-                          {loadingPermEmail === email ? 'Salvando...' : 'Confirmar Permissão'}
-                        </button>
-                      </div>
-                      <div className="flex flex-wrap items-center gap-2">
-                        <label className="flex items-center gap-1.5 text-xs cursor-pointer bg-white px-2.5 py-1.5 rounded-lg border border-gray-200 shadow-2xs hover:border-amber-400 transition flex-1 sm:flex-initial">
-                          <input
-                            type="radio"
-                            name={`perm-${idx}-${email}`}
-                            value="leitura"
-                            checked={perm === 'leitura'}
-                            onChange={() => togglePermissao(email, 'leitura')}
-                            className="accent-[#D4AF37]"
-                          />
-                          <Eye className="w-3.5 h-3.5 text-blue-600 shrink-0" />
-                          <span className="font-bold text-[#121212] text-[11px]">Leitura</span>
-                        </label>
-                        <label className="flex items-center gap-1.5 text-xs cursor-pointer bg-white px-2.5 py-1.5 rounded-lg border border-gray-200 shadow-2xs hover:border-amber-400 transition flex-1 sm:flex-initial">
-                          <input
-                            type="radio"
-                            name={`perm-${idx}-${email}`}
-                            value="edicao"
-                            checked={perm === 'edicao'}
-                            onChange={() => togglePermissao(email, 'edicao')}
-                            className="accent-[#D4AF37]"
-                          />
-                          <Edit3 className="w-3.5 h-3.5 text-amber-700 shrink-0" />
-                          <span className="font-bold text-[#121212] text-[11px]">Edição</span>
-                        </label>
-                      </div>
-                    </div>
 
-                    {/* Gamification Bar */}
-                    <div className="flex items-center flex-wrap gap-1.5 pt-2 border-t border-gray-200 text-[11px]">
-                      <span className="font-bold text-gray-500 text-[10px] uppercase tracking-wider">Gamificação:</span>
-                      <span className="px-2 py-0.5 bg-pink-50 border border-pink-200 text-pink-900 font-extrabold rounded-md flex items-center gap-1">
-                        <span>{gState.division.icon}</span>
-                        <span>{gState.division.name}</span>
-                      </span>
-                      <span className="px-2 py-0.5 bg-orange-50 border border-orange-200 text-orange-900 font-extrabold rounded-md flex items-center gap-1">
-                        <Flame className="w-3 h-3 text-orange-600 fill-orange-500" />
-                        <span>{gState.streak} sem</span>
-                      </span>
-                      <span className="px-2 py-0.5 bg-purple-50 border border-purple-200 text-purple-900 font-extrabold rounded-md flex items-center gap-1">
-                        <Zap className="w-3 h-3 text-purple-600 fill-purple-400" />
-                        <span>{gState.xp} XP</span>
-                      </span>
-                      <span className="px-2 py-0.5 bg-cyan-50 border border-cyan-200 text-cyan-900 font-extrabold rounded-md flex items-center gap-1">
-                        <Gem className="w-3 h-3 text-cyan-600 fill-cyan-400" />
-                        <span>{gState.gems} 💎</span>
-                      </span>
-                    </div>
+                      {/* CAIXA DE PERMISSÃO (RADIO BUTTONS E CONFIRMAÇÃO) */}
+                      <div style={{ backgroundColor: '#fff', padding: '15px', borderRadius: '10px', border: '1px solid #eee' }}>
+                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '15px' }}>
+                              <span style={{ fontSize: '13px', fontWeight: 'bold', color: '#555' }}>Permissão:</span>
+                              <button type="button" disabled={loadingPermEmail === email} onClick={() => confirmarPermissao(email)} style={{ padding: '8px 12px', backgroundColor: '#1a1a1a', color: '#ffb300', borderRadius: '6px', fontSize: '12px', fontWeight: 'bold', border: 'none', cursor: 'pointer', opacity: loadingPermEmail === email ? 0.5 : 1 }}>{loadingPermEmail === email ? 'Salvando...' : 'Confirmar Permissão'}</button>
+                          </div>
+                          
+                          <div style={{ display: 'flex', gap: '10px' }}>
+                              <div onClick={() => togglePermissao(email, 'leitura')} style={{ flex: 1, padding: '10px', border: perm !== 'edicao' ? '2px solid #ffb300' : '1px solid #ddd', borderRadius: '8px', display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer', backgroundColor: perm !== 'edicao' ? '#fffaf0' : '#fff' }}>
+                                  <div style={{ width: '16px', height: '16px', borderRadius: '50%', border: perm !== 'edicao' ? '4px solid #ffb300' : '2px solid #ccc', backgroundColor: '#fff' }}></div>
+                                  <span style={{ fontSize: '13px', fontWeight: 'bold', color: '#333' }}>👁️ Leitura</span>
+                              </div>
+                              
+                              <div onClick={() => togglePermissao(email, 'edicao')} style={{ flex: 1, padding: '10px', border: perm === 'edicao' ? '2px solid #ffb300' : '1px solid #ddd', borderRadius: '8px', display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer', backgroundColor: perm === 'edicao' ? '#fffaf0' : '#fff' }}>
+                                  <div style={{ width: '16px', height: '16px', borderRadius: '50%', border: perm === 'edicao' ? '4px solid #ffb300' : '2px solid #ccc', backgroundColor: '#fff' }}></div>
+                                  <span style={{ fontSize: '13px', fontWeight: 'bold', color: '#333' }}>✏️ Edição</span>
+                              </div>
+                          </div>
+                      </div>
+
+                      {/* Gamification Bar */}
+                      <div className="flex items-center flex-wrap gap-1.5 pt-3 mt-3 border-t border-gray-200 text-[11px]">
+                        <span className="font-bold text-gray-500 text-[10px] uppercase tracking-wider">Gamificação:</span>
+                        <span className="px-2 py-0.5 bg-pink-50 border border-pink-200 text-pink-900 font-extrabold rounded-md flex items-center gap-1">
+                          <span>{gState.division.icon}</span>
+                          <span>{gState.division.name}</span>
+                        </span>
+                        <span className="px-2 py-0.5 bg-orange-50 border border-orange-200 text-orange-900 font-extrabold rounded-md flex items-center gap-1">
+                          <Flame className="w-3 h-3 text-orange-600 fill-orange-500" />
+                          <span>{gState.streak} sem</span>
+                        </span>
+                        <span className="px-2 py-0.5 bg-purple-50 border border-purple-200 text-purple-900 font-extrabold rounded-md flex items-center gap-1">
+                          <Zap className="w-3 h-3 text-purple-600 fill-purple-400" />
+                          <span>{gState.xp} XP</span>
+                        </span>
+                        <span className="px-2 py-0.5 bg-cyan-50 border border-cyan-200 text-cyan-900 font-extrabold rounded-md flex items-center gap-1">
+                          <Gem className="w-3 h-3 text-cyan-600 fill-cyan-400" />
+                          <span>{gState.gems} 💎</span>
+                        </span>
+                      </div>
                   </div>
                 );
               })
             ) : (
-              <p style={{ textAlign: 'center', color: '#888', padding: '15px', border: '1px dashed #ccc', borderRadius: '8px' }}>Nenhum membro listado.</p>
+                <p style={{ textAlign: 'center', color: '#888', padding: '15px', border: '1px dashed #ccc', borderRadius: '8px' }}>Nenhum membro listado no momento.</p>
             )}
           </div>
         </div>
