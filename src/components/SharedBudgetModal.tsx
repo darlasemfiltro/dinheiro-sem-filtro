@@ -101,7 +101,23 @@ export const SharedBudgetModal: React.FC<SharedBudgetModalProps> = ({
         }
 
         setMembrosLocais(Array.isArray(json.allowed_users) ? json.allowed_users : (Array.isArray(json.shared_members) ? json.shared_members : []));
-        setPermissoesLocais(json.member_permissions || {});
+        const rawPerms = json.member_permissions || {};
+        const normalizedPerms: Record<string, string> = {};
+        Object.keys(rawPerms).forEach(k => {
+          const val = rawPerms[k];
+          normalizedPerms[k.toLowerCase()] = (val === 'edicao' || val === 'edit' || val === 'edição') ? 'edicao' : 'leitura';
+        });
+        if (sharedBudget && sharedBudget.collaborators) {
+          sharedBudget.collaborators.forEach(c => {
+            if (c.email) {
+              const mode = c.accessMode === 'edit' ? 'edicao' : (c.accessMode === 'read' ? 'leitura' : null);
+              if (mode) {
+                normalizedPerms[c.email.toLowerCase()] = mode;
+              }
+            }
+          });
+        }
+        setPermissoesLocais(normalizedPerms);
         
         let sharedWithMeList = Array.isArray(json.shared_with_me) ? json.shared_with_me : [];
         try {
@@ -202,8 +218,10 @@ export const SharedBudgetModal: React.FC<SharedBudgetModalProps> = ({
     }
   };
 
-  const atualizarPermissao = async (emailMembro: string, nivel: string) => {
-    console.log("🕵️ [DEDO-DURO] atualizarPermissao called:", { emailMembro, nivel, sharedBudgetId: sharedBudget?.budgetId, ownerEmail: sharedBudget?.ownerEmail });
+  const atualizarPermissao = async (emailMembro: string, nivelInput: string) => {
+    const nivel = (nivelInput === 'edicao' || nivelInput === 'edit' || nivelInput === 'edição') ? 'edicao' : 'leitura';
+    const accessMode = nivel === 'edicao' ? 'edit' : 'read';
+    console.log("🕵️ [DEDO-DURO] atualizarPermissao called:", { emailMembro, nivel, accessMode, sharedBudgetId: sharedBudget?.budgetId, ownerEmail: sharedBudget?.ownerEmail });
     setLoadingPermEmail(emailMembro);
     setIsLoading(true);
     try {
@@ -233,8 +251,9 @@ export const SharedBudgetModal: React.FC<SharedBudgetModalProps> = ({
       }
 
       if (sharedBudget && sharedBudget.budgetId) {
-        const resBudget = StorageService.updateCollaboratorAccessMode(sharedBudget.budgetId, emailAlvo, nivel === 'leitura' ? 'read' : 'edit');
+        const resBudget = StorageService.updateCollaboratorAccessMode(sharedBudget.budgetId, emailAlvo, accessMode);
         console.log("🕵️ [DEDO-DURO] StorageService.updateCollaboratorAccessMode returned:", resBudget);
+        if (resBudget) setSharedBudget(resBudget);
       } else {
         console.warn("🕵️ [DEDO-DURO] sharedBudget or sharedBudget.budgetId is missing!", sharedBudget);
       }
@@ -249,7 +268,7 @@ export const SharedBudgetModal: React.FC<SharedBudgetModalProps> = ({
       alert(`Permissão de ${emailMembro} alterada para ${nivel === 'leitura' ? 'Leitura' : 'Edição'} confirmada com sucesso!`);
       setFeedback({
         type: 'success',
-        msg: `Permissão de ${emailMembro} atualizada e sincronizada com sucesso no Appwrite!`
+        msg: `Permissão de ${emailMembro} atualizada para ${nivel === 'leitura' ? 'Leitura' : 'Edição'} e sincronizada com sucesso!`
       });
       window.location.reload();
     } catch (e) {
