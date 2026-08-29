@@ -3837,10 +3837,32 @@ export class StorageService {
   static isCurrentUserReadOnly(user: User): boolean {
     this.initialize();
     const effectiveBudgetId = this.getEffectiveBudgetId(user);
-    if (effectiveBudgetId === user.id) return false; // Owner of personal budget
+    if (!effectiveBudgetId || effectiveBudgetId === user.id) return false;
 
     const budget = this.getSharedBudget(effectiveBudgetId, user);
-    if (budget.ownerEmail.toLowerCase() === user.email.toLowerCase()) return false;
+    const emailDoDono = budget.ownerEmail || effectiveBudgetId;
+    if (emailDoDono.toLowerCase() === user.email.toLowerCase()) return false;
+
+    // Check member_permissions from user financials in localStorage
+    try {
+      const allFinStr = localStorage.getItem('DINHEIRO_SEM_FILTRO_USER_FINANCIALS') || '{}';
+      const allFin = JSON.parse(allFinStr);
+      for (const k of Object.keys(allFin)) {
+        const item = allFin[k];
+        const parsedData = item.data ? (typeof item.data === 'string' ? JSON.parse(item.data) : item.data) : {};
+        const ownerCandidate = item.email || parsedData.owner_email || parsedData.titular || k;
+        if (ownerCandidate.toLowerCase() === emailDoDono.toLowerCase() || item.id === effectiveBudgetId || k === effectiveBudgetId) {
+          const perms = parsedData.member_permissions || {};
+          const userPerm = perms[user.email?.toLowerCase().trim()];
+          if (userPerm === 'edicao' || userPerm === 'edit' || userPerm === 'edição') {
+            return false; // Edição completa
+          }
+          if (userPerm === 'leitura' || userPerm === 'read') {
+            return true; // Apenas leitura
+          }
+        }
+      }
+    } catch(e) {}
 
     let collab = budget.collaborators.find((c) => c.email.toLowerCase() === user.email.toLowerCase());
     if (!collab) {
@@ -3851,12 +3873,13 @@ export class StorageService {
       }
     }
 
-    const isRead = collab && collab.accessMode === 'read';
-    console.log("🕵️ [DEDO-DURO] isCurrentUserReadOnly check:", { userEmail: user.email, effectiveBudgetId, ownerEmail: budget.ownerEmail, collabAccessMode: collab?.accessMode, isRead });
-    if (isRead) {
-      return true;
+    if (collab) {
+      if (collab.accessMode === 'edit') return false;
+      if (collab.accessMode === 'read') return true;
     }
-    return false;
+
+    // Default safety fallback for non-owner
+    return true;
   }
 
   // --- CATEGORIES ---
