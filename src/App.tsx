@@ -1153,6 +1153,32 @@ export default function App() {
     return false;
   };
 
+  useEffect(() => {
+    let intervaloChecagem: any;
+    const sharedBudgets = StorageService.deduplicateSharedBudgets();
+    const currentActiveBudget = sharedBudgets.find(b => b.budgetId === effectiveBudgetId);
+    const isDono = !currentActiveBudget || currentActiveBudget.ownerEmail?.toLowerCase() === currentUser?.email?.toLowerCase();
+    const jsonAtivo = currentActiveBudget ? { owner_email: currentActiveBudget.ownerEmail, member_permissions: {} } : {};
+    const permissaoDoUsuario = (jsonAtivo && (jsonAtivo as any).member_permissions && (jsonAtivo as any).member_permissions[currentUser?.email?.toLowerCase()]) || 'leitura';
+
+    if (!isDono && effectiveBudgetId) {
+      intervaloChecagem = setInterval(async () => {
+        try {
+          const cfg = getAppwriteConfig();
+          const docFresco = await databases.getDocument(cfg.databaseId, 'user_financials', effectiveBudgetId);
+          const jsonFresco = docFresco.data ? (typeof docFresco.data === 'string' ? JSON.parse(docFresco.data) : docFresco.data) : {};
+          const permissaoFresca = (jsonFresco.member_permissions && jsonFresco.member_permissions[currentUser?.email?.toLowerCase()]) || 'leitura';
+          
+          if (permissaoFresca !== permissaoDoUsuario) {
+            alert(`Atenção! Sua permissão foi alterada pelo titular para: ${permissaoFresca.toUpperCase()}`);
+            window.location.reload();
+          }
+        } catch(e) { console.error("Erro ao sincronizar permissão"); }
+      }, 8000);
+    }
+    return () => clearInterval(intervaloChecagem);
+  }, [effectiveBudgetId, currentUser]);
+
   const buildAppFinancialState = (
     overrideTxs?: Transaction[],
     overrideAccounts?: Account[],
