@@ -238,8 +238,9 @@ html.dark body {
 }
 
 html.dark .bg-white,
-html.dark [class*="bg-white"] {
-  background-color: #162032 !important;
+html.dark [class*="bg-white"],
+html.dark #header-user-drawer-panel {
+  background-color: #111827 !important;
   color: #f8fafc !important;
   border-color: #334155 !important;
 }
@@ -248,9 +249,30 @@ html.dark .bg-\[\#FAFAFA\],
 html.dark .bg-gray-50, 
 html.dark .bg-gray-100,
 html.dark [class*="bg-gray-50"],
-html.dark [class*="bg-gray-100"] {
-  background-color: #111827 !important;
-  color: #f8fafc !important;
+html.dark [class*="bg-gray-100"],
+html.dark div[id*="header-user-drawer-panel"] div {
+  color: inherit;
+}
+
+html.dark .bg-red-50,
+html.dark [class*="bg-red-50"] {
+  background-color: rgba(127, 29, 29, 0.4) !important;
+  color: #fca5a5 !important;
+  border-color: rgba(239, 68, 68, 0.3) !important;
+}
+
+html.dark .bg-amber-50,
+html.dark [class*="bg-amber-50"] {
+  background-color: rgba(120, 53, 15, 0.35) !important;
+  color: #fcd34d !important;
+  border-color: rgba(245, 158, 11, 0.3) !important;
+}
+
+html.dark .bg-blue-50,
+html.dark [class*="bg-blue-50"] {
+  background-color: rgba(30, 58, 138, 0.4) !important;
+  color: #93c5fd !important;
+  border-color: rgba(59, 130, 246, 0.3) !important;
 }
 
 html.dark .bg-gray-200, 
