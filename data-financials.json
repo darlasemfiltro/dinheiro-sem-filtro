@@ -1,0 +1,229 @@
+{
+  "darla.semfiltro@gmail.com": {
+    "accounts": [],
+    "categories": [],
+    "familyMembers": [],
+    "transactions": [],
+    "goals": [],
+    "deletedIds": [],
+    "gamificationState": {
+      "userId": "darla.semfiltro@gmail.com",
+      "accountCreatedAt": "2026-08-17T19:59:07.414Z",
+      "weeklyStreakCount": 2,
+      "lastActiveWeekKey": "2026-W35",
+      "completedWeeksHistory": [
+        "2026-W34",
+        "2026-W35"
+      ],
+      "xpTotal": 180,
+      "weeklyXP": 60,
+      "gems": 75,
+      "streakFreezeCount": 0,
+      "currentDivision": "Bronze",
+      "divisionRankPosition": 1,
+      "hasCompletedWeeklyCheckIn": true,
+      "weeklyQuests": [
+        {
+          "id": "quest_checkin",
+          "title": "Check-in Semanal",
+          "description": "Realize o check-in financeiro semanal no aplicativo.",
+          "xpReward": 60,
+          "gemsReward": 20,
+          "currentProgress": 0,
+          "targetProgress": 1,
+          "completed": false,
+          "category": "checkin"
+        },
+        {
+          "id": "quest_launches",
+          "title": "Lançamentos em Dia",
+          "description": "Cadastre pelo menos 3 receitas ou despesas nesta semana.",
+          "xpReward": 50,
+          "gemsReward": 15,
+          "currentProgress": 0,
+          "targetProgress": 3,
+          "completed": false,
+          "category": "launches"
+        },
+        {
+          "id": "quest_savings",
+          "title": "Guardião de Metas",
+          "description": "Guarde dinheiro em um Objetivo ou Economize na semana.",
+          "xpReward": 100,
+          "gemsReward": 30,
+          "currentProgress": 0,
+          "targetProgress": 1,
+          "completed": false,
+          "category": "savings"
+        },
+        {
+          "id": "quest_consolidation",
+          "title": "Organizador Efetivo",
+          "description": "Concilie/efetive 2 lançamentos pendentes.",
+          "xpReward": 40,
+          "gemsReward": 10,
+          "currentProgress": 0,
+          "targetProgress": 2,
+          "completed": false,
+          "category": "consolidation"
+        }
+      ],
+      "achievements": [
+        {
+          "id": "ach_1",
+          "title": "Primeiro Passo",
+          "description": "Realizou seu primeiro check-in financeiro semanal.",
+          "iconName": "Sparkles",
+          "category": "Início",
+          "unlocked": true
+        },
+        {
+          "id": "ach_2",
+          "title": "Poupador de Ouro",
+          "description": "Manteve 4 semanas consecutivas de ofensiva semanal.",
+          "iconName": "Flame",
+          "category": "Ofensiva",
+          "unlocked": false
+        },
+        {
+          "id": "ach_3",
+          "title": "Superação Pessoal",
+          "description": "Bateu a meta pessoal de 500 XP em uma única semana.",
+          "iconName": "Trophy",
+          "category": "Desafios",
+          "unlocked": false
+        },
+        {
+          "id": "ach_4",
+          "title": "Mestre do Orçamento",
+          "description": "Concluiu todas as missões semanais.",
+          "iconName": "Award",
+          "category": "Missões",
+          "unlocked": false
+        }
+      ],
+      "leaderboard": [],
+      "inventory": {
+        "freezes": 0,
+        "doubleXpActiveUntil": null
+      },
+      "claimedMissions": [],
+      "updatedAt": "2026-08-24T09:37:57.216Z"
+    },
+    "gamificationProfile": {
+      "xp": 180,
+      "gems": 75,
+      "weeklyStreak": 2,
+      "inventory": {
+        "freezes": 0,
+        "doubleXpActiveUntil": null
+      },
+      "claimedMissions": []
+    },
+    "gamification": {
+      "userId": "darla.semfiltro@gmail.com",
+      "accountCreatedAt": "2026-08-17T19:59:07.414Z",
+      "weeklyStreakCount": 2,
+      "lastActiveWeekKey": "2026-W35",
+      "completedWeeksHistory": [
+        "2026-W34",
+        "2026-W35"
+      ],
+      "xpTotal": 180,
+      "weeklyXP": 60,
+      "gems": 75,
+      "streakFreezeCount": 0,
+      "currentDivision": "Bronze",
+      "divisionRankPosition": 1,
+      "hasCompletedWeeklyCheckIn": true,
+      "weeklyQuests": [
+        {
+          "id": "quest_checkin",
+          "title": "Check-in Semanal",
+          "description": "Realize o check-in financeiro semanal no aplicativo.",
+          "xpReward": 60,
+          "gemsReward": 20,
+          "currentProgress": 0,
+          "targetProgress": 1,
+          "completed": false,
+          "category": "checkin"
+        },
+        {
+          "id": "quest_launches",
+          "title": "Lançamentos em Dia",
+          "description": "Cadastre pelo menos 3 receitas ou despesas nesta semana.",
+          "xpReward": 50,
+          "gemsReward": 15,
+          "currentProgress": 0,
+          "targetProgress": 3,
+          "completed": false,
+          "category": "launches"
+        },
+        {
+          "id": "quest_savings",
+          "title": "Guardião de Metas",
+          "description": "Guarde dinheiro em um Objetivo ou Economize na semana.",
+          "xpReward": 100,
+          "gemsReward": 30,
+          "currentProgress": 0,
+          "targetProgress": 1,
+          "completed": false,
+          "category": "savings"
+        },
+        {
+          "id": "quest_consolidation",
+          "title": "Organizador Efetivo",
+          "description": "Concilie/efetive 2 lançamentos pendentes.",
+          "xpReward": 40,
+          "gemsReward": 10,
+          "currentProgress": 0,
+          "targetProgress": 2,
+          "completed": false,
+          "category": "consolidation"
+        }
+      ],
+      "achievements": [
+        {
+          "id": "ach_1",
+          "title": "Primeiro Passo",
+          "description": "Realizou seu primeiro check-in financeiro semanal.",
+          "iconName": "Sparkles",
+          "category": "Início",
+          "unlocked": true
+        },
+        {
+          "id": "ach_2",
+          "title": "Poupador de Ouro",
+          "description": "Manteve 4 semanas consecutivas de ofensiva semanal.",
+          "iconName": "Flame",
+          "category": "Ofensiva",
+          "unlocked": false
+        },
+        {
+          "id": "ach_3",
+          "title": "Superação Pessoal",
+          "description": "Bateu a meta pessoal de 500 XP em uma única semana.",
+          "iconName": "Trophy",
+          "category": "Desafios",
+          "unlocked": false
+        },
+        {
+          "id": "ach_4",
+          "title": "Mestre do Orçamento",
+          "description": "Concluiu todas as missões semanais.",
+          "iconName": "Award",
+          "category": "Missões",
+          "unlocked": false
+        }
+      ],
+      "leaderboard": [],
+      "inventory": {
+        "freezes": 0,
+        "doubleXpActiveUntil": null
+      },
+      "claimedMissions": [],
+      "updatedAt": "2026-08-24T09:37:57.216Z"
+    },
+    "updatedAt": "2026-08-24T09:37:57.216Z"
+  }
+}
