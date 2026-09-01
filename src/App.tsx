@@ -89,20 +89,6 @@ export default function App() {
     localStorage.setItem('app_zoom_level', clamped.toString());
   };
 
-  // Dark Mode State
-  const [darkMode, setDarkMode] = useState<boolean>(() => {
-    return localStorage.getItem('app_dark_mode') === 'true';
-  });
-
-  useEffect(() => {
-    document.documentElement.classList.toggle('dark', darkMode);
-    localStorage.setItem('app_dark_mode', darkMode.toString());
-  }, [darkMode]);
-
-  const toggleDarkMode = () => {
-    setDarkMode(prev => !prev);
-  };
-
   useEffect(() => {
     // Ensure document element remains at standard 100% scale
     (document.documentElement.style as any).zoom = '100%';
@@ -1713,8 +1699,6 @@ export default function App() {
         onZoomChange={handleZoomChange}
         onForceSync={() => refreshData(currentUser)}
         onOpenAppwriteSettings={() => setIsAppwriteModalOpen(true)}
-        darkMode={darkMode}
-        onToggleDarkMode={toggleDarkMode}
       />
 
 

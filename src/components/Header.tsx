@@ -4,7 +4,7 @@ import { DarlaLogo } from './DarlaLogo';
 import { User } from '../types';
 import { StorageService } from '../services/storage';
 import { realtimeSync, SyncConnectionStatus } from '../services/websocket';
-import { Plus, LogOut, Calendar, ChevronDown, ExternalLink, Users, Trash2, Edit3, X, User as UserIcon, Check, Crown, Key, UserPlus, Bell, Shield, ShieldAlert, Flame, Lock, Mail, Calculator, Eye, EyeOff, AlertCircle, ZoomIn, ZoomOut, RotateCcw, RefreshCw, Wifi, WifiOff, Cloud, Sun, Moon } from 'lucide-react';
+import { Plus, LogOut, Calendar, ChevronDown, ExternalLink, Users, Trash2, Edit3, X, User as UserIcon, Check, Crown, Key, UserPlus, Bell, Shield, ShieldAlert, Flame, Lock, Mail, Calculator, Eye, EyeOff, AlertCircle, ZoomIn, ZoomOut, RotateCcw, RefreshCw, Wifi, WifiOff, Cloud } from 'lucide-react';
 import { getMonthYearLabel, usePrivacyMode } from '../utils/finance';
 import { GamificationService } from '../services/gamification';
 import { appwriteDatabases } from '../lib/appwrite';
@@ -30,8 +30,6 @@ interface HeaderProps {
   onZoomChange?: (newZoom: number) => void;
   onForceSync?: () => Promise<void> | void;
   onOpenAppwriteSettings?: () => void;
-  darkMode?: boolean;
-  onToggleDarkMode?: () => void;
 }
 
 export const Header: React.FC<HeaderProps> = ({
@@ -52,8 +50,6 @@ export const Header: React.FC<HeaderProps> = ({
   onZoomChange,
   onForceSync,
   onOpenAppwriteSettings,
-  darkMode = false,
-  onToggleDarkMode,
 }) => {
   const [showUserMenu, setShowUserMenu] = useState(false);
   const [isEditNameModalOpen, setIsEditNameModalOpen] = useState(false);
@@ -464,37 +460,6 @@ export const Header: React.FC<HeaderProps> = ({
                     </button>
 
 
-
-                    {/* Modo Noturno / Dark Mode Toggle */}
-                    <div className="p-3 bg-gradient-to-br from-gray-900 to-gray-800 text-white border border-amber-500/40 rounded-2xl flex items-center justify-between gap-3 shadow-md">
-                      <div className="flex items-center gap-2.5 min-w-0">
-                        {darkMode ? (
-                          <Moon className="w-5 h-5 text-amber-400 shrink-0" />
-                        ) : (
-                          <Sun className="w-5 h-5 text-amber-400 shrink-0" />
-                        )}
-                        <div className="min-w-0">
-                          <p className="text-xs font-black">Modo Noturno</p>
-                          <p className="text-[10px] text-gray-300 truncate">
-                            {darkMode ? 'Ativado (Tema Escuro)' : 'Desativado (Tema Padrão)'}
-                          </p>
-                        </div>
-                      </div>
-                      <button
-                        onClick={onToggleDarkMode}
-                        className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-hidden ${
-                          darkMode ? 'bg-amber-500' : 'bg-gray-600'
-                        }`}
-                        role="switch"
-                        aria-checked={darkMode}
-                      >
-                        <span
-                          className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow-lg ring-0 transition duration-200 ease-in-out ${
-                            darkMode ? 'translate-x-5' : 'translate-x-0'
-                          }`}
-                        />
-                      </button>
-                    </div>
 
                      {/* 6. Ajuste de Zoom do Aplicativo */}
                     <div className="p-3 bg-gradient-to-br from-amber-50/80 to-gray-50 border border-amber-200 rounded-2xl space-y-2 shadow-2xs">
