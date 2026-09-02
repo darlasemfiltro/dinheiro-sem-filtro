@@ -2,13 +2,6 @@ import React, { useState, useEffect } from 'react';
 import { DarlaLogo } from './DarlaLogo';
 import { StorageService } from '../services/storage';
 import { appwriteSignUp, appwriteSignIn, appwriteGoogleOAuthLogin } from '../lib/appwrite';
-import {
-  auth,
-  googleAuthProvider,
-  signInWithPopup,
-  signInWithEmailAndPassword,
-  createUserWithEmailAndPassword,
-} from '../lib/firebase';
 import { User } from '../types';
 import {
   Lock,
@@ -88,20 +81,6 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({ onLoginSuccess }) => {
         }
       } catch (e) {}
 
-      if (auth) {
-        try {
-          if (!isRegister) {
-            await signInWithEmailAndPassword(auth, cleanEmail, password).catch(async () => {
-              await createUserWithEmailAndPassword(auth, cleanEmail, password).catch(() => {});
-            });
-          } else {
-            await createUserWithEmailAndPassword(auth, cleanEmail, password).catch(async () => {
-              await signInWithEmailAndPassword(auth, cleanEmail, password).catch(() => {});
-            });
-          }
-        } catch (e) {}
-      }
-
       const user = await StorageService.ensureUserAndDataSyncedAsync(
         cleanEmail,
         password,
@@ -119,47 +98,17 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({ onLoginSuccess }) => {
     }
   };
 
-  // Google Login Handler: Firebase Google Popup / OAuth2
+  // Google Login Handler: Appwrite Google OAuth2
   const handleGoogleLogin = async () => {
     setError('');
     setIsLoadingGoogle(true);
     try {
-      if (!auth || !googleAuthProvider) {
-        throw new Error('Firebase Auth indisponível.');
-      }
-      const result = await signInWithPopup(auth, googleAuthProvider);
-      const firebaseUser = result.user;
-      const email = firebaseUser.email || '';
-      const name = firebaseUser.displayName || email.split('@')[0];
-      const avatar = firebaseUser.photoURL || undefined;
-
-      if (!email) {
-        throw new Error('Não foi possível obter o e-mail da conta Google.');
-      }
-
-      const cleanEmail = email.trim().toLowerCase();
-      const user = await StorageService.ensureUserAndDataSyncedAsync(
-        cleanEmail,
-        'google-oauth-secure-pass',
-        name,
-        avatar,
-        'google'
-      );
-      localStorage.removeItem('darla_explicit_logout');
-      setIsLoadingGoogle(false);
-      onLoginSuccess(user);
+      localStorage.setItem('darla_oauth_pending', 'true');
+      await appwriteGoogleOAuthLogin();
     } catch (err: any) {
       console.error('[Google Login Error]', err);
       setIsLoadingGoogle(false);
-      if (err?.code !== 'auth/popup-closed-by-user' && err?.code !== 'auth/cancelled-popup-request') {
-        // Fallback to Appwrite OAuth if Firebase popup is restricted in the preview iframe
-        try {
-          localStorage.setItem('darla_oauth_pending', 'true');
-          await appwriteGoogleOAuthLogin();
-        } catch (appwriteErr: any) {
-          setError('Não foi possível realizar o login com o Google. Tente entrar com e-mail e senha.');
-        }
-      }
+      setError('Não foi possível realizar o login com o Google. Tente entrar com e-mail e senha.');
     }
   };
 

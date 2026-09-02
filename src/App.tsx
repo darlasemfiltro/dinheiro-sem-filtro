@@ -4,7 +4,6 @@ import { User, Account, Category, Transaction, Goal, FamilyMember, Subcategory }
 import { StorageService, SEED_CATEGORIES } from './services/storage';
 import { PortfolioStorageService } from './services/portfolioStorage';
 import { realtimeSync } from './services/websocket';
-import { auth, onAuthStateChanged, firebaseSignOut, subscribeToUserFirestoreChanges } from './lib/firebase';
 import { subscribeToAppwriteRealtime, getAppwriteUser, appwriteCompleteOAuthSession, appwriteSignOut, appwriteDatabases as databases, appwriteClient as client, getAppwriteConfig } from './lib/appwrite';
 import { Query } from 'appwrite';
 import {
@@ -850,11 +849,6 @@ export default function App() {
     // Initialize Real-Time WebSocket connection
     realtimeSync.connect(currentUser.email, activeBudgetId);
 
-    // Initialize Firebase Firestore Real-Time Changes subscription
-    const unsubscribeFirestore = subscribeToUserFirestoreChanges(activeBudgetId, () => {
-      refreshData(currentUser, false);
-    });
-
     // Initialize Cloud Appwrite Real-Time subscription
     const unsubscribeAppwrite = subscribeToAppwriteRealtime(activeBudgetId, (remoteData) => {
       if (remoteData) {
@@ -993,8 +987,7 @@ export default function App() {
     }, 20000);
 
     return () => {
-      unsubscribeFirestore();
-      unsubscribeAppwrite();
+      if (typeof unsubscribeAppwrite === 'function') unsubscribeAppwrite();
       clearInterval(permissionPollInterval);
 
       window.removeEventListener('focus', handleFocus);
@@ -1044,9 +1037,6 @@ export default function App() {
         sessionStorage.clear();
       }
       localStorage.setItem('darla_explicit_logout', 'true');
-      if (auth) {
-        await firebaseSignOut(auth).catch(() => {});
-      }
       await appwriteSignOut().catch(() => {});
     } catch (error) {
       console.error("Erro ao encerrar sessão:", error);
