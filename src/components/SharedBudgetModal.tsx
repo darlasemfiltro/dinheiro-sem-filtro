@@ -499,9 +499,9 @@ export const SharedBudgetModal: React.FC<SharedBudgetModalProps> = ({
         try {
           const fnId = import.meta.env.VITE_APPWRITE_FUNCTION_UPDATE_PERMISSIONS;
           if (fnId) {
-             const { functions, ExecutionMethod } = require('appwrite');
-             const { client } = require('../lib/appwrite');
-             const funcs = new functions(client);
+             const { Functions, ExecutionMethod } = await import('appwrite');
+             const { appwriteClient } = await import('../lib/appwrite');
+             const funcs = new Functions(appwriteClient);
              await funcs.createExecution(fnId, JSON.stringify({
                emailDoConvidado: emailMembro,
                idDoDocumentoDoOrcamento: StorageService.getEffectiveBudgetId(currentUser),
