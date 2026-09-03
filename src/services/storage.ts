@@ -2382,11 +2382,22 @@ export class StorageService {
   static logout(clearAll = false, _targetUserId?: string) {
     try {
       if (typeof window !== 'undefined') {
-        localStorage.removeItem(STORAGE_KEYS.CURRENT_USER);
+        const pId = localStorage.getItem('APPWRITE_PROJECT_ID');
+        const ep = localStorage.getItem('APPWRITE_ENDPOINT');
+        const dbId = localStorage.getItem('APPWRITE_DATABASE_ID');
+        const oauthPending = localStorage.getItem('darla_oauth_pending');
+        
+        localStorage.clear();
+        sessionStorage.clear();
+        
+        if (pId) localStorage.setItem('APPWRITE_PROJECT_ID', pId);
+        if (ep) localStorage.setItem('APPWRITE_ENDPOINT', ep);
+        if (dbId) localStorage.setItem('APPWRITE_DATABASE_ID', dbId);
+        if (oauthPending) localStorage.setItem('darla_oauth_pending', oauthPending);
+        
         if (clearAll) {
           localStorage.setItem('darla_explicit_logout', 'true');
         }
-        sessionStorage.clear();
       }
     } catch (e) {
       console.warn('[StorageService.logout error]', e);

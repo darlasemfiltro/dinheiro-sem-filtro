@@ -104,11 +104,29 @@ export async function appwriteSignUp(email: string, pass: string, name?: string)
 export async function appwriteSignIn(email: string, pass: string) {
   const cfg = getAppwriteConfig();
   if (!cfg.projectId) return null;
+  
+  // Prevenção absoluta: Limpa qualquer lixo de memória antes de tentar logar
+  if (typeof window !== 'undefined') {
+    const pId = localStorage.getItem('APPWRITE_PROJECT_ID');
+    const ep = localStorage.getItem('APPWRITE_ENDPOINT');
+    const dbId = localStorage.getItem('APPWRITE_DATABASE_ID');
+    const oauthPending = localStorage.getItem('darla_oauth_pending');
+    
+    localStorage.clear();
+    sessionStorage.clear();
+    
+    if (pId) localStorage.setItem('APPWRITE_PROJECT_ID', pId);
+    if (ep) localStorage.setItem('APPWRITE_ENDPOINT', ep);
+    if (dbId) localStorage.setItem('APPWRITE_DATABASE_ID', dbId);
+    if (oauthPending) localStorage.setItem('darla_oauth_pending', oauthPending);
+  }
+
   try {
     try {
       await appwriteAccount.deleteSession('current').catch(() => {});
     } catch {}
 
+    // Cria a nova sessão 100% limpa
     return await appwriteAccount.createEmailPasswordSession(email, pass);
   } catch (err: any) {
     if (err?.message?.includes('session is active') || err?.code === 401 || err?.message?.includes('active session')) {
@@ -123,8 +141,31 @@ export async function appwriteSignOut() {
   const cfg = getAppwriteConfig();
   if (!cfg.projectId) return;
   try {
+    // Deleta a sessão ativa no servidor do Appwrite
     await appwriteAccount.deleteSession('current');
-  } catch {}
+  } catch (error) {
+    console.log("Nenhuma sessão ativa encontrada no servidor.");
+  } finally {
+    // Limpa TODOS os rastros da conta anterior no navegador
+    if (typeof window !== 'undefined') {
+      const pId = localStorage.getItem('APPWRITE_PROJECT_ID');
+      const ep = localStorage.getItem('APPWRITE_ENDPOINT');
+      const dbId = localStorage.getItem('APPWRITE_DATABASE_ID');
+      
+      localStorage.clear();
+      sessionStorage.clear();
+      
+      if (pId) localStorage.setItem('APPWRITE_PROJECT_ID', pId);
+      if (ep) localStorage.setItem('APPWRITE_ENDPOINT', ep);
+      if (dbId) localStorage.setItem('APPWRITE_DATABASE_ID', dbId);
+      
+      // Marca logout explícito para evitar autologin indesejado
+      localStorage.setItem('darla_explicit_logout', 'true');
+      
+      // Redireciona o usuário para a tela de login
+      window.location.href = '/'; 
+    }
+  }
 }
 
 export async function getAppwriteUser() {
