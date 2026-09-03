@@ -478,10 +478,102 @@ export const SharedBudgetModal: React.FC<SharedBudgetModalProps> = ({
     }
   };
 
-  const togglePermissao = (emailMembro: string, tipo: string) => {
+  const togglePermissao = async (emailMembro: string, tipo: string) => {
     const emailNormalizado = String(emailMembro).toLowerCase().trim();
     setPermissoesLocais(prev => ({ ...prev, [emailNormalizado]: tipo }));
     setDraftPermissoes(prev => ({ ...prev, [emailNormalizado]: tipo, [emailMembro]: tipo }));
+    
+    // Dispara a atualização em tempo real silenciosamente sem bloquear
+    await autoSalvarPermissao(emailNormalizado, tipo);
+  };
+
+  const autoSalvarPermissao = async (emailMembro: string, permissaoEscolhida: string) => {
+    try {
+        setLoadingPermEmail(emailMembro); // Feedback visual (Salvando...)
+        const meuEmail = String(currentUser.email).toLowerCase().trim();
+        const config = getAppwriteConfig();
+        const accessMode = (permissaoEscolhida === 'edicao' || permissaoEscolhida === 'edit' || permissaoEscolhida === 'edição') ? 'edit' : 'read';
+        
+        // 1. Otimização Opcional: Tentar chamar a Appwrite Function de Servidor
+        // (Se a VITE_APPWRITE_FUNCTION_UPDATE_PERMISSIONS estiver definida)
+        try {
+          const fnId = import.meta.env.VITE_APPWRITE_FUNCTION_UPDATE_PERMISSIONS;
+          if (fnId) {
+             const { functions, ExecutionMethod } = require('appwrite');
+             const { client } = require('../lib/appwrite');
+             const funcs = new functions(client);
+             await funcs.createExecution(fnId, JSON.stringify({
+               emailDoConvidado: emailMembro,
+               idDoDocumentoDoOrcamento: StorageService.getEffectiveBudgetId(currentUser),
+               permissaoEscolhida
+             }), false, '/', ExecutionMethod.POST);
+          }
+        } catch(e) { console.warn("Appwrite Function call failed, falling back to client-side SDK.", e); }
+
+        // 2. Client-Side Fallback (Padrão) - Atualiza os dados via SDK Cliente
+        const listaDocs = await databases.listDocuments(config.databaseId, 'user_financials');
+        const meuDoc = listaDocs.documents.find((d: any) => 
+            String(d.email || '').toLowerCase().trim() === meuEmail || 
+            String(d.userId || '').toLowerCase().trim() === meuEmail || 
+            d.$id === getCanonicalAppwriteDocId(currentUser.email)
+        );
+
+        if (meuDoc) {
+            const jsonAtual = meuDoc.data ? (typeof meuDoc.data === 'string' ? JSON.parse(meuDoc.data) : meuDoc.data) : {};
+            jsonAtual.member_permissions = jsonAtual.member_permissions || {};
+            jsonAtual.member_permissions[emailMembro] = permissaoEscolhida;
+            const novaStringData = JSON.stringify(jsonAtual);
+
+            // Atualiza o banco do Titular
+            await databases.updateDocument(config.databaseId, 'user_financials', meuDoc.$id, { userId: meuEmail, data: novaStringData });
+
+            // Muta no próprio browser para instant feedback
+            let financialData: any = meuDoc;
+            if (financialData) financialData.data = novaStringData; 
+        }
+
+        // 3. Atualiza Convidado (Se existir) para disparar o webhook do Realtime dele
+        const docAlvo = listaDocs.documents.find((d: any) => 
+            String(d.email || '').toLowerCase().trim() === emailMembro || 
+            String(d.userId || '').toLowerCase().trim() === emailMembro || 
+            d.$id === getCanonicalAppwriteDocId(emailMembro)
+        );
+        if (docAlvo) {
+          try {
+            const jsonAlvo = docAlvo.data ? (typeof docAlvo.data === 'string' ? JSON.parse(docAlvo.data) : docAlvo.data) : {};
+            jsonAlvo.member_permissions = jsonAlvo.member_permissions || {};
+            jsonAlvo.member_permissions[emailMembro] = permissaoEscolhida;
+            await databases.updateDocument(config.databaseId, 'user_financials', docAlvo.$id, { userId: emailMembro, data: JSON.stringify(jsonAlvo) });
+          } catch(e) {}
+        }
+
+        // 4. Salvar estado de shared_budget
+        if (currentUser && currentUser.email) {
+          await StorageService.updateCollaboratorAccessMode(currentUser.email, emailMembro, accessMode);
+        }
+        if (sharedBudget && sharedBudget.budgetId) {
+          await StorageService.updateCollaboratorAccessMode(sharedBudget.budgetId, emailMembro, accessMode);
+        }
+
+        // 5. Broadcast final (Para recarregar o Realtime entre abas)
+        window.dispatchEvent(new CustomEvent('shared_budgets_updated'));
+        window.dispatchEvent(new Event('remote_data_updated'));
+        window.dispatchEvent(new Event('financial_data_mutated'));
+        if ('BroadcastChannel' in window) {
+          try {
+            const bc = new BroadcastChannel('darla_data_sync_channel');
+            bc.postMessage({ type: 'SHARED_BUDGET_UPDATED', ownerEmail: meuEmail, memberEmail: emailMembro, accessMode });
+            bc.close();
+          } catch(e) {}
+        }
+
+        setFeedback({ type: 'success', msg: `Permissão de ${emailMembro} atualizada para ${permissaoEscolhida} com sucesso!` });
+    } catch (error) {
+        console.error("Falha na atualização automática:", error);
+        setFeedback({ type: 'error', msg: `Erro ao atualizar permissão: ${(error as any).message}` });
+    } finally {
+        setLoadingPermEmail(null);
+    }
   };
 
   useEffect(() => {
@@ -1054,8 +1146,10 @@ export const SharedBudgetModal: React.FC<SharedBudgetModalProps> = ({
                       {/* CAIXA DE PERMISSÃO (RADIO BUTTONS E CONFIRMAÇÃO) */}
                       <div style={{ backgroundColor: '#fff', padding: '15px', borderRadius: '10px', border: '1px solid #eee' }}>
                           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '15px' }}>
-                              <span style={{ fontSize: '13px', fontWeight: 'bold', color: '#555' }}>Permissão:</span>
-                              <button type="button" disabled={loadingPermEmail === email} onClick={() => confirmarPermissao(email)} style={{ padding: '8px 12px', backgroundColor: '#1a1a1a', color: '#ffb300', borderRadius: '6px', fontSize: '12px', fontWeight: 'bold', border: 'none', cursor: 'pointer', opacity: loadingPermEmail === email ? 0.5 : 1 }}>{loadingPermEmail === email ? 'Salvando...' : 'Confirmar Permissão'}</button>
+                              <span style={{ fontSize: '13px', fontWeight: 'bold', color: '#555' }}>Permissão de Acesso:</span>
+                              {loadingPermEmail === email && (
+                                <span style={{ fontSize: '11px', color: '#ffb300', fontWeight: 'bold' }}>Salvando automaticamente...</span>
+                              )}
                           </div>
                           
                           <div style={{ display: 'flex', gap: '10px' }}>
