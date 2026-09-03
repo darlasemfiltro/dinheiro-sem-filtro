@@ -2379,10 +2379,7 @@ export class StorageService {
     // Keep local records intact so multi-user switching / offline cache is not lost
   }
 
-  static logout(clearAll = false, _targetUserId?: string) {
-    try {
-      if (typeof window !== 'undefined') {
-        const pId = localStorage.getItem('APPWRITE_PROJECT_ID');
+  static logout(clearAll = false, _targetUserId?: string) {    try {      _inMemoryStore.currentUser = null;      _inMemoryStore.users = [];      _inMemoryStore.accounts = [];      _inMemoryStore.categories = [];      _inMemoryStore.transactions = [];      _inMemoryStore.goals = [];      _inMemoryStore.familyMembers = [];      _inMemoryStore.sharedBudgets = [];      if (typeof window !== 'undefined') {        const pId = localStorage.getItem('APPWRITE_PROJECT_ID');
         const ep = localStorage.getItem('APPWRITE_ENDPOINT');
         const dbId = localStorage.getItem('APPWRITE_DATABASE_ID');
         const oauthPending = localStorage.getItem('darla_oauth_pending');

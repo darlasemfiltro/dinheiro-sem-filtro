@@ -1046,9 +1046,7 @@ export default function App() {
       setAccounts([]);
       setGoals([]);
       setFamilyMembers([]);
-      setBudgets([]);
-      window.location.replace('/');
-    }
+      setBudgets([]);      window.location.href = '/';      setTimeout(() => window.location.reload(), 100);    }
   };
 
   const handleResetBudgetToZero = () => {

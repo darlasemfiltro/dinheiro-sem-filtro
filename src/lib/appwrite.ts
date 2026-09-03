@@ -162,9 +162,7 @@ export async function appwriteSignOut() {
       // Marca logout explícito para evitar autologin indesejado
       localStorage.setItem('darla_explicit_logout', 'true');
       
-      // Redireciona o usuário para a tela de login
-      window.location.href = '/'; 
-    }
+      // Redireciona o usuário para a tela de login      window.location.href = '/';       setTimeout(() => window.location.reload(), 100);    }
   }
 }
 
