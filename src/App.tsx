@@ -163,28 +163,24 @@ export default function App() {
       setIsAuthLoading(true); // Exibe o spinner
     }
 
-    // Fluxo em Background (OAuth e Restauração de Sessão)
+    // Fluxo em Background (OAuth e Restauração de Sessão com Atraso para Cookies)
     const initAuthBackground = async () => {
       try {
         let appwriteUserActive: any = null;
 
-        // 1. Se veio com parâmetros de OAuth, troca o token
-        if (oauthUserId && oauthSecret) {
-          try {
-            await appwriteCompleteOAuthSession(oauthUserId, oauthSecret);
-          } catch (e) {
-            console.warn('[OAuth session exchange error]', e);
-          }
+        // Dá 1 segundo (1000ms) para o navegador registrar os cookies de sessão de forma segura.
+        if (isOAuthReturn) {
+          await new Promise(r => setTimeout(r, 1000));
         }
 
-        // 2. Busca o usuário real logado na sessão ativa do Appwrite
+        // Busca o usuário real logado na sessão ativa do Appwrite
         try {
           appwriteUserActive = await getAppwriteUser();
         } catch (err) {
           console.warn('[Appwrite User Fetch Error]', err);
         }
 
-        if (appwriteUserActive?.email) {
+        if (appwriteUserActive && appwriteUserActive.email) {
           const email = appwriteUserActive.email.trim().toLowerCase();
           const name = appwriteUserActive.name || email.split('@')[0];
           const avatar = appwriteUserActive?.prefs?.avatar;
@@ -207,11 +203,16 @@ export default function App() {
             setCurrentUser(synced);
             setIsAuthLoading(false);
             refreshData(synced, true);
+            if (isOAuthReturn) {
+                window.location.reload();
+            }
           }
-        } else if (!savedUserInitial || !savedUserInitial.email) {
-          // Se não há sessão ativa real no Appwrite nem no Storage, desloga para tela de login
-          setCurrentUser(null);
-          setIsAuthLoading(false);
+        } else {
+          // Se falhar de verdade (cancelou o login, cookie expirou)
+          if (mounted) {
+            setCurrentUser(null);
+            setIsAuthLoading(false);
+          }
         }
       } catch (e) {
         console.warn('[OAuth initAuth background error]', e);
