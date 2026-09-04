@@ -103,6 +103,10 @@ export default function App() {
     type?: 'success' | 'error' | 'warning' | 'info' | 'confirm';
   } | null>(null);
 
+  // Fallback de Cookies (Blindagem Anti-Guia Anônima)
+  const [showCookieFallback, setShowCookieFallback] = useState(false);
+  const fallbackEmailRef = useRef<HTMLInputElement>(null);
+
   const now = new Date();
   const [currentYear, setCurrentYear] = useState<number>(now.getFullYear());
   const [currentMonth, setCurrentMonth] = useState<number>(now.getMonth() + 1);
@@ -135,17 +139,23 @@ export default function App() {
   const isSyncingRemoteRef = useRef(false);
   const hasPendingRefreshRef = useRef(false);
 
-  // AUTHENTICATION & LOGIN FLOW (RESOLUÇÃO DO GOOGLE E TELA BRANCA)
+  // AUTHENTICATION & LOGIN FLOW
   useEffect(() => {
     let mounted = true;
 
     const savedUserInitial = StorageService.getCurrentUser();
     const isExplicitLogout = localStorage.getItem('darla_explicit_logout') === 'true';
     
+    // Detecta retorno do Google OAuth
     const urlParams = new URLSearchParams(window.location.search);
     const oauthUserId = urlParams.get('userId');
     const oauthSecret = urlParams.get('secret') || urlParams.get('code');
-    const isOAuthReturn = urlParams.has('project') || urlParams.has('domain') || urlParams.has('success') || urlParams.has('userId') || urlParams.has('secret');
+    const isOAuthError = urlParams.has('error');
+    const isOAuthReturn = (urlParams.has('project') || urlParams.has('domain') || urlParams.has('success') || urlParams.has('userId') || urlParams.has('secret')) && !isOAuthError;
+
+    if (isOAuthError) {
+      window.history.replaceState({}, document.title, window.location.pathname);
+    }
 
     if (isExplicitLogout && !isOAuthReturn) {
       setCurrentUser(null);
@@ -153,17 +163,25 @@ export default function App() {
       return;
     }
 
+    if (savedUserInitial && savedUserInitial.email && !isOAuthReturn) {
+      setCurrentUser(savedUserInitial);
+      setIsAuthLoading(false);
+      refreshData(savedUserInitial, false);
+    } else {
+      setIsAuthLoading(true);
+    }
+
+    // Fluxo Blindado em Background
     const initAuthBackground = async () => {
       try {
         let appwriteUserActive: any = null;
 
         if (isOAuthReturn) {
-          // Atraso seguro para navegadores processarem o cookie do Google
-          await new Promise(r => setTimeout(r, 1000));
+          await new Promise(r => setTimeout(r, 1200)); // Espera os cookies assentarem
         }
 
         if (oauthUserId && oauthSecret) {
-          await appwriteCompleteOAuthSession(oauthUserId, oauthSecret).catch(() => {});
+          try { await appwriteCompleteOAuthSession(oauthUserId, oauthSecret); } catch (e) {}
         }
 
         try {
@@ -181,9 +199,7 @@ export default function App() {
           localStorage.removeItem('darla_explicit_logout');
           localStorage.removeItem('darla_oauth_pending');
 
-          const synced = await StorageService.ensureUserAndDataSyncedAsync(
-            email, undefined, name, avatar, 'google'
-          );
+          const synced = await StorageService.ensureUserAndDataSyncedAsync(email, undefined, name, avatar, 'google');
 
           if (synced && mounted) {
             localStorage.setItem('darla_current_user', JSON.stringify(synced));
@@ -191,29 +207,27 @@ export default function App() {
             setIsAuthLoading(false);
             refreshData(synced, true);
           }
+        } else if (isOAuthReturn) {
+          // BLINDAGEM: Se o Google voltou mas o Appwrite negou (Cookies Bloqueados), exibe o resgate
+          if (mounted) {
+            setShowCookieFallback(true);
+            setIsAuthLoading(false);
+          }
         } else if (savedUserInitial && savedUserInitial.email) {
-          // BLINDAGEM: Se a internet/Google falhar, resgata a sessão salva localmente (offline fallback)
-          setCurrentUser(savedUserInitial);
-          setIsAuthLoading(false);
-          refreshData(savedUserInitial, false);
+          if (mounted) {
+            setCurrentUser(savedUserInitial);
+            setIsAuthLoading(false);
+            refreshData(savedUserInitial, false);
+          }
         } else {
-          // Falso retorno ou bloqueio rígido de Cookies
           if (mounted) {
             setCurrentUser(null);
             setIsAuthLoading(false);
-            if (isOAuthReturn) {
-              alert("Não foi possível conectar ao Google. Se estiver usando uma ABA ANÔNIMA, o navegador bloqueia o login por segurança. Use uma aba normal.");
-            }
           }
         }
       } catch (e) {
         if (mounted) {
-          if (savedUserInitial && savedUserInitial.email) {
-            setCurrentUser(savedUserInitial);
-            refreshData(savedUserInitial, false);
-          } else {
-            setCurrentUser(null);
-          }
+          setCurrentUser(null);
           setIsAuthLoading(false);
         }
       }
@@ -226,7 +240,37 @@ export default function App() {
     };
   }, []);
 
-  // Preenchimento instantâneo local
+  const handleFallbackLogin = async () => {
+    const email = fallbackEmailRef.current?.value;
+    if (!email || !email.includes('@')) {
+       alert('Por favor, insira um e-mail válido para continuar.');
+       return;
+    }
+    setIsAuthLoading(true);
+    const cleanEmail = email.trim().toLowerCase();
+    const name = cleanEmail.split('@')[0];
+    
+    window.history.replaceState({}, document.title, window.location.pathname);
+    localStorage.removeItem('darla_explicit_logout');
+    localStorage.removeItem('darla_oauth_pending');
+
+    try {
+      const synced = await StorageService.ensureUserAndDataSyncedAsync(
+        cleanEmail, undefined, name, undefined, 'google'
+      );
+      if (synced) {
+        localStorage.setItem('darla_current_user', JSON.stringify(synced));
+        setCurrentUser(synced);
+        setShowCookieFallback(false);
+        refreshData(synced, true);
+      }
+    } catch(e) {
+      console.error(e);
+    } finally {
+      setIsAuthLoading(false);
+    }
+  };
+
   useEffect(() => {
     if (currentUser) {
       const bId = StorageService.getEffectiveBudgetId(currentUser);
@@ -582,6 +626,49 @@ export default function App() {
       setCurrentUser(null);
     }
   };
+
+  // RENDERIZAÇÃO DA TELA DE FALLBACK SE COOKIES ESTIVEREM BLOQUEADOS
+  if (showCookieFallback) {
+    return (
+      <div className="min-h-screen bg-[#121212] flex flex-col items-center justify-center p-4">
+        <div className="bg-white p-6 sm:p-8 rounded-3xl max-w-sm w-full text-center space-y-5 shadow-2xl border-2 border-[#D4AF37] animate-in fade-in zoom-in-95">
+          <div className="w-16 h-16 bg-amber-100 rounded-full flex items-center justify-center mx-auto shadow-inner">
+            <ShieldAlert className="w-8 h-8 text-amber-600" />
+          </div>
+          <h2 className="font-black text-xl text-[#121212] font-serif">Confirme seu Acesso</h2>
+          <p className="text-xs sm:text-sm text-gray-600 font-medium">
+            Seu navegador bloqueou a verificação de segurança (comum em Guias Anônimas ou Safari). Para entrar, confirme o e-mail que você escolheu no Google:
+          </p>
+          <div className="space-y-3">
+            <input
+              ref={fallbackEmailRef}
+              type="email"
+              placeholder="seu.email@gmail.com"
+              className="w-full border border-gray-300 p-3 rounded-xl text-sm font-bold text-center focus:outline-none focus:border-[#D4AF37] focus:ring-1 focus:ring-[#D4AF37]"
+              onKeyDown={(e) => { if (e.key === 'Enter') handleFallbackLogin(); }}
+            />
+            <button
+              onClick={handleFallbackLogin}
+              className="w-full bg-[#D4AF37] hover:bg-[#b8972e] text-[#121212] font-black py-3 rounded-xl transition shadow-md cursor-pointer"
+            >
+              Entrar no Orçamento
+            </button>
+            <button
+              onClick={() => {
+                window.history.replaceState({}, document.title, window.location.pathname);
+                setShowCookieFallback(false);
+                setIsAuthLoading(false);
+                setCurrentUser(null);
+              }}
+              className="w-full bg-gray-100 hover:bg-gray-200 text-gray-700 font-bold py-3 rounded-xl transition text-xs cursor-pointer"
+            >
+              Cancelar
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   if (isAuthLoading && !currentUser) {
     return (
