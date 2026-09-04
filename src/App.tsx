@@ -691,17 +691,23 @@ export default function App() {
 
     // Always ensure an active user session upon OAuth return or startup
     let initialUser = savedUserInitial;
-    if (hasOAuthParams || isOAuthPending || !initialUser || !initialUser.email) {
-      initialUser = {
-        id: oauthUserId || 'usr_darla_main',
-        name: 'Darla Sem Filtro',
-        email: 'darla.semfiltro@gmail.com',
-        authProvider: 'google',
-        createdAt: new Date().toISOString()
-      } as any;
-      StorageService.setCurrentUser(initialUser);
-      localStorage.removeItem('darla_explicit_logout');
-      localStorage.removeItem('darla_oauth_pending');
+
+    // Se não há usuário na memória e não há login em andamento, vá para a tela de login
+    if (!initialUser || !initialUser.email) {
+      if (!hasOAuthParams && !isOAuthPending) {
+        setCurrentUser(null);
+        setIsAuthLoading(false);
+        return;
+      } else {
+        // Placeholder temporário genérico para não quebrar o login
+        initialUser = {
+          id: oauthUserId || 'pending_oauth',
+          name: 'Carregando...',
+          email: 'carregando@auth.local',
+          authProvider: 'appwrite',
+          createdAt: new Date().toISOString()
+        } as any;
+      }
     }
 
     if (isExplicitLogout && !hasOAuthParams && !isOAuthPending) {
@@ -1366,7 +1372,7 @@ export default function App() {
     try {
       const fullState = buildAppFinancialState(transactionsToPersist, accountsToPersist);
       await saveAppData(fullState);
-      console.log('[Appwrite Sync] Dados e contas sincronizados na nuvem (doc 6a849358002db9e638ce)!');
+      console.log('[Appwrite Sync] Dados e contas sincronizados na nuvem!');
     } catch (appwriteErr) {
       console.warn('[Appwrite Sync Notice]', appwriteErr);
     }
@@ -2045,4 +2051,4 @@ export default function App() {
       />
     </div>
   );
-}
+    }
