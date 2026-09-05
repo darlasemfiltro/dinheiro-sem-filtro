@@ -3848,24 +3848,7 @@ export class StorageService {
     let modoLido: 'read' | 'edit' = 'edit';
     let origem = 'padrão';
 
-    // 1. Check collaborator accessMode from shared budgets first (Authoritative from server sync)
-    const allBudgets = this.deduplicateSharedBudgets();
-    const targetB = allBudgets.find(b => String(b.ownerEmail || '').toLowerCase().trim() === ownerNormalized || String(b.ownerId || '').toLowerCase().trim() === ownerNormalized);
-    if (targetB && Array.isArray(targetB.collaborators)) {
-      const collab = targetB.collaborators.find(c => String(c.email || '').toLowerCase().trim() === meuEmailLido);
-      if (collab && collab.accessMode) {
-        const mode = String(collab.accessMode).toLowerCase().trim();
-        if (mode === 'read') {
-          modoLido = 'read';
-          origem = 'shared_budgets';
-        } else if (mode === 'edit' || mode === 'edicao' || mode === 'edição') {
-          modoLido = 'edit';
-          origem = 'shared_budgets';
-        }
-      }
-    }
-
-    // 2. Check member_permissions from user financials in localStorage
+    // 1. Check member_permissions from user financials in localStorage FIRST (Authoritative from Titular's document)
     try {
       const allFinStr = localStorage.getItem('DINHEIRO_SEM_FILTRO_USER_FINANCIALS') || '{}';
       const allFin = JSON.parse(allFinStr);
@@ -3890,6 +3873,25 @@ export class StorageService {
         }
       }
     } catch(e) {}
+
+    // 2. Check collaborator accessMode from shared budgets if not explicitly found in financials
+    if (origem === 'padrão') {
+      const allBudgets = this.deduplicateSharedBudgets();
+      const targetB = allBudgets.find(b => String(b.ownerEmail || '').toLowerCase().trim() === ownerNormalized || String(b.ownerId || '').toLowerCase().trim() === ownerNormalized);
+      if (targetB && Array.isArray(targetB.collaborators)) {
+        const collab = targetB.collaborators.find(c => String(c.email || '').toLowerCase().trim() === meuEmailLido);
+        if (collab && collab.accessMode) {
+          const mode = String(collab.accessMode).toLowerCase().trim();
+          if (mode === 'read') {
+            modoLido = 'read';
+            origem = 'shared_budgets';
+          } else if (mode === 'edit' || mode === 'edicao' || mode === 'edição') {
+            modoLido = 'edit';
+            origem = 'shared_budgets';
+          }
+        }
+      }
+    }
 
     console.log(`🕵️ [DEDO-DURO LEITURA] Permissão lida para ${meuEmailLido} no orçamento de ${ownerNormalized}: ${modoLido} (Origem: ${origem})`);
     
