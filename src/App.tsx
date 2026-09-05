@@ -162,6 +162,7 @@ export default function App() {
   // Security Concurrency & Logout Safety Modals
   const [sessionRevokedModalOpen, setSessionRevokedModalOpen] = useState(false);
   const [isAppwriteModalOpen, setIsAppwriteModalOpen] = useState(false);
+  const [isSharedBudgetModalOpen, setIsSharedBudgetModalOpen] = useState(false);
 
   const isSyncingRemoteRef = useRef(false);
   const hasPendingRefreshRef = useRef(false);
@@ -1681,6 +1682,8 @@ export default function App() {
           setCurrentMonth(month);
         }}
         onOpenNewTransaction={handleOpenNewTransaction}
+        onOpenSharedBudget={() => setIsSharedBudgetModalOpen(true)}
+        pendingInvitesCount={persistentInvites.length}
         onOpenEditProfile={() => {
           setIsEditProfileModalOpen(true);
         }}
@@ -1906,6 +1909,23 @@ export default function App() {
             refreshData(updatedUser);
           }}
           onLogout={handleLogout}
+        />
+      )}
+
+      {/* Shared Budget Modal */}
+      {currentUser && (
+        <SharedBudgetModal
+          isOpen={isSharedBudgetModalOpen}
+          onClose={() => setIsSharedBudgetModalOpen(false)}
+          user={currentUser}
+          onUserUpdated={(updatedUser) => {
+            setCurrentUser(updatedUser);
+            refreshData(updatedUser);
+          }}
+          pendingInvites={persistentInvites}
+          onAcceptInvite={handleAcceptInvite}
+          onRejectInvite={handleRejectInvite}
+          loadingInviteId={loadingInviteId}
         />
       )}
 

@@ -20,6 +20,8 @@ interface HeaderProps {
   onYearMonthChange: (year: number, month: number) => void;
   onOpenNewTransaction: () => void;
   onOpenEditProfile?: (tab?: 'profile' | 'notifications') => void;
+  onOpenSharedBudget?: () => void;
+  pendingInvitesCount?: number;
   onOpenCriticalActionsModal?: () => void;
   onUpdateUserName?: (newName: string) => void;
   onResetBudgetToZero?: () => void;
@@ -40,6 +42,8 @@ export const Header: React.FC<HeaderProps> = ({
   onYearMonthChange,
   onOpenNewTransaction,
   onOpenEditProfile,
+  onOpenSharedBudget,
+  pendingInvitesCount = 0,
   onOpenCriticalActionsModal,
   onUpdateUserName,
   onResetBudgetToZero,
@@ -364,7 +368,12 @@ export const Header: React.FC<HeaderProps> = ({
                       <span>{userInitial}</span>
                     )}
                   </div>
-
+                  {/* Notification Badge */}
+                  {pendingInvitesCount > 0 && (
+                    <div className="absolute -top-1 -right-1 w-4 h-4 bg-red-500 rounded-full border-2 border-white flex items-center justify-center animate-pulse shadow-md z-10">
+                      <span className="text-[8px] font-black text-white leading-none">{pendingInvitesCount}</span>
+                    </div>
+                  )}
                 </div>
 
               </div>
@@ -457,6 +466,25 @@ export const Header: React.FC<HeaderProps> = ({
                     >
                       <Edit3 className="w-4 h-4 text-[#D4AF37] shrink-0" />
                       <span>Alterar Informações do Usuário</span>
+                    </button>
+
+                    {/* 3. Membros, Convites e Compartilhamento */}
+                    <button
+                      onClick={() => {
+                        setShowUserMenu(false);
+                        if (onOpenSharedBudget) onOpenSharedBudget();
+                      }}
+                      className="w-full text-left p-3 bg-gray-50 hover:bg-amber-50 text-[#121212] hover:border-[#D4AF37] border border-gray-200 rounded-2xl text-xs font-bold transition flex items-center justify-between gap-3 cursor-pointer relative"
+                    >
+                      <div className="flex items-center gap-3">
+                        <Users className="w-4 h-4 text-[#D4AF37] shrink-0" />
+                        <span>Membros & Compartilhamento</span>
+                      </div>
+                      {pendingInvitesCount > 0 && (
+                        <span className="flex items-center justify-center min-w-[20px] h-5 px-1.5 rounded-full bg-red-500 text-white text-[10px] font-black absolute right-3">
+                          {pendingInvitesCount}
+                        </span>
+                      )}
                     </button>
 
 
