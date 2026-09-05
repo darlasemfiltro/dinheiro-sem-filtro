@@ -528,6 +528,7 @@ export const SharedBudgetModal: React.FC<SharedBudgetModalProps> = ({
 
   const autoSalvarPermissao = async (emailMembro: string, permissaoEscolhida: string) => {
     try {
+        console.log('🕵️ [DEDO-DURO GRAVAÇÃO]', { titular: currentUser.email, membro: emailMembro, nivel: permissaoEscolhida });
         setLoadingPermEmail(emailMembro); // Feedback visual (Salvando...)
         const meuEmail = String(currentUser.email).toLowerCase().trim();
         const config = getAppwriteConfig();
@@ -611,6 +612,8 @@ export const SharedBudgetModal: React.FC<SharedBudgetModalProps> = ({
         } catch (err) {
           console.warn("Could not create document in 'notificacoes':", err);
         }
+
+        alert(`[DEDO-DURO] Permissão salva no banco como: ${permissaoEscolhida} para ${emailMembro}`);
 
         // 5. Broadcast final (Para recarregar o Realtime entre abas)
         window.dispatchEvent(new CustomEvent('shared_budgets_updated'));

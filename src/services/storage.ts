@@ -3845,6 +3845,9 @@ export class StorageService {
     const ownerNormalized = String(ownerEmail).toLowerCase().trim();
     if (ownerNormalized === meuEmailLido) return 'edit';
 
+    let modoLido: 'read' | 'edit' = 'edit';
+    let origem = 'padrão';
+
     // 0. Check notificacoes for recent permission change matching this user (Highest Priority)
     try {
       const notifsStr = localStorage.getItem(STORAGE_KEYS.NOTIFICATIONS) || '[]';
@@ -3857,8 +3860,13 @@ export class StorageService {
         userNotifs.sort((a, b) => new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime());
         const latest = userNotifs[0];
         const msg = String(latest.message || '').toLowerCase();
-        if (msg.includes('leitura') || msg.includes('read')) return 'read';
-        if (msg.includes('edicao') || msg.includes('edição') || msg.includes('edit')) return 'edit';
+        if (msg.includes('leitura') || msg.includes('read')) {
+          modoLido = 'read';
+          origem = 'notificacoes';
+        } else if (msg.includes('edicao') || msg.includes('edição') || msg.includes('edit')) {
+          modoLido = 'edit';
+          origem = 'notificacoes';
+        }
       }
     } catch(e) {}
 
@@ -3875,8 +3883,13 @@ export class StorageService {
           for (const permKey of Object.keys(perms)) {
             if (permKey.toLowerCase().trim() === meuEmailLido) {
               const val = String(perms[permKey]).toLowerCase().trim();
-              if (val === 'leitura' || val === 'read') return 'read';
-              if (val === 'edicao' || val === 'edit' || val === 'edição') return 'edit';
+              if (val === 'leitura' || val === 'read') {
+                modoLido = 'read';
+                origem = 'localStorage (user_financials)';
+              } else if (val === 'edicao' || val === 'edit' || val === 'edição') {
+                modoLido = 'edit';
+                origem = 'localStorage (user_financials)';
+              }
             }
           }
         }
@@ -3890,12 +3903,28 @@ export class StorageService {
       const collab = targetB.collaborators.find(c => String(c.email || '').toLowerCase().trim() === meuEmailLido);
       if (collab && collab.accessMode) {
         const mode = String(collab.accessMode).toLowerCase().trim();
-        if (mode === 'read') return 'read';
-        if (mode === 'edit' || mode === 'edicao' || mode === 'edição') return 'edit';
+        if (mode === 'read') {
+          modoLido = 'read';
+          origem = 'shared_budgets';
+        } else if (mode === 'edit' || mode === 'edicao' || mode === 'edição') {
+          modoLido = 'edit';
+          origem = 'shared_budgets';
+        }
       }
     }
 
-    return 'edit';
+    console.log(`🕵️ [DEDO-DURO LEITURA] Permissão lida para ${meuEmailLido} no orçamento de ${ownerNormalized}: ${modoLido} (Origem: ${origem})`);
+    
+    if (user && user.email && user.email.toLowerCase() !== ownerNormalized) {
+      try {
+        if (typeof window !== 'undefined' && !(window as any).__dedoDuroAlertShown) {
+          (window as any).__dedoDuroAlertShown = true;
+          alert('[DEDO-DURO LEITURA] Permissão lida no banco para este orçamento: ' + modoLido + ' | Documento ID: ' + ownerNormalized + ' (Origem: ' + origem + ')');
+        }
+      } catch(e) {}
+    }
+
+    return modoLido;
   }
 
   // --- CATEGORIES ---
