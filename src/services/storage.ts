@@ -3848,29 +3848,24 @@ export class StorageService {
     let modoLido: 'read' | 'edit' = 'edit';
     let origem = 'padrão';
 
-    // 0. Check notificacoes for recent permission change matching this user (Highest Priority)
-    try {
-      const notifsStr = localStorage.getItem(STORAGE_KEYS.NOTIFICATIONS) || '[]';
-      const notifs: BudgetNotification[] = JSON.parse(notifsStr);
-      const userNotifs = notifs.filter(n => 
-        (String(n.toEmail || '').toLowerCase().trim() === meuEmailLido || String(n.fromEmail || '').toLowerCase().trim() === meuEmailLido) && 
-        (String(n.message || '').toLowerCase().includes('permissão') || String(n.message || '').toLowerCase().includes('leitura') || String(n.message || '').toLowerCase().includes('edição') || String(n.message || '').toLowerCase().includes('edit'))
-      );
-      if (userNotifs.length > 0) {
-        userNotifs.sort((a, b) => new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime());
-        const latest = userNotifs[0];
-        const msg = String(latest.message || '').toLowerCase();
-        if (msg.includes('leitura') || msg.includes('read')) {
+    // 1. Check collaborator accessMode from shared budgets first (Authoritative from server sync)
+    const allBudgets = this.deduplicateSharedBudgets();
+    const targetB = allBudgets.find(b => String(b.ownerEmail || '').toLowerCase().trim() === ownerNormalized || String(b.ownerId || '').toLowerCase().trim() === ownerNormalized);
+    if (targetB && Array.isArray(targetB.collaborators)) {
+      const collab = targetB.collaborators.find(c => String(c.email || '').toLowerCase().trim() === meuEmailLido);
+      if (collab && collab.accessMode) {
+        const mode = String(collab.accessMode).toLowerCase().trim();
+        if (mode === 'read') {
           modoLido = 'read';
-          origem = 'notificacoes';
-        } else if (msg.includes('edicao') || msg.includes('edição') || msg.includes('edit')) {
+          origem = 'shared_budgets';
+        } else if (mode === 'edit' || mode === 'edicao' || mode === 'edição') {
           modoLido = 'edit';
-          origem = 'notificacoes';
+          origem = 'shared_budgets';
         }
       }
-    } catch(e) {}
+    }
 
-    // 1. Check member_permissions from user financials in localStorage FIRST (Authoritative)
+    // 2. Check member_permissions from user financials in localStorage
     try {
       const allFinStr = localStorage.getItem('DINHEIRO_SEM_FILTRO_USER_FINANCIALS') || '{}';
       const allFin = JSON.parse(allFinStr);
@@ -3895,23 +3890,6 @@ export class StorageService {
         }
       }
     } catch(e) {}
-
-    // 2. Check collaborator accessMode from shared budgets
-    const allBudgets = this.deduplicateSharedBudgets();
-    const targetB = allBudgets.find(b => String(b.ownerEmail || '').toLowerCase().trim() === ownerNormalized || String(b.ownerId || '').toLowerCase().trim() === ownerNormalized);
-    if (targetB && Array.isArray(targetB.collaborators)) {
-      const collab = targetB.collaborators.find(c => String(c.email || '').toLowerCase().trim() === meuEmailLido);
-      if (collab && collab.accessMode) {
-        const mode = String(collab.accessMode).toLowerCase().trim();
-        if (mode === 'read') {
-          modoLido = 'read';
-          origem = 'shared_budgets';
-        } else if (mode === 'edit' || mode === 'edicao' || mode === 'edição') {
-          modoLido = 'edit';
-          origem = 'shared_budgets';
-        }
-      }
-    }
 
     console.log(`🕵️ [DEDO-DURO LEITURA] Permissão lida para ${meuEmailLido} no orçamento de ${ownerNormalized}: ${modoLido} (Origem: ${origem})`);
     
