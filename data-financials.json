@@ -10,10 +10,10 @@
       "userId": "darla.semfiltro@gmail.com",
       "accountCreatedAt": "2026-08-17T19:59:07.414Z",
       "weeklyStreakCount": 2,
-      "lastActiveWeekKey": "2026-W36",
+      "lastActiveWeekKey": "2026-W35",
       "completedWeeksHistory": [
         "2026-W34",
-        "2026-W36"
+        "2026-W35"
       ],
       "xpTotal": 180,
       "weeklyXP": 60,
@@ -108,7 +108,7 @@
         "doubleXpActiveUntil": null
       },
       "claimedMissions": [],
-      "updatedAt": "2026-09-04T22:27:10.276Z"
+      "updatedAt": "2026-08-24T09:37:57.216Z"
     },
     "gamificationProfile": {
       "xp": 180,
@@ -124,10 +124,10 @@
       "userId": "darla.semfiltro@gmail.com",
       "accountCreatedAt": "2026-08-17T19:59:07.414Z",
       "weeklyStreakCount": 2,
-      "lastActiveWeekKey": "2026-W36",
+      "lastActiveWeekKey": "2026-W35",
       "completedWeeksHistory": [
         "2026-W34",
-        "2026-W36"
+        "2026-W35"
       ],
       "xpTotal": 180,
       "weeklyXP": 60,
@@ -222,8 +222,8 @@
         "doubleXpActiveUntil": null
       },
       "claimedMissions": [],
-      "updatedAt": "2026-09-04T22:27:10.276Z"
+      "updatedAt": "2026-08-24T09:37:57.216Z"
     },
-    "updatedAt": "2026-09-04T22:27:10.276Z"
+    "updatedAt": "2026-08-24T09:37:57.216Z"
   }
 }
