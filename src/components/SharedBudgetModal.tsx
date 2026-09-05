@@ -4,7 +4,7 @@ import { StorageService, getCanonicalUserId } from '../services/storage';
 import { GamificationService, LEAGUE_DIVISIONS } from '../services/gamification';
 import { appwriteDatabases as databases, getAppwriteConfig } from '../lib/appwrite';
 import { getCanonicalAppwriteDocId } from '../lib/appwriteSync';
-import { Permission, Role } from 'appwrite';
+import { Permission, Role, ID, Query } from 'appwrite';
 import {
   Users,
   Copy,
@@ -62,23 +62,24 @@ export const SharedBudgetModal: React.FC<SharedBudgetModalProps> = ({
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
 
-  // Estados exatos solicitados
+  // Estados locais sincronizados
   const [membrosLocais, setMembrosLocais] = useState<string[]>([]);
   const [permissoesLocais, setPermissoesLocais] = useState<Record<string, string>>({});
   const [compartilhadosComigo, setCompartilhadosComigo] = useState<string[]>([]);
+  const [permissoesTitulares, setPermissoesTitulares] = useState<Record<string, string>>({});
   const [draftPermissoes, setDraftPermissoes] = useState<Record<string, string>>({});
   const [loadingPermEmail, setLoadingPermEmail] = useState<string | null>(null);
 
-  // Busca à prova de falhas via listDocuments / getDocument
+  // Busca do servidor sem cache intermediário
   useEffect(() => {
     const buscarDados = async () => {
       if (!currentUser?.email || !isOpen) return;
       try {
-        await StorageService.syncSharedBudgetsWithServer(currentUser.email);
         const config = getAppwriteConfig();
         const docId = getCanonicalAppwriteDocId(currentUser.email);
+        const meuEmailLimpo = currentUser.email.toLowerCase().trim();
         let json: any = {};
-        
+
         try {
           const doc = await databases.getDocument(config.databaseId, 'user_financials', docId);
           if (doc && doc.data) {
@@ -87,108 +88,78 @@ export const SharedBudgetModal: React.FC<SharedBudgetModalProps> = ({
         } catch (e1) {
           try {
             const lista = await databases.listDocuments(config.databaseId, 'user_financials');
-            const meuDoc = lista.documents.find((d: any) => 
-              d.userId === currentUser.email || 
-              d.email === currentUser.email || 
-              d.$id === docId ||
-              (d.userId && d.userId.toLowerCase() === currentUser.email.toLowerCase())
+            const meuDoc = lista.documents.find((d: any) =>
+              d.userId === meuEmailLimpo ||
+              d.email === meuEmailLimpo ||
+              d.$id === docId
             );
             if (meuDoc && meuDoc.data) {
               json = typeof meuDoc.data === 'string' ? JSON.parse(meuDoc.data) : meuDoc.data;
             }
-          } catch (e2) {
-            console.error("Erro listDocuments:", e2);
-          }
+          } catch (e2) {}
         }
 
-        setMembrosLocais(Array.isArray(json.allowed_users) ? json.allowed_users : (Array.isArray(json.shared_members) ? json.shared_members : []));
+        // Carrega lista de membros vinculados ao titular
+        const membrosAtuais = Array.isArray(json.allowed_users)
+          ? json.allowed_users
+          : (Array.isArray(json.shared_members) ? json.shared_members : []);
+        setMembrosLocais(membrosAtuais);
+
         const rawPerms = json.member_permissions || {};
         const normalizedPerms: Record<string, string> = {};
         Object.keys(rawPerms).forEach(k => {
           const val = rawPerms[k];
           normalizedPerms[k.toLowerCase()] = (val === 'edicao' || val === 'edit' || val === 'edição') ? 'edicao' : 'leitura';
         });
-        if (sharedBudget && sharedBudget.collaborators) {
-          sharedBudget.collaborators.forEach(c => {
-            if (c.email) {
-              const mode = c.accessMode === 'edit' ? 'edicao' : (c.accessMode === 'read' ? 'leitura' : null);
-              if (mode) {
-                normalizedPerms[c.email.toLowerCase()] = mode;
-              }
-            }
-          });
-        }
         setPermissoesLocais(normalizedPerms);
-        
-        let sharedWithMeList = Array.isArray(json.shared_with_me) ? json.shared_with_me : [];
+
+        // Identifica orçamentos compartilhados com este usuário
+        let sharedWithMeList: string[] = Array.isArray(json.shared_with_me) ? [...json.shared_with_me] : [];
+        const permsDosTitulares: Record<string, string> = {};
+
         try {
           const listaAll = await databases.listDocuments(config.databaseId, 'user_financials');
-          listaAll.documents.forEach((d: any) => {
-            if (d.$id !== docId && d.userId !== currentUser.email) {
+          for (const d of listaAll.documents) {
+            const ownerEmail = (d.userId || d.email || '').toLowerCase().trim();
+            if (d.$id !== docId && ownerEmail !== meuEmailLimpo) {
               try {
                 const dJson = typeof d.data === 'string' ? JSON.parse(d.data || '{}') : (d.data || {});
-                const ownerEmail = d.userId || d.email || d.$id;
-                
-                // Check server-side member_permissions for current user
-                const memberPerms = dJson.member_permissions || {};
-                const serverPerm = memberPerms[currentUser.email.toLowerCase().trim()];
-                if (serverPerm) {
-                  const accessMode = (serverPerm === 'edicao' || serverPerm === 'edit' || serverPerm === 'edição') ? 'edit' : 'read';
-                  
-                  // Update localStorage SHARED_BUDGETS if different
-                  try {
-                    const allSharedStr = localStorage.getItem('darla_shared_budgets') || '[]';
-                    const allShared = JSON.parse(allSharedStr);
-                    let foundB = allShared.find((b: any) => b.ownerEmail?.toLowerCase() === ownerEmail.toLowerCase() || b.budgetId === ownerEmail);
-                    if (foundB) {
-                      let col = foundB.collaborators?.find((c: any) => c.email.toLowerCase() === currentUser.email.toLowerCase());
-                      if (col && col.accessMode !== accessMode) {
-                        col.accessMode = accessMode;
-                        localStorage.setItem('darla_shared_budgets', JSON.stringify(allShared));
-                        window.dispatchEvent(new CustomEvent('shared_budgets_updated'));
-                      }
-                    }
-                  } catch (err) {}
-
-                  // Update localStorage DINHEIRO_SEM_FILTRO_USER_FINANCIALS if different
-                  try {
-                    const allFinStr = localStorage.getItem('DINHEIRO_SEM_FILTRO_USER_FINANCIALS') || '{}';
-                    const allFin = JSON.parse(allFinStr);
-                    if (allFin[ownerEmail] && allFin[ownerEmail].data) {
-                      const fData = typeof allFin[ownerEmail].data === 'string' ? JSON.parse(allFin[ownerEmail].data) : allFin[ownerEmail].data;
-                      fData.member_permissions = fData.member_permissions || {};
-                      if (fData.member_permissions[currentUser.email.toLowerCase().trim()] !== serverPerm) {
-                        fData.member_permissions[currentUser.email.toLowerCase().trim()] = serverPerm;
-                        allFin[ownerEmail].data = JSON.stringify(fData);
-                        localStorage.setItem('DINHEIRO_SEM_FILTRO_USER_FINANCIALS', JSON.stringify(allFin));
-                        window.dispatchEvent(new Event('remote_data_updated'));
-                      }
-                    }
-                  } catch (err) {}
-                }
-
                 const allowed = Array.isArray(dJson.allowed_users) ? dJson.allowed_users : (Array.isArray(dJson.shared_members) ? dJson.shared_members : []);
-                if (allowed.some((m: string) => m && m.toLowerCase().trim() === currentUser.email.toLowerCase().trim())) {
+                
+                const isMemberAllowed = allowed.some((m: string) => m && m.toLowerCase().trim() === meuEmailLimpo);
+                if (isMemberAllowed) {
                   if (ownerEmail && !sharedWithMeList.includes(ownerEmail)) {
                     sharedWithMeList.push(ownerEmail);
                   }
+
+                  // Consulta direta à chave gravada pelo Titular
+                  const permsDoTitular = dJson.member_permissions || {};
+                  const permDefinida = permsDoTitular[meuEmailLimpo];
+                  const modoFinal = (permDefinida === 'edicao' || permDefinida === 'edit' || permDefinida === 'edição') ? 'edit' : 'read';
+
+                  permsDosTitulares[ownerEmail] = modoFinal;
+
+                  // Sobrescreve o cache do localStorage imediatamente
+                  await StorageService.updateCollaboratorAccessMode(ownerEmail, meuEmailLimpo, modoFinal);
+                  const canonicalId = getCanonicalUserId(ownerEmail);
+                  await StorageService.updateCollaboratorAccessMode(canonicalId, meuEmailLimpo, modoFinal);
                 }
               } catch (err) {}
             }
-          });
+          }
         } catch (e3) {}
 
         setCompartilhadosComigo(sharedWithMeList);
+        setPermissoesTitulares(permsDosTitulares);
         setAvailableBudgets(StorageService.getAvailableBudgetsForUser(user));
       } catch (e) {
-        console.error("Erro na leitura:", e);
+        console.error("Erro na sincronização de permissões:", e);
       }
     };
+
     buscarDados();
 
-    const handleUpdate = () => {
-      buscarDados();
-    };
+    const handleUpdate = () => buscarDados();
     window.addEventListener('shared_budget_updated', handleUpdate);
     window.addEventListener('shared_budgets_updated', handleUpdate);
     return () => {
@@ -197,10 +168,89 @@ export const SharedBudgetModal: React.FC<SharedBudgetModalProps> = ({
     };
   }, [currentUser?.id, isOpen]);
 
-  const getAccessModeLabelForTitular = (emailTitular: string, targetBudget: any) => {
-    if (emailTitular.toLowerCase() === user.email?.toLowerCase()) return '✏️ Seu Orçamento';
+  // Exibe a permissão lida diretamente do documento do Titular
+  const getAccessModeLabelForTitular = (emailTitular: string) => {
+    const limpo = emailTitular.toLowerCase().trim();
+    if (limpo === user.email?.toLowerCase().trim()) return '✏️ Seu Orçamento';
+
+    const modoServidor = permissoesTitulares[limpo];
+    if (modoServidor) {
+      return modoServidor === 'read' ? '📖 Modo Leitura' : '✏️ Modo Edição';
+    }
+
     const mode = StorageService.getUserAccessModeForBudget(user, emailTitular);
     return mode === 'read' ? '📖 Modo Leitura' : '✏️ Modo Edição';
+  };
+
+  const autoSalvarPermissao = async (emailMembro: string, permissaoEscolhida: string) => {
+    try {
+      setLoadingPermEmail(emailMembro);
+      const meuEmail = String(currentUser.email).toLowerCase().trim();
+      const config = getAppwriteConfig();
+      const accessMode = (permissaoEscolhida === 'edicao' || permissaoEscolhida === 'edit' || permissaoEscolhida === 'edição') ? 'edit' : 'read';
+
+      // 1. Grava no documento do Titular (user_financials)
+      const listaDocs = await databases.listDocuments(config.databaseId, 'user_financials');
+      const meuDoc = listaDocs.documents.find((d: any) =>
+        String(d.email || '').toLowerCase().trim() === meuEmail ||
+        String(d.userId || '').toLowerCase().trim() === meuEmail ||
+        d.$id === getCanonicalAppwriteDocId(currentUser.email)
+      );
+
+      if (meuDoc) {
+        const jsonAtual = meuDoc.data ? (typeof meuDoc.data === 'string' ? JSON.parse(meuDoc.data) : meuDoc.data) : {};
+        jsonAtual.member_permissions = jsonAtual.member_permissions || {};
+        jsonAtual.member_permissions[emailMembro.toLowerCase().trim()] = permissaoEscolhida;
+        const novaStringData = JSON.stringify(jsonAtual);
+
+        await databases.updateDocument(config.databaseId, 'user_financials', meuDoc.$id, {
+          userId: meuEmail,
+          data: novaStringData,
+        });
+
+        let financialData: any = meuDoc;
+        if (financialData) financialData.data = novaStringData;
+      }
+
+      // 2. Dispara registro na tabela 'notificacoes' para o membro
+      try {
+        await databases.createDocument(config.databaseId, 'notificacoes', ID.unique(), {
+          userId: emailMembro.toLowerCase().trim(),
+          budgetId: meuDoc ? meuDoc.$id : 'orcamento',
+          mensagem: `${meuEmail} alterou sua permissão para ${permissaoEscolhida === 'leitura' ? 'leitura' : 'edicao'}.`,
+          tipo: 'permissao_alterada',
+        });
+      } catch (errNotif) {}
+
+      // 3. Atualiza cache do navegador
+      if (currentUser?.email) {
+        await StorageService.updateCollaboratorAccessMode(currentUser.email, emailMembro, accessMode);
+      }
+      if (sharedBudget?.budgetId) {
+        await StorageService.updateCollaboratorAccessMode(sharedBudget.budgetId, emailMembro, accessMode);
+      }
+
+      window.dispatchEvent(new CustomEvent('shared_budgets_updated'));
+      window.dispatchEvent(new Event('remote_data_updated'));
+      window.dispatchEvent(new Event('financial_data_mutated'));
+
+      setFeedback({
+        type: 'success',
+        msg: `Permissão de ${emailMembro} atualizada para ${permissaoEscolhida} com sucesso!`,
+      });
+    } catch (error) {
+      console.error("Falha ao salvar permissão:", error);
+      setFeedback({ type: 'error', msg: `Erro ao salvar permissão: ${(error as any).message}` });
+    } finally {
+      setLoadingPermEmail(null);
+    }
+  };
+
+  const togglePermissao = async (emailMembro: string, tipo: string) => {
+    const emailNormalizado = String(emailMembro).toLowerCase().trim();
+    setPermissoesLocais(prev => ({ ...prev, [emailNormalizado]: tipo }));
+    setDraftPermissoes(prev => ({ ...prev, [emailNormalizado]: tipo, [emailMembro]: tipo }));
+    await autoSalvarPermissao(emailNormalizado, tipo);
   };
 
   const concederAcesso = async (emailConvidado: string) => {
@@ -210,16 +260,14 @@ export const SharedBudgetModal: React.FC<SharedBudgetModalProps> = ({
       const config = getAppwriteConfig();
       const meuEmail = currentUser.email.toLowerCase().trim();
       const emailAlvo = emailConvidado.toLowerCase().trim();
-      
+
       const meuDocId = getCanonicalAppwriteDocId(meuEmail);
       const alvoDocId = getCanonicalAppwriteDocId(emailAlvo);
 
       const lista = await databases.listDocuments(config.databaseId, 'user_financials');
-      
       const meuDoc = lista.documents.find((d: any) => d.userId === meuEmail || d.email === meuEmail || d.$id === meuDocId);
       const docAlvo = lista.documents.find((d: any) => d.userId === emailAlvo || d.email === emailAlvo || d.$id === alvoDocId);
 
-      // Grava na Titular
       const meuJson = meuDoc && meuDoc.data ? (typeof meuDoc.data === 'string' ? JSON.parse(meuDoc.data || '{}') : meuDoc.data) : {};
       let allowed = Array.isArray(meuJson.allowed_users) ? meuJson.allowed_users : [];
       if (!allowed.includes(emailAlvo)) allowed.push(emailAlvo);
@@ -230,9 +278,8 @@ export const SharedBudgetModal: React.FC<SharedBudgetModalProps> = ({
       meuJson.shared_members = sharedM;
 
       meuJson.member_permissions = meuJson.member_permissions || {};
-      if (!meuJson.member_permissions[emailAlvo]) {
-        meuJson.member_permissions[emailAlvo] = inviteAccessMode === 'read' ? 'leitura' : 'edicao';
-      }
+      const nivelDefinido = inviteAccessMode === 'read' ? 'leitura' : 'edicao';
+      meuJson.member_permissions[emailAlvo] = nivelDefinido;
 
       const meuPayload = { userId: meuEmail, data: JSON.stringify(meuJson) };
       if (meuDoc) {
@@ -245,7 +292,6 @@ export const SharedBudgetModal: React.FC<SharedBudgetModalProps> = ({
         ]);
       }
 
-      // Grava no Convidado
       const jsonAlvo = docAlvo && docAlvo.data ? (typeof docAlvo.data === 'string' ? JSON.parse(docAlvo.data || '{}') : docAlvo.data) : {};
       let shared = Array.isArray(jsonAlvo.shared_with_me) ? jsonAlvo.shared_with_me : [];
       if (!shared.includes(meuEmail)) shared.push(meuEmail);
@@ -263,8 +309,16 @@ export const SharedBudgetModal: React.FC<SharedBudgetModalProps> = ({
         ]);
       }
 
-      StorageService.addCollaboratorByEmail(currentUser, emailAlvo, inviteAccessMode);
+      try {
+        await databases.createDocument(config.databaseId, 'notificacoes', ID.unique(), {
+          userId: emailAlvo,
+          budgetId: meuDocId,
+          mensagem: `${meuEmail} concedeu a você acesso de ${nivelDefinido === 'leitura' ? 'Leitura' : 'Edição'} ao orçamento.`,
+          tipo: 'permissao_alterada'
+        });
+      } catch (errNotif) {}
 
+      StorageService.addCollaboratorByEmail(currentUser, emailAlvo, inviteAccessMode);
       alert(`Acesso concedido para ${emailAlvo}!`);
       window.location.reload();
     } catch (e) {
@@ -275,421 +329,62 @@ export const SharedBudgetModal: React.FC<SharedBudgetModalProps> = ({
     }
   };
 
-  const atualizarPermissao = async (emailMembro: string, nivelInput: string) => {
-    const nivel = (nivelInput === 'edicao' || nivelInput === 'edit' || nivelInput === 'edição') ? 'edicao' : 'leitura';
-    const accessMode = nivel === 'edicao' ? 'edit' : 'read';
-    console.log("🕵️ [DEDO-DURO] atualizarPermissao called:", { emailMembro, nivel, accessMode, sharedBudgetId: sharedBudget?.budgetId, ownerEmail: sharedBudget?.ownerEmail });
-    setLoadingPermEmail(emailMembro);
-    setIsLoading(true);
+  const removerMembro = async (emailMembro: string) => {
+    if (!window.confirm(`Tem certeza que deseja excluir ${emailMembro} do seu orçamento?`)) return;
     try {
       const config = getAppwriteConfig();
       const meuEmail = currentUser.email.toLowerCase().trim();
-      const meuDocId = getCanonicalAppwriteDocId(meuEmail);
-      const emailAlvo = emailMembro.toLowerCase().trim();
-      const alvoDocId = getCanonicalAppwriteDocId(emailAlvo);
-
-      const lista = await databases.listDocuments(config.databaseId, 'user_financials');
-      const meuDoc = lista.documents.find((d: any) => d.userId === meuEmail || d.email === meuEmail || d.$id === meuDocId);
-      const docAlvo = lista.documents.find((d: any) => d.userId === emailAlvo || d.email === emailAlvo || d.$id === alvoDocId);
-
-      if (meuDoc) {
-        const json = typeof meuDoc.data === 'string' ? JSON.parse(meuDoc.data || '{}') : (meuDoc.data || {});
-        json.member_permissions = json.member_permissions || {};
-        json.member_permissions[emailAlvo] = nivel;
-        await databases.updateDocument(config.databaseId, 'user_financials', meuDoc.$id, { userId: meuEmail, data: JSON.stringify(json) });
-        
-        try {
-          await fetch('/api/data/sync', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              userId: meuEmail,
-              member_permissions: json.member_permissions
-            })
-          });
-        } catch (e) {
-          console.warn('[Sync member_permissions to server error]', e);
-        }
-      }
-
-      if (docAlvo) {
-        const jsonAlvo = typeof docAlvo.data === 'string' ? JSON.parse(docAlvo.data || '{}') : (docAlvo.data || {});
-        jsonAlvo.member_permissions = jsonAlvo.member_permissions || {};
-        jsonAlvo.member_permissions[meuEmail] = nivel;
-        await databases.updateDocument(config.databaseId, 'user_financials', docAlvo.$id, { userId: emailAlvo, data: JSON.stringify(jsonAlvo) });
-      }
-
-      if (sharedBudget && sharedBudget.budgetId) {
-        const resBudget = await StorageService.updateCollaboratorAccessMode(sharedBudget.budgetId, emailAlvo, accessMode);
-        if (resBudget) setSharedBudget(resBudget);
-      }
-
-      setPermissoesLocais(prev => ({ ...prev, [emailAlvo]: nivel }));
-      setDraftPermissoes(prev => {
-        const copy = { ...prev };
-        delete copy[emailAlvo];
-        return copy;
-      });
-
-      window.dispatchEvent(new CustomEvent('shared_budgets_updated'));
-      window.dispatchEvent(new Event('remote_data_updated'));
-      window.dispatchEvent(new Event('financial_data_mutated'));
-
-      setFeedback({
-        type: 'success',
-        msg: `Permissão de ${emailMembro} atualizada para ${nivel === 'leitura' ? 'Leitura' : 'Edição'} e sincronizada com sucesso!`
-      });
-    } catch (e) {
-      console.error("🕵️ [DEDO-DURO] Erro em atualizarPermissao:", e);
-      alert(`[DEDO-DURO ERRO] Falha ao atualizar permissão: ${e instanceof Error ? e.message : e}`);
-      setFeedback({ type: 'error', msg: 'Erro ao atualizar permissão.' });
-    } finally {
-      setLoadingPermEmail(null);
-      setIsLoading(false);
-    }
-  };
-
-  const removerMembro = async (emailMembro: string) => {
-    if(!window.confirm(`Tem certeza que deseja excluir ${emailMembro} do seu orçamento?`)) return;
-    try {
-      const config = getAppwriteConfig();
-      const meuId = getCanonicalAppwriteDocId(currentUser.email);
+      const meuId = getCanonicalAppwriteDocId(meuEmail);
       const docMe = await databases.getDocument(config.databaseId, 'user_financials', meuId);
       const jsonMe = docMe.data ? (typeof docMe.data === 'string' ? JSON.parse(docMe.data) : docMe.data) : {};
 
-      // Remove das listas
       jsonMe.allowed_users = (jsonMe.allowed_users || []).filter((e: string) => e.toLowerCase() !== emailMembro.toLowerCase());
       if (jsonMe.shared_members) {
         jsonMe.shared_members = jsonMe.shared_members.filter((e: string) => e.toLowerCase() !== emailMembro.toLowerCase());
       }
-      if (jsonMe.member_permissions) delete jsonMe.member_permissions[emailMembro];
-      await databases.updateDocument(config.databaseId, 'user_financials', meuId, { userId: currentUser.email.toLowerCase().trim(), data: JSON.stringify(jsonMe) });
+      if (jsonMe.member_permissions) delete jsonMe.member_permissions[emailMembro.toLowerCase().trim()];
+      await databases.updateDocument(config.databaseId, 'user_financials', meuId, { userId: meuEmail, data: JSON.stringify(jsonMe) });
 
-      // Remove o vínculo no convidado
       const emailAlvo = emailMembro.toLowerCase().trim();
       const idConvidado = getCanonicalAppwriteDocId(emailAlvo);
       try {
         const docConv = await databases.getDocument(config.databaseId, 'user_financials', idConvidado);
         const jsonConv = docConv.data ? (typeof docConv.data === 'string' ? JSON.parse(docConv.data) : docConv.data) : {};
         if (Array.isArray(jsonConv.shared_with_me)) {
-          jsonConv.shared_with_me = jsonConv.shared_with_me.filter((e: string) => e.toLowerCase() !== currentUser.email.toLowerCase());
+          jsonConv.shared_with_me = jsonConv.shared_with_me.filter((e: string) => e.toLowerCase() !== meuEmail);
         }
-        if (jsonConv.active_budget_owner === meuId || jsonConv.active_budget_owner === currentUser.email) {
+        if (jsonConv.active_budget_owner === meuId || jsonConv.active_budget_owner === meuEmail) {
           jsonConv.active_budget_owner = null;
         }
         await databases.updateDocument(config.databaseId, 'user_financials', idConvidado, { userId: emailAlvo, data: JSON.stringify(jsonConv) });
-      } catch(e) { console.warn("Convidado não sincronizado na exclusão."); }
+      } catch (e) {}
+
+      try {
+        await databases.createDocument(config.databaseId, 'notificacoes', ID.unique(), {
+          userId: emailAlvo,
+          budgetId: meuId,
+          mensagem: `${meuEmail} removeu seu acesso ao orçamento.`,
+          tipo: 'remocao'
+        });
+      } catch (errNotif) {}
 
       const targetBudgetId = sharedBudget?.budgetId || effectiveBudgetId;
       StorageService.removeCollaborator(targetBudgetId, emailMembro);
 
       alert("Membro removido com sucesso!");
       window.location.reload();
-    } catch (error) { 
+    } catch (error) {
       console.error("Erro ao excluir membro:", error);
-      alert("Erro ao excluir membro."); 
+      alert("Erro ao excluir membro.");
     }
   };
-
-  const confirmarPermissao = async (emailMembro: string) => {
-    try {
-        const emailNormalizado = String(emailMembro).toLowerCase().trim();
-        const permissaoEscolhida = draftPermissoes[emailMembro] || draftPermissoes[emailNormalizado] || permissoesLocais[emailNormalizado] || permissoesLocais[emailMembro] || 'leitura';
-        const meuEmail = String(currentUser.email).toLowerCase().trim();
-        
-        const config = getAppwriteConfig();
-
-        // 1. Busca os dados reais diretamente do servidor
-        const listaDocs = await databases.listDocuments(config.databaseId, 'user_financials');
-        const meuDoc = listaDocs.documents.find((d: any) => 
-            String(d.email || '').toLowerCase().trim() === meuEmail || 
-            String(d.userId || '').toLowerCase().trim() === meuEmail || 
-            d.$id === getCanonicalAppwriteDocId(currentUser.email)
-        );
-
-        if (!meuDoc) return alert("Erro: Documento não encontrado no banco.");
-
-        // 2. Prepara o JSON com a nova permissão
-        const jsonAtual = meuDoc.data ? (typeof meuDoc.data === 'string' ? JSON.parse(meuDoc.data) : meuDoc.data) : {};
-        jsonAtual.member_permissions = jsonAtual.member_permissions || {};
-        jsonAtual.member_permissions[emailNormalizado] = permissaoEscolhida;
-        const novaStringData = JSON.stringify(jsonAtual);
-
-        // 3. Atualiza o banco de dados oficial da Titular (Appwrite)
-        await databases.updateDocument(
-            config.databaseId,
-            'user_financials',
-            meuDoc.$id,
-            { userId: currentUser.email.toLowerCase().trim(), data: novaStringData }
-        );
-
-        // 3.1 Atualiza também o documento do membro/convidado no Appwrite se existir
-        const docAlvo = listaDocs.documents.find((d: any) => 
-            String(d.email || '').toLowerCase().trim() === emailNormalizado || 
-            String(d.userId || '').toLowerCase().trim() === emailNormalizado || 
-            d.$id === getCanonicalAppwriteDocId(emailNormalizado)
-        );
-        if (docAlvo) {
-          try {
-            const jsonAlvo = docAlvo.data ? (typeof docAlvo.data === 'string' ? JSON.parse(docAlvo.data) : docAlvo.data) : {};
-            jsonAlvo.member_permissions = jsonAlvo.member_permissions || {};
-            jsonAlvo.member_permissions[emailNormalizado] = permissaoEscolhida;
-            await databases.updateDocument(
-              config.databaseId,
-              'user_financials',
-              docAlvo.$id,
-              { userId: emailNormalizado, data: JSON.stringify(jsonAlvo) }
-            );
-          } catch(e) {}
-        }
-
-        // Also update local storage and shared budget collaborator access mode
-        try {
-          const allFinStr = localStorage.getItem('DINHEIRO_SEM_FILTRO_USER_FINANCIALS') || '{}';
-          const allFin = JSON.parse(allFinStr);
-          const meuIdKey = meuDoc.$id;
-          const keyToUse = allFin[meuIdKey] ? meuIdKey : Object.keys(allFin)[0];
-          if (keyToUse && allFin[keyToUse]) {
-            const item = allFin[keyToUse];
-            const parsedData = item.data ? (typeof item.data === 'string' ? JSON.parse(item.data) : item.data) : {};
-            parsedData.member_permissions = jsonAtual.member_permissions;
-            item.data = JSON.stringify(parsedData);
-            localStorage.setItem('DINHEIRO_SEM_FILTRO_USER_FINANCIALS', JSON.stringify(allFin));
-          }
-        } catch(e) {}
-
-        const accessMode = (permissaoEscolhida === 'edicao' || permissaoEscolhida === 'edit' || permissaoEscolhida === 'edição') ? 'edit' : 'read';
-        if (currentUser && currentUser.email) {
-          await StorageService.updateCollaboratorAccessMode(currentUser.email, emailNormalizado, accessMode);
-        }
-        if (sharedBudget && sharedBudget.budgetId) {
-          await StorageService.updateCollaboratorAccessMode(sharedBudget.budgetId, emailNormalizado, accessMode);
-        }
-
-        // Sync member_permissions to central server backend
-        try {
-          await fetch('/api/data/sync', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              userId: currentUser.email,
-              member_permissions: jsonAtual.member_permissions
-            })
-          });
-          await fetch('/api/data/sync', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              userId: emailNormalizado,
-              member_permissions: jsonAtual.member_permissions
-            })
-          });
-        } catch(e) {}
-
-        window.dispatchEvent(new CustomEvent('shared_budgets_updated'));
-        window.dispatchEvent(new Event('remote_data_updated'));
-        window.dispatchEvent(new Event('financial_data_mutated'));
-
-        // 4. O TRUQUE DE BLINDAGEM: Muta a referência do objeto em memória
-        let financialData: any = meuDoc;
-        if (financialData) {
-            financialData.data = novaStringData; 
-        }
-
-        window.dispatchEvent(new Event('shared_budget_updated'));
-        window.dispatchEvent(new Event('financial_data_mutated'));
-        if ('BroadcastChannel' in window) {
-          try {
-            const bc = new BroadcastChannel('darla_data_sync_channel');
-            bc.postMessage({ type: 'SHARED_BUDGET_UPDATED', ownerEmail: meuEmail, memberEmail: emailNormalizado, accessMode });
-            bc.close();
-          } catch(e) {}
-        }
-
-        alert(`SUCESSO ABSOLUTO! Permissão de ${emailNormalizado} travada no banco como: ${permissaoEscolhida.toUpperCase()}`);
-        
-        // 5. Hard Reload para forçar a renderização do novo estado
-        window.location.href = window.location.pathname;
-
-    } catch (error) {
-        console.error("Falha na mutação:", error);
-        alert("Erro ao gravar no servidor.");
-    }
-  };
-
-  const togglePermissao = async (emailMembro: string, tipo: string) => {
-    const emailNormalizado = String(emailMembro).toLowerCase().trim();
-    setPermissoesLocais(prev => ({ ...prev, [emailNormalizado]: tipo }));
-    setDraftPermissoes(prev => ({ ...prev, [emailNormalizado]: tipo, [emailMembro]: tipo }));
-    
-    // Dispara a atualização em tempo real silenciosamente sem bloquear
-    await autoSalvarPermissao(emailNormalizado, tipo);
-  };
-
-  const autoSalvarPermissao = async (emailMembro: string, permissaoEscolhida: string) => {
-    try {
-        console.log('🕵️ [DEDO-DURO GRAVAÇÃO]', { titular: currentUser.email, membro: emailMembro, nivel: permissaoEscolhida });
-        setLoadingPermEmail(emailMembro); // Feedback visual (Salvando...)
-        const meuEmail = String(currentUser.email).toLowerCase().trim();
-        const config = getAppwriteConfig();
-        const accessMode = (permissaoEscolhida === 'edicao' || permissaoEscolhida === 'edit' || permissaoEscolhida === 'edição') ? 'edit' : 'read';
-        
-        // 1. Otimização Opcional: Tentar chamar a Appwrite Function de Servidor
-        // (Se a VITE_APPWRITE_FUNCTION_UPDATE_PERMISSIONS estiver definida)
-        try {
-          const fnId = import.meta.env.VITE_APPWRITE_FUNCTION_UPDATE_PERMISSIONS;
-          if (fnId) {
-             const { Functions, ExecutionMethod } = await import('appwrite');
-             const { appwriteClient } = await import('../lib/appwrite');
-             const funcs = new Functions(appwriteClient);
-             await funcs.createExecution(fnId, JSON.stringify({
-               emailDoConvidado: emailMembro,
-               idDoDocumentoDoOrcamento: StorageService.getEffectiveBudgetId(currentUser),
-               permissaoEscolhida
-             }), false, '/', ExecutionMethod.POST);
-          }
-        } catch(e) { console.warn("Appwrite Function call failed, falling back to client-side SDK.", e); }
-
-        // 2. Client-Side Fallback (Padrão) - Atualiza os dados via SDK Cliente
-        const listaDocs = await databases.listDocuments(config.databaseId, 'user_financials');
-        const meuDoc = listaDocs.documents.find((d: any) => 
-            String(d.email || '').toLowerCase().trim() === meuEmail || 
-            String(d.userId || '').toLowerCase().trim() === meuEmail || 
-            d.$id === getCanonicalAppwriteDocId(currentUser.email)
-        );
-
-        if (meuDoc) {
-            const jsonAtual = meuDoc.data ? (typeof meuDoc.data === 'string' ? JSON.parse(meuDoc.data) : meuDoc.data) : {};
-            jsonAtual.member_permissions = jsonAtual.member_permissions || {};
-            jsonAtual.member_permissions[emailMembro] = permissaoEscolhida;
-            const novaStringData = JSON.stringify(jsonAtual);
-
-            // Atualiza o banco do Titular
-            await databases.updateDocument(config.databaseId, 'user_financials', meuDoc.$id, { userId: meuEmail, data: novaStringData });
-
-            // Muta no próprio browser para instant feedback
-            let financialData: any = meuDoc;
-            if (financialData) financialData.data = novaStringData; 
-        }
-
-        // 3. Atualiza Convidado (Se existir) para disparar o webhook do Realtime dele
-        const docAlvo = listaDocs.documents.find((d: any) => 
-            String(d.email || '').toLowerCase().trim() === emailMembro || 
-            String(d.userId || '').toLowerCase().trim() === emailMembro || 
-            d.$id === getCanonicalAppwriteDocId(emailMembro)
-        );
-        if (docAlvo) {
-          try {
-            const jsonAlvo = docAlvo.data ? (typeof docAlvo.data === 'string' ? JSON.parse(docAlvo.data) : docAlvo.data) : {};
-            jsonAlvo.member_permissions = jsonAlvo.member_permissions || {};
-            jsonAlvo.member_permissions[emailMembro] = permissaoEscolhida;
-            await databases.updateDocument(config.databaseId, 'user_financials', docAlvo.$id, { userId: emailMembro, data: JSON.stringify(jsonAlvo) });
-          } catch(e) {}
-        }
-
-        // 4. Salvar estado de shared_budget
-        if (currentUser && currentUser.email) {
-          await StorageService.updateCollaboratorAccessMode(currentUser.email, emailMembro, accessMode);
-        }
-        if (sharedBudget && sharedBudget.budgetId) {
-          await StorageService.updateCollaboratorAccessMode(sharedBudget.budgetId, emailMembro, accessMode);
-        }
-
-        // 4.5. Criar registro na coleção notificacoes para sincronização em tempo real do membro
-        try {
-          const notifPayload = {
-            userId: emailMembro.toLowerCase().trim(),
-            budgetId: StorageService.getEffectiveBudgetId(currentUser),
-            mensagem: `Seu nível de acesso foi alterado para: ${permissaoEscolhida}`,
-            tipo: 'permissao_alterada',
-            createdAt: new Date().toISOString()
-          };
-          await databases.createDocument(config.databaseId, 'notificacoes', 'unique()', notifPayload, [
-            Permission.read(Role.users()),
-            Permission.update(Role.users()),
-            Permission.delete(Role.users())
-          ]);
-        } catch (err) {
-          console.warn("Could not create document in 'notificacoes':", err);
-        }
-
-        alert(`[DEDO-DURO] Permissão salva no banco como: ${permissaoEscolhida} para ${emailMembro}`);
-
-        // 5. Broadcast final (Para recarregar o Realtime entre abas)
-        window.dispatchEvent(new CustomEvent('shared_budgets_updated'));
-        window.dispatchEvent(new Event('remote_data_updated'));
-        window.dispatchEvent(new Event('financial_data_mutated'));
-        if ('BroadcastChannel' in window) {
-          try {
-            const bc = new BroadcastChannel('darla_data_sync_channel');
-            bc.postMessage({ type: 'SHARED_BUDGET_UPDATED', ownerEmail: meuEmail, memberEmail: emailMembro, accessMode });
-            bc.close();
-          } catch(e) {}
-        }
-
-        setFeedback({ type: 'success', msg: `Permissão de ${emailMembro} atualizada para ${permissaoEscolhida} com sucesso!` });
-    } catch (error) {
-        console.error("Falha na atualização automática:", error);
-        setFeedback({ type: 'error', msg: `Erro ao atualizar permissão: ${(error as any).message}` });
-    } finally {
-        setLoadingPermEmail(null);
-    }
-  };
-
-  useEffect(() => {
-    if (isOpen) {
-      const currentBudgetId = StorageService.getEffectiveBudgetId(user);
-      const curBudget = StorageService.getSharedBudget(currentBudgetId, user);
-      setSharedBudget(curBudget);
-      setAvailableBudgets(StorageService.getAvailableBudgetsForUser(user));
-      setNotifications(StorageService.getPendingNotifications(user.email, curBudget.code));
-      setSentNotifications(StorageService.getSentPendingNotifications(user.email));
-
-      // Consulta a coleção notificacoes para verificar alterações recentes de permissão
-      (async () => {
-        try {
-          const config = getAppwriteConfig();
-          const listaNotifs = await databases.listDocuments(config.databaseId, 'notificacoes');
-          const userEmailLower = user.email.toLowerCase().trim();
-          const minhasAlteracoes = listaNotifs.documents.filter((d: any) => 
-            String(d.userId || '').toLowerCase().trim() === userEmailLower &&
-            d.tipo === 'permissao_alterada'
-          );
-          if (minhasAlteracoes.length > 0) {
-            minhasAlteracoes.sort((a: any, b: any) => new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime());
-            const maisRecente = minhasAlteracoes[0];
-            const msg = String(maisRecente.mensagem || '').toLowerCase();
-            let novaPerm = 'edicao';
-            if (msg.includes('leitura') || msg.includes('read')) {
-              novaPerm = 'leitura';
-            } else if (msg.includes('edicao') || msg.includes('edição') || msg.includes('edit')) {
-              novaPerm = 'edicao';
-            }
-            setPermissoesLocais(prev => ({ ...prev, [userEmailLower]: novaPerm }));
-          }
-        } catch (err) {
-          console.warn("Could not fetch notifications collection for permissions sync:", err);
-        }
-      })();
-
-      StorageService.syncNotificationsWithServer(user.email, curBudget.code).then((notifs) => {
-        setNotifications(notifs);
-        setSentNotifications(StorageService.getSentPendingNotifications(user.email));
-        const updatedBudgetId = StorageService.getEffectiveBudgetId(user);
-        const updatedB = StorageService.getSharedBudget(updatedBudgetId, user);
-        setSharedBudget(updatedB);
-        setAvailableBudgets(StorageService.getAvailableBudgetsForUser(user));
-      });
-    }
-  }, [isOpen, user?.id]);
 
   const [isSwitchingBudget, setIsSwitchingBudget] = useState(false);
   const [switchLoadingMessage, setSwitchLoadingMessage] = useState('');
 
   const handleSwitchToBudget = async (budgetIdToAccess: string) => {
-    console.log('[DEDO-DURO] handleSwitchToBudget', { budgetIdToAccess, currentUser: user });
     setIsSwitchingBudget(true);
-    setSwitchLoadingMessage('Sincronizando contas, transações e carregando orçamento...');
+    setSwitchLoadingMessage('Sincronizando contas, transações e permissões...');
     try {
       const updated = StorageService.switchBudget(user, budgetIdToAccess);
       await onUserUpdated(updated);
@@ -701,7 +396,6 @@ export const SharedBudgetModal: React.FC<SharedBudgetModalProps> = ({
         type: 'success',
         msg: `Orçamento alterado com sucesso! Você agora está visualizando o orçamento de: ${targetObj.ownerName}`,
       });
-      // Keep popup open for a brief moment to ensure all state updates and renders are fully settled without flashing
       await new Promise(resolve => setTimeout(resolve, 800));
       setIsSwitchingBudget(false);
       onClose();
@@ -789,62 +483,6 @@ export const SharedBudgetModal: React.FC<SharedBudgetModalProps> = ({
     } catch (e) {
       console.error(e);
       setIsSwitchingBudget(false);
-    }
-  };
-
-  const handleRemoveCollaborator = async (email: string) => {
-    if (window.confirm(`Tem certeza que deseja EXCLUIR o acesso do membro ${email}?`)) {
-      setIsLoading(true);
-      try {
-        const config = getAppwriteConfig();
-        const meuEmail = currentUser.email.toLowerCase().trim();
-        const meuDocId = getCanonicalAppwriteDocId(meuEmail);
-        const emailAlvo = email.toLowerCase().trim();
-        const alvoDocId = getCanonicalAppwriteDocId(emailAlvo);
-
-        const lista = await databases.listDocuments(config.databaseId, 'user_financials');
-        const meuDoc = lista.documents.find((d: any) => d.userId === meuEmail || d.email === meuEmail || d.$id === meuDocId);
-        const docAlvo = lista.documents.find((d: any) => d.userId === emailAlvo || d.email === emailAlvo || d.$id === alvoDocId);
-
-        if (meuDoc) {
-          const json = typeof meuDoc.data === 'string' ? JSON.parse(meuDoc.data || '{}') : (meuDoc.data || {});
-          if (Array.isArray(json.allowed_users)) {
-            json.allowed_users = json.allowed_users.filter((m: string) => m.toLowerCase() !== emailAlvo);
-          }
-          if (Array.isArray(json.shared_members)) {
-            json.shared_members = json.shared_members.filter((m: string) => m.toLowerCase() !== emailAlvo);
-          }
-          if (json.member_permissions) {
-            delete json.member_permissions[emailAlvo];
-          }
-          await databases.updateDocument(config.databaseId, 'user_financials', meuDoc.$id, { userId: meuEmail, data: JSON.stringify(json) });
-        }
-
-        if (docAlvo) {
-          const jsonAlvo = typeof docAlvo.data === 'string' ? JSON.parse(docAlvo.data || '{}') : (docAlvo.data || {});
-          if (Array.isArray(jsonAlvo.shared_with_me)) {
-            jsonAlvo.shared_with_me = jsonAlvo.shared_with_me.filter((owner: string) => owner.toLowerCase() !== meuEmail);
-          }
-          if (jsonAlvo.active_budget_owner === meuDocId || jsonAlvo.active_budget_owner === meuEmail || jsonAlvo.active_budget_owner === currentUser.email) {
-            jsonAlvo.active_budget_owner = null;
-          }
-          await databases.updateDocument(config.databaseId, 'user_financials', docAlvo.$id, { userId: emailAlvo, data: JSON.stringify(jsonAlvo) });
-        }
-
-        const targetBudgetId = sharedBudget.budgetId || effectiveBudgetId;
-        const updated = StorageService.removeCollaborator(targetBudgetId, email);
-        if (updated) {
-          setSharedBudget(updated);
-          setFeedback({ type: 'success', msg: `Acesso do membro ${email} excluído e sincronizado com sucesso no Appwrite.` });
-        }
-        alert(`Membro ${email} excluído com sucesso!`);
-        window.location.reload();
-      } catch (err) {
-        console.error("Erro ao remover colaborador no Appwrite:", err);
-        alert("Erro ao excluir membro no Appwrite.");
-      } finally {
-        setIsLoading(false);
-      }
     }
   };
 
@@ -1040,7 +678,7 @@ export const SharedBudgetModal: React.FC<SharedBudgetModalProps> = ({
               compartilhadosComigo.map((emailTitular: string, idx: number) => {
                 const isSelected = !isOwner && sharedBudget.ownerEmail?.toLowerCase() === emailTitular.toLowerCase();
                 const targetBudget = availableBudgets.find(item => item.budget.ownerEmail.toLowerCase() === emailTitular.toLowerCase());
-                const accessModeLabel = getAccessModeLabelForTitular(emailTitular, targetBudget);
+                const accessModeLabel = getAccessModeLabelForTitular(emailTitular);
                 return (
                   <button
                     key={idx}
@@ -1088,14 +726,14 @@ export const SharedBudgetModal: React.FC<SharedBudgetModalProps> = ({
             ) : null}
           </div>
 
-          {/* Section 1: Acesso ao seu Orçamento (Conectar) */}
+          {/* Section 1: Conceder Acesso */}
           <div className="space-y-3 bg-[#D4AF37]/10 p-3.5 sm:p-4 rounded-2xl border border-[#D4AF37]/40">
             <label className="text-xs font-extrabold text-[#121212] block uppercase tracking-wider flex items-center gap-1.5">
               <UserPlus className="w-4 h-4 text-[#D4AF37]" />
               <span>1. Acesso ao seu Orçamento (Conectar):</span>
             </label>
             <p className="text-[11px] text-gray-700 leading-snug">
-              Informe somente o <strong>e-mail do convidado</strong> cadastrado no sistema para conceder acesso ao seu orçamento e defina a permissão:
+              Informe o <strong>e-mail do convidado</strong> cadastrado no sistema para conceder acesso ao seu orçamento:
             </p>
 
             <form onSubmit={handleAddCollaborator} className="space-y-2">
@@ -1120,9 +758,8 @@ export const SharedBudgetModal: React.FC<SharedBudgetModalProps> = ({
                 </button>
               </div>
 
-              {/* Mode Selection */}
               <div className="flex flex-wrap items-center gap-x-4 gap-y-2 pt-1">
-                <span className="text-[11px] font-bold text-gray-700 w-full sm:w-auto">Modo de Acesso:</span>
+                <span className="text-[11px] font-bold text-gray-700 w-full sm:w-auto">Modo de Acesso Inicial:</span>
                 <label className="flex items-center gap-1.5 text-xs cursor-pointer">
                   <input
                     type="radio"
@@ -1176,14 +813,14 @@ export const SharedBudgetModal: React.FC<SharedBudgetModalProps> = ({
             </div>
           </div>
 
-          {/* Section 2: Pedir Acesso a Outro Orçamento (Conectar) */}
+          {/* Section 2: Pedir Acesso */}
           <div className="space-y-2 pt-2 border-t border-gray-200">
             <label className="text-xs font-extrabold text-[#121212] block uppercase tracking-wider flex items-center gap-1.5">
               <Key className="w-4 h-4 text-[#00C853]" />
               <span>2. Pedir Acesso a Outro Orçamento (Conectar):</span>
             </label>
             <p className="text-[11px] text-gray-700 leading-snug">
-              Informe somente o <strong>e-mail do titular</strong> do orçamento cadastrado no sistema para solicitar autorização:
+              Informe o <strong>e-mail do titular</strong> do orçamento cadastrado no sistema para solicitar autorização:
             </p>
             <form onSubmit={handleJoinBudget} className="flex flex-col sm:flex-row gap-2">
               <div className="relative flex-1">
@@ -1207,76 +844,73 @@ export const SharedBudgetModal: React.FC<SharedBudgetModalProps> = ({
             </form>
           </div>
 
-          {/* SEÇÃO 2: MEMBROS QUE ACESSAM ESTE ORÇAMENTO */}
+          {/* SEÇÃO DE MEMBROS E PERMISSÕES */}
           <div className="mb-5">
             <h4 className="text-[#333] text-xs sm:text-sm font-bold mb-3 uppercase tracking-wider">
               MEMBROS QUE ACESSAM ESTE ORÇAMENTO:
             </h4>
-            
+
             {membrosLocais.length > 0 ? (
               membrosLocais.map((email, idx) => {
                 const gState = getMemberGamification(email);
                 const currentDraft = draftPermissoes[email];
-                const perm = currentDraft !== undefined ? currentDraft : (permissoesLocais[email] || 'leitura');
+                const perm = currentDraft !== undefined ? currentDraft : (permissoesLocais[email.toLowerCase().trim()] || 'leitura');
                 return (
                   <div key={idx} style={{ padding: '15px', border: '1px solid #e0e0e0', borderRadius: '12px', marginBottom: '15px', backgroundColor: '#f9f9f9' }}>
-                      <p style={{ margin: 0, fontWeight: 'bold', color: '#333', fontSize: '15px', marginBottom: '10px' }}>{email}</p>
-                      
-                      {/* BOTÕES DE STATUS E EXCLUSÃO */}
-                      <div style={{ display: 'flex', gap: '10px', marginBottom: '15px' }}>
-                          <span style={{ padding: '6px 12px', backgroundColor: '#e8f5e9', color: '#2e7d32', borderRadius: '20px', fontSize: '12px', fontWeight: 'bold', border: '1px solid #4CAF50' }}>✓ Concedido</span>
-                          {isOwner && (
-                            <button type="button" onClick={() => removerMembro(email)} style={{ padding: '6px 12px', backgroundColor: '#ffebee', color: '#c62828', borderRadius: '20px', fontSize: '12px', fontWeight: 'bold', border: '1px solid #f44336', cursor: 'pointer' }}>Excluir</button>
-                          )}
+                    <p style={{ margin: 0, fontWeight: 'bold', color: '#333', fontSize: '15px', marginBottom: '10px' }}>{email}</p>
+
+                    <div style={{ display: 'flex', gap: '10px', marginBottom: '15px' }}>
+                      <span style={{ padding: '6px 12px', backgroundColor: '#e8f5e9', color: '#2e7d32', borderRadius: '20px', fontSize: '12px', fontWeight: 'bold', border: '1px solid #4CAF50' }}>✓ Concedido</span>
+                      {isOwner && (
+                        <button type="button" onClick={() => removerMembro(email)} style={{ padding: '6px 12px', backgroundColor: '#ffebee', color: '#c62828', borderRadius: '20px', fontSize: '12px', fontWeight: 'bold', border: '1px solid #f44336', cursor: 'pointer' }}>Excluir</button>
+                      )}
+                    </div>
+
+                    <div style={{ backgroundColor: '#fff', padding: '15px', borderRadius: '10px', border: '1px solid #eee' }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '15px' }}>
+                        <span style={{ fontSize: '13px', fontWeight: 'bold', color: '#555' }}>Permissão de Acesso:</span>
+                        {loadingPermEmail === email && (
+                          <span style={{ fontSize: '11px', color: '#ffb300', fontWeight: 'bold' }}>Salvando no servidor...</span>
+                        )}
                       </div>
 
-                      {/* CAIXA DE PERMISSÃO (RADIO BUTTONS E CONFIRMAÇÃO) */}
-                      <div style={{ backgroundColor: '#fff', padding: '15px', borderRadius: '10px', border: '1px solid #eee' }}>
-                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '15px' }}>
-                              <span style={{ fontSize: '13px', fontWeight: 'bold', color: '#555' }}>Permissão de Acesso:</span>
-                              {loadingPermEmail === email && (
-                                <span style={{ fontSize: '11px', color: '#ffb300', fontWeight: 'bold' }}>Salvando automaticamente...</span>
-                              )}
-                          </div>
-                          
-                          <div style={{ display: 'flex', gap: '10px' }}>
-                              <div onClick={() => togglePermissao(email, 'leitura')} style={{ flex: 1, padding: '10px', border: perm !== 'edicao' ? '2px solid #ffb300' : '1px solid #ddd', borderRadius: '8px', display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer', backgroundColor: perm !== 'edicao' ? '#fffaf0' : '#fff' }}>
-                                  <div style={{ width: '16px', height: '16px', borderRadius: '50%', border: perm !== 'edicao' ? '4px solid #ffb300' : '2px solid #ccc', backgroundColor: '#fff' }}></div>
-                                  <span style={{ fontSize: '13px', fontWeight: 'bold', color: '#333' }}>👁️ Leitura</span>
-                              </div>
-                              
-                              <div onClick={() => togglePermissao(email, 'edicao')} style={{ flex: 1, padding: '10px', border: perm === 'edicao' ? '2px solid #ffb300' : '1px solid #ddd', borderRadius: '8px', display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer', backgroundColor: perm === 'edicao' ? '#fffaf0' : '#fff' }}>
-                                  <div style={{ width: '16px', height: '16px', borderRadius: '50%', border: perm === 'edicao' ? '4px solid #ffb300' : '2px solid #ccc', backgroundColor: '#fff' }}></div>
-                                  <span style={{ fontSize: '13px', fontWeight: 'bold', color: '#333' }}>✏️ Edição</span>
-                              </div>
-                          </div>
-                      </div>
+                      <div style={{ display: 'flex', gap: '10px' }}>
+                        <div onClick={() => togglePermissao(email, 'leitura')} style={{ flex: 1, padding: '10px', border: perm !== 'edicao' ? '2px solid #ffb300' : '1px solid #ddd', borderRadius: '8px', display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer', backgroundColor: perm !== 'edicao' ? '#fffaf0' : '#fff' }}>
+                          <div style={{ width: '16px', height: '16px', borderRadius: '50%', border: perm !== 'edicao' ? '4px solid #ffb300' : '2px solid #ccc', backgroundColor: '#fff' }}></div>
+                          <span style={{ fontSize: '13px', fontWeight: 'bold', color: '#333' }}>👁️ Leitura</span>
+                        </div>
 
-                      {/* Gamification Bar */}
-                      <div className="flex items-center flex-wrap gap-1.5 pt-3 mt-3 border-t border-gray-200 text-[11px]">
-                        <span className="font-bold text-gray-500 text-[10px] uppercase tracking-wider">Gamificação:</span>
-                        <span className="px-2 py-0.5 bg-pink-50 border border-pink-200 text-pink-900 font-extrabold rounded-md flex items-center gap-1">
-                          <span>{gState.division.icon}</span>
-                          <span>{gState.division.name}</span>
-                        </span>
-                        <span className="px-2 py-0.5 bg-orange-50 border border-orange-200 text-orange-900 font-extrabold rounded-md flex items-center gap-1">
-                          <Flame className="w-3 h-3 text-orange-600 fill-orange-500" />
-                          <span>{gState.streak} sem</span>
-                        </span>
-                        <span className="px-2 py-0.5 bg-purple-50 border border-purple-200 text-purple-900 font-extrabold rounded-md flex items-center gap-1">
-                          <Zap className="w-3 h-3 text-purple-600 fill-purple-400" />
-                          <span>{gState.xp} XP</span>
-                        </span>
-                        <span className="px-2 py-0.5 bg-cyan-50 border border-cyan-200 text-cyan-900 font-extrabold rounded-md flex items-center gap-1">
-                          <Gem className="w-3 h-3 text-cyan-600 fill-cyan-400" />
-                          <span>{gState.gems} 💎</span>
-                        </span>
+                        <div onClick={() => togglePermissao(email, 'edicao')} style={{ flex: 1, padding: '10px', border: perm === 'edicao' ? '2px solid #ffb300' : '1px solid #ddd', borderRadius: '8px', display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer', backgroundColor: perm === 'edicao' ? '#fffaf0' : '#fff' }}>
+                          <div style={{ width: '16px', height: '16px', borderRadius: '50%', border: perm === 'edicao' ? '4px solid #ffb300' : '2px solid #ccc', backgroundColor: '#fff' }}></div>
+                          <span style={{ fontSize: '13px', fontWeight: 'bold', color: '#333' }}>✏️ Edição</span>
+                        </div>
                       </div>
+                    </div>
+
+                    <div className="flex items-center flex-wrap gap-1.5 pt-3 mt-3 border-t border-gray-200 text-[11px]">
+                      <span className="font-bold text-gray-500 text-[10px] uppercase tracking-wider">Gamificação:</span>
+                      <span className="px-2 py-0.5 bg-pink-50 border border-pink-200 text-pink-900 font-extrabold rounded-md flex items-center gap-1">
+                        <span>{gState.division.icon}</span>
+                        <span>{gState.division.name}</span>
+                      </span>
+                      <span className="px-2 py-0.5 bg-orange-50 border border-orange-200 text-orange-900 font-extrabold rounded-md flex items-center gap-1">
+                        <Flame className="w-3 h-3 text-orange-600 fill-orange-500" />
+                        <span>{gState.streak} sem</span>
+                      </span>
+                      <span className="px-2 py-0.5 bg-purple-50 border border-purple-200 text-purple-900 font-extrabold rounded-md flex items-center gap-1">
+                        <Zap className="w-3 h-3 text-purple-600 fill-purple-400" />
+                        <span>{gState.xp} XP</span>
+                      </span>
+                      <span className="px-2 py-0.5 bg-cyan-50 border border-cyan-200 text-cyan-900 font-extrabold rounded-md flex items-center gap-1">
+                        <Gem className="w-3 h-3 text-cyan-600 fill-cyan-400" />
+                        <span>{gState.gems} 💎</span>
+                      </span>
+                    </div>
                   </div>
                 );
               })
             ) : (
-                <p style={{ textAlign: 'center', color: '#888', padding: '15px', border: '1px dashed #ccc', borderRadius: '8px' }}>Nenhum membro listado no momento.</p>
+              <p style={{ textAlign: 'center', color: '#888', padding: '15px', border: '1px dashed #ccc', borderRadius: '8px' }}>Nenhum membro listado no momento.</p>
             )}
           </div>
         </div>
