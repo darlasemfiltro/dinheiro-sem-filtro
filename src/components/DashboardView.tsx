@@ -286,34 +286,34 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
       {/* Active Account / Budget Status Banner */}
       {user && (() => {
         const effectiveBudgetId = StorageService.getEffectiveBudgetId(user);
-        const shared = StorageService.getSharedBudget(effectiveBudgetId, user);
+        const activeBudget = StorageService.getSharedBudget(effectiveBudgetId, user);
         const isReadOnly = StorageService.isCurrentUserReadOnly(user);
         
         const myEmail = String(user.email || '').toLowerCase().trim();
-        const ownerEmail = String(shared.ownerEmail || '').toLowerCase().trim();
-        const ownerName = shared.ownerName || ownerEmail || effectiveBudgetId;
+        const ownerEmail = String(activeBudget.ownerEmail || '').toLowerCase().trim();
         
-        const isOwnBudget = !effectiveBudgetId || 
-          effectiveBudgetId === user.id || 
-          effectiveBudgetId === user.email || 
-          effectiveBudgetId === user.budgetId || 
-          (myEmail && ownerEmail && myEmail === ownerEmail) ||
-          effectiveBudgetId === 'default';
+        const isOwnBudget = !user?.budgetId || 
+          user?.budgetId === user?.id || 
+          user?.budgetId === user?.email || 
+          effectiveBudgetId === user?.id || 
+          effectiveBudgetId === user?.email || 
+          effectiveBudgetId === 'default' ||
+          (myEmail && ownerEmail && myEmail === ownerEmail);
 
         return (
           <div className="bg-white rounded-2xl p-3.5 sm:p-4 shadow-sm border border-gray-200 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
             <div className="flex items-center gap-3">
               <div className="w-10 h-10 rounded-xl bg-amber-500/10 border border-amber-500/30 flex items-center justify-center text-amber-600 shrink-0 font-bold">
-                {isOwnBudget ? '👤' : '👥'}
+                {isOwnBudget ? '👑' : '👥'}
               </div>
               <div>
                 <span className="text-[11px] font-bold text-gray-500 uppercase tracking-wider block">
-                  {isOwnBudget ? 'Orçamento Próprio' : 'Orçamento Compartilhado'}
+                  {isOwnBudget ? 'Orçamento Pessoal' : 'Orçamento Compartilhado'}
                 </span>
                 <h2 className="text-xs sm:text-sm font-black text-[#121212] tracking-tight">
                   {isOwnBudget 
-                    ? `Orçamento Próprio: ${user.name || user.email || 'Titular'}` 
-                    : `Orçamento Compartilhado: ${ownerName}`}
+                    ? `Orçamento Pessoal: ${user.name || user.email || 'Titular'}` 
+                    : `Orçamento Compartilhado: ${activeBudget.ownerName || activeBudget.ownerEmail || effectiveBudgetId}`}
                 </h2>
               </div>
             </div>
@@ -321,8 +321,8 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
             <div className="flex items-center gap-2 w-full sm:w-auto justify-end">
               {isOwnBudget ? (
                 <div className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-emerald-50 text-emerald-700 border border-emerald-200 rounded-xl text-xs font-black shadow-2xs">
-                  <span>✏️</span>
-                  <span>Modo Titular (Edição Completa)</span>
+                  <span>👑</span>
+                  <span>Titular (Edição Completa)</span>
                 </div>
               ) : isReadOnly ? (
                 <div className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-amber-50 text-amber-800 border border-amber-200 rounded-xl text-xs font-black shadow-2xs">
@@ -332,7 +332,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
               ) : (
                 <div className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-emerald-50 text-emerald-700 border border-emerald-200 rounded-xl text-xs font-black shadow-2xs">
                   <span>✏️</span>
-                  <span>Modo Edição (Permissão de Lançamento)</span>
+                  <span>Modo Edição (Lançamentos Liberados)</span>
                 </div>
               )}
             </div>
