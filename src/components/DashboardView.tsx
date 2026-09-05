@@ -283,6 +283,63 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
         </div>
       )}
 
+      {/* Active Account / Budget Status Banner */}
+      {user && (() => {
+        const effectiveBudgetId = StorageService.getEffectiveBudgetId(user);
+        const shared = StorageService.getSharedBudget(effectiveBudgetId, user);
+        const isReadOnly = StorageService.isCurrentUserReadOnly(user);
+        
+        const myEmail = String(user.email || '').toLowerCase().trim();
+        const ownerEmail = String(shared.ownerEmail || '').toLowerCase().trim();
+        const ownerName = shared.ownerName || ownerEmail || effectiveBudgetId;
+        
+        const isOwnBudget = !effectiveBudgetId || 
+          effectiveBudgetId === user.id || 
+          effectiveBudgetId === user.email || 
+          effectiveBudgetId === user.budgetId || 
+          (myEmail && ownerEmail && myEmail === ownerEmail) ||
+          effectiveBudgetId === 'default';
+
+        return (
+          <div className="bg-white rounded-2xl p-3.5 sm:p-4 shadow-sm border border-gray-200 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-xl bg-amber-500/10 border border-amber-500/30 flex items-center justify-center text-amber-600 shrink-0 font-bold">
+                {isOwnBudget ? '👤' : '👥'}
+              </div>
+              <div>
+                <span className="text-[11px] font-bold text-gray-500 uppercase tracking-wider block">
+                  {isOwnBudget ? 'Orçamento Próprio' : 'Orçamento Compartilhado'}
+                </span>
+                <h2 className="text-xs sm:text-sm font-black text-[#121212] tracking-tight">
+                  {isOwnBudget 
+                    ? `Orçamento Próprio: ${user.name || user.email || 'Titular'}` 
+                    : `Orçamento Compartilhado: ${ownerName}`}
+                </h2>
+              </div>
+            </div>
+
+            <div className="flex items-center gap-2 w-full sm:w-auto justify-end">
+              {isOwnBudget ? (
+                <div className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-emerald-50 text-emerald-700 border border-emerald-200 rounded-xl text-xs font-black shadow-2xs">
+                  <span>✏️</span>
+                  <span>Modo Titular (Edição Completa)</span>
+                </div>
+              ) : isReadOnly ? (
+                <div className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-amber-50 text-amber-800 border border-amber-200 rounded-xl text-xs font-black shadow-2xs">
+                  <span>📖</span>
+                  <span>Modo Leitura (Apenas Visualização)</span>
+                </div>
+              ) : (
+                <div className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-emerald-50 text-emerald-700 border border-emerald-200 rounded-xl text-xs font-black shadow-2xs">
+                  <span>✏️</span>
+                  <span>Modo Edição (Permissão de Lançamento)</span>
+                </div>
+              )}
+            </div>
+          </div>
+        );
+      })()}
+
       {/* Compact Dashboard Branding Header */}
       <div
         className="bg-gradient-to-r from-[#121212] via-[#241E10] to-[#121212] text-white rounded-2xl p-3 sm:p-4 shadow-lg border border-[#D4AF37]/60 flex flex-col sm:flex-row items-center justify-between gap-3"
