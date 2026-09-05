@@ -49,6 +49,7 @@ export const SharedBudgetModal: React.FC<SharedBudgetModalProps> = ({
   loadingInviteId = null,
 }) => {
   const currentUser = user;
+  const isReadOnly = StorageService.isCurrentUserReadOnly(currentUser);
   const effectiveBudgetId = StorageService.getEffectiveBudgetId(currentUser);
   const [sharedBudget, setSharedBudget] = useState<SharedBudget>(() =>
     StorageService.getSharedBudget(effectiveBudgetId, user)
@@ -726,92 +727,93 @@ export const SharedBudgetModal: React.FC<SharedBudgetModalProps> = ({
             ) : null}
           </div>
 
-          {/* Section 1: Conceder Acesso */}
-          <div className="space-y-3 bg-[#D4AF37]/10 p-3.5 sm:p-4 rounded-2xl border border-[#D4AF37]/40">
-            <label className="text-xs font-extrabold text-[#121212] block uppercase tracking-wider flex items-center gap-1.5">
-              <UserPlus className="w-4 h-4 text-[#D4AF37]" />
-              <span>1. Acesso ao seu Orçamento (Conectar):</span>
-            </label>
-            <p className="text-[11px] text-gray-700 leading-snug">
-              Informe o <strong>e-mail do convidado</strong> cadastrado no sistema para conceder acesso ao seu orçamento:
-            </p>
+          {Boolean(!isReadOnly) && (
+            <div className="space-y-3 bg-[#D4AF37]/10 p-3.5 sm:p-4 rounded-2xl border border-[#D4AF37]/40">
+              <label className="text-xs font-extrabold text-[#121212] block uppercase tracking-wider flex items-center gap-1.5">
+                <UserPlus className="w-4 h-4 text-[#D4AF37]" />
+                <span>1. Acesso ao seu Orçamento (Conectar):</span>
+              </label>
+              <p className="text-[11px] text-gray-700 leading-snug">
+                Informe o <strong>e-mail do convidado</strong> cadastrado no sistema para conceder acesso ao seu orçamento:
+              </p>
 
-            <form onSubmit={handleAddCollaborator} className="space-y-2">
-              <div className="flex flex-col sm:flex-row gap-2">
-                <div className="relative flex-1">
-                  <Mail className="w-4 h-4 text-[#D4AF37] absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
-                  <input
-                    type="email"
-                    value={inviteEmail}
-                    onChange={(e) => setInviteEmail(e.target.value)}
-                    placeholder="E-mail do Convidado"
-                    className="w-full pl-9 pr-3 py-2.5 bg-white border border-gray-300 rounded-xl text-xs font-bold text-[#121212] focus:outline-none focus:ring-2 focus:ring-[#D4AF37]"
-                  />
+              <form onSubmit={handleAddCollaborator} className="space-y-2">
+                <div className="flex flex-col sm:flex-row gap-2">
+                  <div className="relative flex-1">
+                    <Mail className="w-4 h-4 text-[#D4AF37] absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
+                    <input
+                      type="email"
+                      value={inviteEmail}
+                      onChange={(e) => setInviteEmail(e.target.value)}
+                      placeholder="E-mail do Convidado"
+                      className="w-full pl-9 pr-3 py-2.5 bg-white border border-gray-300 rounded-xl text-xs font-bold text-[#121212] focus:outline-none focus:ring-2 focus:ring-[#D4AF37]"
+                    />
+                  </div>
+                  <button
+                    type="submit"
+                    disabled={isLoading}
+                    className="py-2.5 px-4 bg-[#121212] text-[#D4AF37] font-bold text-xs rounded-xl hover:bg-black transition flex items-center justify-center gap-1.5 cursor-pointer shrink-0 min-h-[38px] border border-[#D4AF37] disabled:opacity-50 w-full sm:w-auto"
+                  >
+                    <UserPlus className="w-4 h-4 shrink-0" />
+                    <span>{isLoading ? 'Processando...' : 'Conceder Acesso'}</span>
+                  </button>
                 </div>
-                <button
-                  type="submit"
-                  disabled={isLoading}
-                  className="py-2.5 px-4 bg-[#121212] text-[#D4AF37] font-bold text-xs rounded-xl hover:bg-black transition flex items-center justify-center gap-1.5 cursor-pointer shrink-0 min-h-[38px] border border-[#D4AF37] disabled:opacity-50 w-full sm:w-auto"
-                >
-                  <UserPlus className="w-4 h-4 shrink-0" />
-                  <span>{isLoading ? 'Processando...' : 'Conceder Acesso'}</span>
-                </button>
-              </div>
 
-              <div className="flex flex-wrap items-center gap-x-4 gap-y-2 pt-1">
-                <span className="text-[11px] font-bold text-gray-700 w-full sm:w-auto">Modo de Acesso Inicial:</span>
-                <label className="flex items-center gap-1.5 text-xs cursor-pointer">
-                  <input
-                    type="radio"
-                    name="inviteMode"
-                    value="edit"
-                    checked={inviteAccessMode === 'edit'}
-                    onChange={() => setInviteAccessMode('edit')}
-                    className="accent-[#D4AF37]"
-                  />
-                  <Edit3 className="w-3.5 h-3.5 text-amber-700 shrink-0" />
-                  <span className="font-bold text-[#121212]">Edição (Completo)</span>
-                </label>
-                <label className="flex items-center gap-1.5 text-xs cursor-pointer">
-                  <input
-                    type="radio"
-                    name="inviteMode"
-                    value="read"
-                    checked={inviteAccessMode === 'read'}
-                    onChange={() => setInviteAccessMode('read')}
-                    className="accent-[#D4AF37]"
-                  />
-                  <Eye className="w-3.5 h-3.5 text-blue-600 shrink-0" />
-                  <span className="font-bold text-[#121212]">Leitura (Apenas Visualizar)</span>
-                </label>
-              </div>
-            </form>
+                <div className="flex flex-wrap items-center gap-x-4 gap-y-2 pt-1">
+                  <span className="text-[11px] font-bold text-gray-700 w-full sm:w-auto">Modo de Acesso Inicial:</span>
+                  <label className="flex items-center gap-1.5 text-xs cursor-pointer">
+                    <input
+                      type="radio"
+                      name="inviteMode"
+                      value="edit"
+                      checked={inviteAccessMode === 'edit'}
+                      onChange={() => setInviteAccessMode('edit')}
+                      className="accent-[#D4AF37]"
+                    />
+                    <Edit3 className="w-3.5 h-3.5 text-amber-700 shrink-0" />
+                    <span className="font-bold text-[#121212]">Edição (Completo)</span>
+                  </label>
+                  <label className="flex items-center gap-1.5 text-xs cursor-pointer">
+                    <input
+                      type="radio"
+                      name="inviteMode"
+                      value="read"
+                      checked={inviteAccessMode === 'read'}
+                      onChange={() => setInviteAccessMode('read')}
+                      className="accent-[#D4AF37]"
+                    />
+                    <Eye className="w-3.5 h-3.5 text-blue-600 shrink-0" />
+                    <span className="font-bold text-[#121212]">Leitura (Apenas Visualizar)</span>
+                  </label>
+                </div>
+              </form>
 
-            <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2 bg-white/90 p-2.5 rounded-xl border border-amber-300 text-xs w-full">
-              <div className="flex items-center gap-1.5 flex-wrap min-w-0">
-                <span className="text-[11px] font-bold text-gray-700">Seu E-mail de Titular:</span>
-                <span className="font-semibold text-xs text-[#121212] bg-amber-50 px-2 py-0.5 rounded border border-amber-200 truncate select-all">{user.email}</span>
-              </div>
-              <div className="flex items-center gap-1.5 w-full sm:w-auto shrink-0">
-                <button
-                  type="button"
-                  onClick={handleCopyEmail}
-                  className="flex-1 sm:flex-initial py-1.5 px-3 bg-[#D4AF37] hover:bg-[#B89628] text-[#121212] font-black text-[10px] rounded-lg transition flex items-center justify-center gap-1 cursor-pointer"
-                >
-                  {copied ? <Check className="w-3.5 h-3.5 stroke-[3]" /> : <Copy className="w-3.5 h-3.5" />}
-                  <span>{copied ? 'Copiado!' : 'Copiar E-mail'}</span>
-                </button>
-                <button
-                  type="button"
-                  onClick={handleCopyInviteText}
-                  className="flex-1 sm:flex-initial py-1.5 px-3 bg-[#121212] text-[#D4AF37] font-bold text-[10px] rounded-lg hover:bg-black transition flex items-center justify-center gap-1 cursor-pointer"
-                >
-                  <Sparkles className="w-3.5 h-3.5 text-[#D4AF37]" />
-                  <span>Copiar Convite</span>
-                </button>
+              <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2 bg-white/90 p-2.5 rounded-xl border border-amber-300 text-xs w-full">
+                <div className="flex items-center gap-1.5 flex-wrap min-w-0">
+                  <span className="text-[11px] font-bold text-gray-700">Seu E-mail de Titular:</span>
+                  <span className="font-semibold text-xs text-[#121212] bg-amber-50 px-2 py-0.5 rounded border border-amber-200 truncate select-all">{user.email}</span>
+                </div>
+                <div className="flex items-center gap-1.5 w-full sm:w-auto shrink-0">
+                  <button
+                    type="button"
+                    onClick={handleCopyEmail}
+                    className="flex-1 sm:flex-initial py-1.5 px-3 bg-[#D4AF37] hover:bg-[#B89628] text-[#121212] font-black text-[10px] rounded-lg transition flex items-center justify-center gap-1 cursor-pointer"
+                  >
+                    {copied ? <Check className="w-3.5 h-3.5 stroke-[3]" /> : <Copy className="w-3.5 h-3.5" />}
+                    <span>{copied ? 'Copiado!' : 'Copiar E-mail'}</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleCopyInviteText}
+                    className="flex-1 sm:flex-initial py-1.5 px-3 bg-[#121212] text-[#D4AF37] font-bold text-[10px] rounded-lg hover:bg-black transition flex items-center justify-center gap-1 cursor-pointer"
+                  >
+                    <Sparkles className="w-3.5 h-3.5 text-[#D4AF37]" />
+                    <span>Copiar Convite</span>
+                  </button>
+                </div>
               </div>
             </div>
-          </div>
+          )}
 
           {/* Section 2: Pedir Acesso */}
           <div className="space-y-2 pt-2 border-t border-gray-200">
@@ -861,31 +863,37 @@ export const SharedBudgetModal: React.FC<SharedBudgetModalProps> = ({
 
                     <div style={{ display: 'flex', gap: '10px', marginBottom: '15px' }}>
                       <span style={{ padding: '6px 12px', backgroundColor: '#e8f5e9', color: '#2e7d32', borderRadius: '20px', fontSize: '12px', fontWeight: 'bold', border: '1px solid #4CAF50' }}>✓ Concedido</span>
-                      {isOwner && (
+                      {Boolean(!isReadOnly) && isOwner && (
                         <button type="button" onClick={() => removerMembro(email)} style={{ padding: '6px 12px', backgroundColor: '#ffebee', color: '#c62828', borderRadius: '20px', fontSize: '12px', fontWeight: 'bold', border: '1px solid #f44336', cursor: 'pointer' }}>Excluir</button>
                       )}
                     </div>
 
-                    <div style={{ backgroundColor: '#fff', padding: '15px', borderRadius: '10px', border: '1px solid #eee' }}>
-                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '15px' }}>
-                        <span style={{ fontSize: '13px', fontWeight: 'bold', color: '#555' }}>Permissão de Acesso:</span>
-                        {loadingPermEmail === email && (
-                          <span style={{ fontSize: '11px', color: '#ffb300', fontWeight: 'bold' }}>Salvando no servidor...</span>
-                        )}
-                      </div>
-
-                      <div style={{ display: 'flex', gap: '10px' }}>
-                        <div onClick={() => togglePermissao(email, 'leitura')} style={{ flex: 1, padding: '10px', border: perm !== 'edicao' ? '2px solid #ffb300' : '1px solid #ddd', borderRadius: '8px', display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer', backgroundColor: perm !== 'edicao' ? '#fffaf0' : '#fff' }}>
-                          <div style={{ width: '16px', height: '16px', borderRadius: '50%', border: perm !== 'edicao' ? '4px solid #ffb300' : '2px solid #ccc', backgroundColor: '#fff' }}></div>
-                          <span style={{ fontSize: '13px', fontWeight: 'bold', color: '#333' }}>👁️ Leitura</span>
+                    {Boolean(!isReadOnly) ? (
+                      <div style={{ backgroundColor: '#fff', padding: '15px', borderRadius: '10px', border: '1px solid #eee' }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '15px' }}>
+                          <span style={{ fontSize: '13px', fontWeight: 'bold', color: '#555' }}>Permissão de Acesso:</span>
+                          {loadingPermEmail === email && (
+                            <span style={{ fontSize: '11px', color: '#ffb300', fontWeight: 'bold' }}>Salvando no servidor...</span>
+                          )}
                         </div>
 
-                        <div onClick={() => togglePermissao(email, 'edicao')} style={{ flex: 1, padding: '10px', border: perm === 'edicao' ? '2px solid #ffb300' : '1px solid #ddd', borderRadius: '8px', display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer', backgroundColor: perm === 'edicao' ? '#fffaf0' : '#fff' }}>
-                          <div style={{ width: '16px', height: '16px', borderRadius: '50%', border: perm === 'edicao' ? '4px solid #ffb300' : '2px solid #ccc', backgroundColor: '#fff' }}></div>
-                          <span style={{ fontSize: '13px', fontWeight: 'bold', color: '#333' }}>✏️ Edição</span>
+                        <div style={{ display: 'flex', gap: '10px' }}>
+                          <div onClick={() => togglePermissao(email, 'leitura')} style={{ flex: 1, padding: '10px', border: perm !== 'edicao' ? '2px solid #ffb300' : '1px solid #ddd', borderRadius: '8px', display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer', backgroundColor: perm !== 'edicao' ? '#fffaf0' : '#fff' }}>
+                            <div style={{ width: '16px', height: '16px', borderRadius: '50%', border: perm !== 'edicao' ? '4px solid #ffb300' : '2px solid #ccc', backgroundColor: '#fff' }}></div>
+                            <span style={{ fontSize: '13px', fontWeight: 'bold', color: '#333' }}>👁️ Leitura</span>
+                          </div>
+
+                          <div onClick={() => togglePermissao(email, 'edicao')} style={{ flex: 1, padding: '10px', border: perm === 'edicao' ? '2px solid #ffb300' : '1px solid #ddd', borderRadius: '8px', display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer', backgroundColor: perm === 'edicao' ? '#fffaf0' : '#fff' }}>
+                            <div style={{ width: '16px', height: '16px', borderRadius: '50%', border: perm === 'edicao' ? '4px solid #ffb300' : '2px solid #ccc', backgroundColor: '#fff' }}></div>
+                            <span style={{ fontSize: '13px', fontWeight: 'bold', color: '#333' }}>✏️ Edição</span>
+                          </div>
                         </div>
                       </div>
-                    </div>
+                    ) : (
+                      <div style={{ backgroundColor: '#fff', padding: '10px 15px', borderRadius: '10px', border: '1px solid #eee', fontSize: '13px', color: '#555' }}>
+                        Permissão de Acesso: <strong className="text-gray-900">{perm === 'edicao' ? '✏️ Edição' : '👁️ Leitura'}</strong>
+                      </div>
+                    )}
 
                     <div className="flex items-center flex-wrap gap-1.5 pt-3 mt-3 border-t border-gray-200 text-[11px]">
                       <span className="font-bold text-gray-500 text-[10px] uppercase tracking-wider">Gamificação:</span>

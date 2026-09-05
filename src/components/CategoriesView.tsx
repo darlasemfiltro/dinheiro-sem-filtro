@@ -903,26 +903,28 @@ export const CategoriesView: React.FC<CategoriesViewProps> = ({
                   </div>
                 </div>
 
-                <div className="flex items-center justify-end gap-2 pt-3 border-t border-gray-200">
-                  <button
-                    onClick={() => handleOpenEditMember(member)}
-                    className="p-2.5 text-gray-700 hover:text-[#121212] hover:bg-gray-100 rounded-xl transition cursor-pointer min-h-[40px] flex items-center gap-1 font-bold text-xs"
-                    title="Editar Membro"
-                  >
-                    <Edit2 className="w-4 h-4" />
-                    <span>Editar</span>
-                  </button>
-                  {onDeleteFamilyMember && (
+                {Boolean(!isReadOnly) && (
+                  <div className="flex items-center justify-end gap-2 pt-3 border-t border-gray-200">
                     <button
-                      onClick={() => onDeleteFamilyMember(member.id)}
-                      className="p-2.5 text-red-600 hover:text-[#FF3D00] hover:bg-[#FF3D00]/10 rounded-xl transition cursor-pointer min-h-[40px] flex items-center gap-1 font-bold text-xs"
-                      title="Excluir Membro"
+                      onClick={() => handleOpenEditMember(member)}
+                      className="p-2.5 text-gray-700 hover:text-[#121212] hover:bg-gray-100 rounded-xl transition cursor-pointer min-h-[40px] flex items-center gap-1 font-bold text-xs"
+                      title="Editar Membro"
                     >
-                      <Trash2 className="w-4 h-4" />
-                      <span>Excluir</span>
+                      <Edit2 className="w-4 h-4" />
+                      <span>Editar</span>
                     </button>
-                  )}
-                </div>
+                    {onDeleteFamilyMember && (
+                      <button
+                        onClick={() => onDeleteFamilyMember(member.id)}
+                        className="p-2.5 text-red-600 hover:text-[#FF3D00] hover:bg-[#FF3D00]/10 rounded-xl transition cursor-pointer min-h-[40px] flex items-center gap-1 font-bold text-xs"
+                        title="Excluir Membro"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                        <span>Excluir</span>
+                      </button>
+                    )}
+                  </div>
+                )}
               </div>
             ))}
           </div>
@@ -931,12 +933,14 @@ export const CategoriesView: React.FC<CategoriesViewProps> = ({
             <div className="text-center py-12 bg-white rounded-3xl border border-gray-200 p-6 space-y-3">
               <Users className="w-12 h-12 text-[#D4AF37] mx-auto" />
               <p className="text-sm font-bold text-[#121212]">Nenhum membro cadastrado ainda.</p>
-              <button
-                onClick={handleOpenAddMember}
-                className="py-2 px-4 bg-[#121212] text-[#D4AF37] font-bold text-xs rounded-xl hover:bg-black transition cursor-pointer"
-              >
-                Adicionar Primeiro Membro
-              </button>
+              {Boolean(!isReadOnly) && (
+                <button
+                  onClick={handleOpenAddMember}
+                  className="py-2 px-4 bg-[#121212] text-[#D4AF37] font-bold text-xs rounded-xl hover:bg-black transition cursor-pointer"
+                >
+                  Adicionar Primeiro Membro
+                </button>
+              )}
             </div>
           )}
         </div>
