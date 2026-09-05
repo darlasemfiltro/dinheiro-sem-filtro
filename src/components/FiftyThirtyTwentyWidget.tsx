@@ -705,22 +705,19 @@ export const FiftyThirtyTwentyWidget: React.FC<FiftyThirtyTwentyWidgetProps> = (
             </select>
           </div>
 
-          <button
-            type="button"
-            onClick={() => {
-              if (isReadOnly) {
-                alert('Ação bloqueada: Você possui apenas permissão de LEITURA neste orçamento.');
-                return;
-              }
-              setTempTargets({ ...targets });
-              setIsEditModalOpen(true);
-            }}
-            disabled={isReadOnly}
-            className={`min-h-[42px] sm:min-h-[44px] py-2 px-3.5 bg-[#D4AF37] text-[#121212] font-black text-xs sm:text-sm rounded-xl transition flex items-center justify-center gap-2 shadow-md shrink-0 border border-amber-600/30 ${isReadOnly ? 'opacity-50 cursor-not-allowed' : 'hover:bg-[#c4a02e] cursor-pointer'}`}
-          >
-            <Edit3 className="w-4 h-4 shrink-0" />
-            <span>Editar Meta %</span>
-          </button>
+          {Boolean(!isReadOnly) && (
+            <button
+              type="button"
+              onClick={() => {
+                setTempTargets({ ...targets });
+                setIsEditModalOpen(true);
+              }}
+              className="min-h-[42px] sm:min-h-[44px] py-2 px-3.5 bg-[#D4AF37] hover:bg-[#c4a02e] text-[#121212] font-black text-xs sm:text-sm rounded-xl transition flex items-center justify-center gap-2 shadow-md shrink-0 border border-amber-600/30 cursor-pointer"
+            >
+              <Edit3 className="w-4 h-4 shrink-0" />
+              <span>Editar Meta %</span>
+            </button>
+          )}
         </div>
       </div>
 

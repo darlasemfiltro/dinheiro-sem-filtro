@@ -649,33 +649,35 @@ export const CategoriesView: React.FC<CategoriesViewProps> = ({
             </button>
           </div>
 
-          {mainView === 'categories' ? (
-            <div className="flex items-center gap-2 w-full sm:w-auto">
-              <button
-                onClick={handleRestoreDefaults}
-                title="Carregar Estrutura Padrão 50/30/20"
-                className="min-h-[42px] sm:min-h-[44px] py-2 px-3 bg-gray-100 hover:bg-gray-200 text-[#121212] font-black text-xs rounded-xl border border-gray-300 transition flex items-center justify-center gap-1.5 cursor-pointer shrink-0"
-              >
-                <RotateCcw className="w-3.5 h-3.5 text-[#D4AF37]" />
-                <span className="hidden md:inline">Restaurar 50/30/20</span>
-              </button>
+          {!isReadOnly && (
+            mainView === 'categories' ? (
+              <div className="flex items-center gap-2 w-full sm:w-auto">
+                <button
+                  onClick={handleRestoreDefaults}
+                  title="Carregar Estrutura Padrão 50/30/20"
+                  className="min-h-[42px] sm:min-h-[44px] py-2 px-3 bg-gray-100 hover:bg-gray-200 text-[#121212] font-black text-xs rounded-xl border border-gray-300 transition flex items-center justify-center gap-1.5 cursor-pointer shrink-0"
+                >
+                  <RotateCcw className="w-3.5 h-3.5 text-[#D4AF37]" />
+                  <span className="hidden md:inline">Restaurar 50/30/20</span>
+                </button>
 
+                <button
+                  onClick={handleOpenAddCategory}
+                  className="flex-1 sm:flex-initial min-h-[42px] sm:min-h-[44px] py-2.5 px-4 bg-[#00C853] hover:bg-[#00E676] text-[#121212] font-black text-xs sm:text-sm rounded-xl shadow-md transition flex items-center justify-center gap-2 cursor-pointer shrink-0 border border-[#00A843]"
+                >
+                  <Plus className="w-4 h-4 stroke-[3]" />
+                  <span>Nova Categoria</span>
+                </button>
+              </div>
+            ) : (
               <button
-                onClick={handleOpenAddCategory}
-                className="flex-1 sm:flex-initial min-h-[42px] sm:min-h-[44px] py-2.5 px-4 bg-[#00C853] hover:bg-[#00E676] text-[#121212] font-black text-xs sm:text-sm rounded-xl shadow-md transition flex items-center justify-center gap-2 cursor-pointer shrink-0 border border-[#00A843]"
+                onClick={handleOpenAddMember}
+                className="w-full sm:w-auto min-h-[42px] sm:min-h-[44px] py-2.5 px-4 bg-[#00C853] hover:bg-[#00E676] text-[#121212] font-black text-xs sm:text-sm rounded-xl shadow-md transition flex items-center justify-center gap-2 cursor-pointer shrink-0 border border-[#00A843]"
               >
-                <Plus className="w-4 h-4 stroke-[3]" />
-                <span>Nova Categoria</span>
+                <UserPlus className="w-4 h-4 stroke-[3]" />
+                <span>Novo Membro</span>
               </button>
-            </div>
-          ) : (
-            <button
-              onClick={handleOpenAddMember}
-              className="w-full sm:w-auto min-h-[42px] sm:min-h-[44px] py-2.5 px-4 bg-[#00C853] hover:bg-[#00E676] text-[#121212] font-black text-xs sm:text-sm rounded-xl shadow-md transition flex items-center justify-center gap-2 cursor-pointer shrink-0 border border-[#00A843]"
-            >
-              <UserPlus className="w-4 h-4 stroke-[3]" />
-              <span>Novo Membro</span>
-            </button>
+            )
           )}
         </div>
       </div>

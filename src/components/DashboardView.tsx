@@ -329,20 +329,21 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
             const isReadOnly = StorageService.isCurrentUserReadOnly(user);
             return (
               <div className="flex flex-col items-end gap-2">
-                <button
-                  onClick={() => {
-                    if (isReadOnly) {
-                      alert('Ação bloqueada: Você possui apenas permissão de LEITURA neste orçamento.');
-                      return;
-                    }
-                    onOpenNewTransaction();
-                  }}
-                  disabled={isReadOnly}
-                  className={`py-1.5 px-3 bg-[#00C853] text-[#121212] font-bold text-xs rounded-xl shadow-sm transition flex items-center justify-center gap-1.5 border border-[#00A843] w-auto shrink-0 ${isReadOnly ? 'opacity-50 cursor-not-allowed' : 'hover:bg-[#00E676] cursor-pointer'}`}
-                >
-                  <Plus className="w-3.5 h-3.5 text-[#121212] stroke-[3] shrink-0" />
-                  <span>Novo Lançamento</span>
-                </button>
+                {Boolean(!isReadOnly) && (
+                  <button
+                    onClick={() => {
+                      if (isReadOnly) {
+                        alert('Ação bloqueada: Você possui apenas permissão de LEITURA neste orçamento.');
+                        return;
+                      }
+                      onOpenNewTransaction();
+                    }}
+                    className="py-1.5 px-3 bg-[#00C853] hover:bg-[#00E676] text-[#121212] font-bold text-xs rounded-xl shadow-sm transition flex items-center justify-center gap-1.5 border border-[#00A843] w-auto shrink-0 cursor-pointer"
+                  >
+                    <Plus className="w-3.5 h-3.5 text-[#121212] stroke-[3] shrink-0" />
+                    <span>Novo Lançamento</span>
+                  </button>
+                )}
                 {isReadOnly && (
                   <div className="text-[11px] text-[#856404] bg-[#fff3cd] border border-[#ffeeba] px-3 py-1 rounded-xl font-bold">
                     🔒 MODO LEITURA: Orçamento de {emailDoDono} (Apenas Visualização)

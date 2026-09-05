@@ -249,13 +249,15 @@ export const GoalsView: React.FC<GoalsViewProps> = ({
           </p>
         </div>
 
-        <button
-          onClick={handleOpenAddGoal}
-          className="min-h-[42px] sm:min-h-[44px] py-2.5 px-4 bg-[#00C853] hover:bg-[#00E676] text-[#121212] font-black text-xs sm:text-sm rounded-xl shadow-md transition flex items-center justify-center gap-2 cursor-pointer border border-[#00A843] shrink-0"
-        >
-          <Plus className="w-4 h-4 stroke-[3] shrink-0" />
-          <span>Novo Objetivo</span>
-        </button>
+        {!isReadOnly && (
+          <button
+            onClick={handleOpenAddGoal}
+            className="min-h-[42px] sm:min-h-[44px] py-2.5 px-4 bg-[#00C853] hover:bg-[#00E676] text-[#121212] font-black text-xs sm:text-sm rounded-xl shadow-md transition flex items-center justify-center gap-2 cursor-pointer border border-[#00A843] shrink-0"
+          >
+            <Plus className="w-4 h-4 stroke-[3] shrink-0" />
+            <span>Novo Objetivo</span>
+          </button>
+        )}
       </div>
 
       {/* Valor Geral Summary Banner */}
@@ -329,20 +331,22 @@ export const GoalsView: React.FC<GoalsViewProps> = ({
                     <h3 className="text-base font-bold text-[#121212] font-serif">{goal.title}</h3>
                   </div>
 
-                  <div className="flex items-center gap-1">
-                    <button
-                      onClick={() => handleOpenEditGoal(goal)}
-                      className="p-1.5 text-gray-600 hover:text-[#121212] hover:bg-gray-100 rounded-xl transition cursor-pointer"
-                    >
-                      <Edit2 className="w-3.5 h-3.5" />
-                    </button>
-                    <button
-                      onClick={() => onDeleteGoal(goal.id)}
-                      className="p-1.5 text-[#FF3D00] hover:bg-red-50 rounded-xl transition cursor-pointer"
-                    >
-                      <Trash2 className="w-3.5 h-3.5" />
-                    </button>
-                  </div>
+                  {!isReadOnly && (
+                    <div className="flex items-center gap-1">
+                      <button
+                        onClick={() => handleOpenEditGoal(goal)}
+                        className="p-1.5 text-gray-600 hover:text-[#121212] hover:bg-gray-100 rounded-xl transition cursor-pointer"
+                      >
+                        <Edit2 className="w-3.5 h-3.5" />
+                      </button>
+                      <button
+                        onClick={() => onDeleteGoal(goal.id)}
+                        className="p-1.5 text-[#FF3D00] hover:bg-red-50 rounded-xl transition cursor-pointer"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
+                  )}
                 </div>
 
                 {/* Progress Circle & Bar */}
@@ -412,16 +416,18 @@ export const GoalsView: React.FC<GoalsViewProps> = ({
               </div>
 
               {/* Deposit Action Button */}
-              <button
-                onClick={() => {
-                  setDepositGoalId(goal.id);
-                  setDepositAmount('');
-                }}
-                className="w-full py-2.5 bg-[#00C853] hover:bg-[#00E676] text-[#121212] font-black text-xs rounded-xl shadow-xs transition flex items-center justify-center gap-2 cursor-pointer mt-2"
-              >
-                <Sparkles className="w-4 h-4 text-[#121212]" />
-                <span>Registrar Aporte de Economia</span>
-              </button>
+              {!isReadOnly && (
+                <button
+                  onClick={() => {
+                    setDepositGoalId(goal.id);
+                    setDepositAmount('');
+                  }}
+                  className="w-full py-2.5 bg-[#00C853] hover:bg-[#00E676] text-[#121212] font-black text-xs rounded-xl shadow-xs transition flex items-center justify-center gap-2 cursor-pointer mt-2"
+                >
+                  <Sparkles className="w-4 h-4 text-[#121212]" />
+                  <span>Registrar Aporte de Economia</span>
+                </button>
+              )}
             </div>
           );
         })}

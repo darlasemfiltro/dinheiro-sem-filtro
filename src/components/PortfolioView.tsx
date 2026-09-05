@@ -2343,13 +2343,15 @@ export const PortfolioView: React.FC<PortfolioViewProps> = ({
               {showValues ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
             </button>
 
-            <button
-              onClick={() => setIsAddModalOpen(true)}
-              className="px-3.5 py-2 bg-[#D4AF37] hover:bg-[#FACC15] text-[#121212] font-black text-xs rounded-xl shadow-lg transition flex items-center gap-1.5 cursor-pointer"
-            >
-              <PlusCircle className="w-4 h-4 stroke-[2.5]" />
-              <span>Cadastrar Ativo</span>
-            </button>
+            {!isReadOnly && (
+              <button
+                onClick={() => setIsAddModalOpen(true)}
+                className="px-3.5 py-2 bg-[#D4AF37] hover:bg-[#FACC15] text-[#121212] font-black text-xs rounded-xl shadow-lg transition flex items-center gap-1.5 cursor-pointer"
+              >
+                <PlusCircle className="w-4 h-4 stroke-[2.5]" />
+                <span>Cadastrar Ativo</span>
+              </button>
+            )}
 
             <button
               onClick={handleRefreshPrices}
@@ -5499,13 +5501,15 @@ export const PortfolioView: React.FC<PortfolioViewProps> = ({
                 <h3 className="text-base font-black uppercase text-white font-serif tracking-wider">Metas do Investidor</h3>
                 <p className="text-xs text-gray-400">Acompanhe e gerencie a evolução das suas metas financeiras</p>
               </div>
-              <button
-                onClick={handleOpenNewGoalModal}
-                className="px-3.5 py-2 bg-[#D4AF37] hover:bg-[#FACC15] text-[#121212] font-black text-xs rounded-xl shadow-md transition flex items-center gap-2 cursor-pointer"
-              >
-                <Plus className="w-4 h-4 stroke-[3]" />
-                <span>Nova Meta</span>
-              </button>
+              {!isReadOnly && (
+                <button
+                  onClick={handleOpenNewGoalModal}
+                  className="px-3.5 py-2 bg-[#D4AF37] hover:bg-[#FACC15] text-[#121212] font-black text-xs rounded-xl shadow-md transition flex items-center gap-2 cursor-pointer"
+                >
+                  <Plus className="w-4 h-4 stroke-[3]" />
+                  <span>Nova Meta</span>
+                </button>
+              )}
             </div>
 
             <div className="space-y-4">
@@ -5523,23 +5527,27 @@ export const PortfolioView: React.FC<PortfolioViewProps> = ({
 
                       <div className="flex items-center gap-2">
                         <span className="text-lg font-black text-white">{pct}%</span>
-                        <button
-                          onClick={() => handleOpenEditGoalModal(g)}
-                          className="p-1.5 bg-[#18181B] hover:bg-white/10 text-gray-300 border border-white/10 rounded-lg transition cursor-pointer"
-                          title="Editar Meta"
-                        >
-                          <Edit2 className="w-3.5 h-3.5" />
-                        </button>
-                        <button
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            handleDeleteGoal(g.id);
-                          }}
-                          className="p-1.5 bg-red-500/20 hover:bg-red-500/30 text-red-400 border border-red-500/40 rounded-lg transition cursor-pointer"
-                          title="Excluir Meta"
-                        >
-                          <Trash2 className="w-3.5 h-3.5" />
-                        </button>
+                        {!isReadOnly && (
+                          <>
+                            <button
+                              onClick={() => handleOpenEditGoalModal(g)}
+                              className="p-1.5 bg-[#18181B] hover:bg-white/10 text-gray-300 border border-white/10 rounded-lg transition cursor-pointer"
+                              title="Editar Meta"
+                            >
+                              <Edit2 className="w-3.5 h-3.5" />
+                            </button>
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleDeleteGoal(g.id);
+                              }}
+                              className="p-1.5 bg-red-500/20 hover:bg-red-500/30 text-red-400 border border-red-500/40 rounded-lg transition cursor-pointer"
+                              title="Excluir Meta"
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
+                            </button>
+                          </>
+                        )}
                       </div>
                     </div>
 
@@ -5581,13 +5589,15 @@ export const PortfolioView: React.FC<PortfolioViewProps> = ({
             </div>
 
             <div className="flex items-center gap-2">
-              <button
-                onClick={handleOpenNewTxModal}
-                className="px-3.5 py-2 bg-[#D4AF37] hover:bg-[#FACC15] text-[#121212] font-black text-xs rounded-xl transition flex items-center gap-1.5 cursor-pointer shadow-md"
-              >
-                <Plus className="w-4 h-4 stroke-[3]" />
-                <span>Nova Transação</span>
-              </button>
+              {!isReadOnly && (
+                <button
+                  onClick={handleOpenNewTxModal}
+                  className="px-3.5 py-2 bg-[#D4AF37] hover:bg-[#FACC15] text-[#121212] font-black text-xs rounded-xl transition flex items-center gap-1.5 cursor-pointer shadow-md"
+                >
+                  <Plus className="w-4 h-4 stroke-[3]" />
+                  <span>Nova Transação</span>
+                </button>
+              )}
 
               <button
                 onClick={() => setIsFilterModalOpen(true)}
@@ -5637,7 +5647,7 @@ export const PortfolioView: React.FC<PortfolioViewProps> = ({
                   <th className="py-3 px-2">Preço Unit.</th>
                   <th className="py-3 px-2">Total</th>
                   <th className="py-3 px-2">Corretora</th>
-                  <th className="py-3 px-2 text-right">Ações</th>
+                  {!isReadOnly && <th className="py-3 px-2 text-right">Ações</th>}
                 </tr>
               </thead>
               <tbody className="divide-y divide-white/5">
@@ -5661,24 +5671,26 @@ export const PortfolioView: React.FC<PortfolioViewProps> = ({
                     <td className="py-3 px-2 text-gray-300">{formatValue(tx.unitPrice)}</td>
                     <td className="py-3 px-2 text-white">{formatValue(tx.totalAmount)}</td>
                     <td className="py-3 px-2 text-gray-400">{tx.broker}</td>
-                    <td className="py-3 px-2 text-right">
-                      <div className="flex items-center justify-end gap-1.5">
-                        <button
-                          onClick={() => handleOpenEditTxModal(tx)}
-                          className="p-1.5 bg-[#121212] hover:bg-white/10 text-gray-300 border border-white/20 rounded-lg transition cursor-pointer"
-                          title="Editar Transação"
-                        >
-                          <Edit2 className="w-3.5 h-3.5" />
-                        </button>
-                        <button
-                          onClick={() => handleDeleteTx(tx.id)}
-                          className="p-1.5 bg-red-500/20 hover:bg-red-500/30 text-red-400 border border-red-500/40 rounded-lg transition cursor-pointer"
-                          title="Excluir Transação"
-                        >
-                          <Trash2 className="w-3.5 h-3.5" />
-                        </button>
-                      </div>
-                    </td>
+                    {!isReadOnly && (
+                      <td className="py-3 px-2 text-right">
+                        <div className="flex items-center justify-end gap-1.5">
+                          <button
+                            onClick={() => handleOpenEditTxModal(tx)}
+                            className="p-1.5 bg-[#121212] hover:bg-white/10 text-gray-300 border border-white/20 rounded-lg transition cursor-pointer"
+                            title="Editar Transação"
+                          >
+                            <Edit2 className="w-3.5 h-3.5" />
+                          </button>
+                          <button
+                            onClick={() => handleDeleteTx(tx.id)}
+                            className="p-1.5 bg-red-500/20 hover:bg-red-500/30 text-red-400 border border-red-500/40 rounded-lg transition cursor-pointer"
+                            title="Excluir Transação"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
+                      </td>
+                    )}
                   </tr>
                 ))}
 
