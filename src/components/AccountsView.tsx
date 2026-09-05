@@ -9,6 +9,7 @@ interface AccountsViewProps {
   onSaveAccount: (account: Account, updatedAccounts?: Account[]) => Promise<any> | void;
   onDeleteAccount: (id: string) => Promise<any> | void;
   userId: string;
+  isReadOnly?: boolean;
 }
 
 export const AccountsView: React.FC<AccountsViewProps> = ({
@@ -17,6 +18,7 @@ export const AccountsView: React.FC<AccountsViewProps> = ({
   onSaveAccount,
   onDeleteAccount,
   userId,
+  isReadOnly = false,
 }) => {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingAccount, setEditingAccount] = useState<Account | null>(null);
@@ -115,13 +117,15 @@ export const AccountsView: React.FC<AccountsViewProps> = ({
           </p>
         </div>
 
-        <button
-          onClick={handleOpenAdd}
-          className="min-h-[42px] sm:min-h-[44px] py-2.5 px-4 bg-[#00C853] hover:bg-[#00E676] text-[#121212] font-black text-xs sm:text-sm rounded-xl shadow-md transition flex items-center justify-center gap-2 cursor-pointer border border-[#00A843] shrink-0"
-        >
-          <Plus className="w-4 h-4 stroke-[3] shrink-0" />
-          <span>Nova Conta</span>
-        </button>
+        {!isReadOnly && (
+          <button
+            onClick={handleOpenAdd}
+            className="min-h-[42px] sm:min-h-[44px] py-2.5 px-4 bg-[#00C853] hover:bg-[#00E676] text-[#121212] font-black text-xs sm:text-sm rounded-xl shadow-md transition flex items-center justify-center gap-2 cursor-pointer border border-[#00A843] shrink-0"
+          >
+            <Plus className="w-4 h-4 stroke-[3] shrink-0" />
+            <span>Nova Conta</span>
+          </button>
+        )}
       </div>
 
       {/* Total Accounts Summary Box */}
@@ -188,22 +192,24 @@ export const AccountsView: React.FC<AccountsViewProps> = ({
                   </div>
                 </div>
 
-                <div className="flex items-center gap-1">
-                  <button
-                    onClick={() => handleOpenEdit(acc)}
-                    className="p-1.5 text-gray-600 hover:text-[#121212] hover:bg-gray-100 rounded-xl transition cursor-pointer"
-                  >
-                    <Edit2 className="w-3.5 h-3.5" />
-                  </button>
-                  {accounts.length > 1 && (
+                {!isReadOnly && (
+                  <div className="flex items-center gap-1">
                     <button
-                      onClick={() => onDeleteAccount(acc.id)}
-                      className="p-1.5 text-gray-400 hover:text-[#FF3D00] hover:bg-[#FF3D00]/10 rounded-xl transition cursor-pointer"
+                      onClick={() => handleOpenEdit(acc)}
+                      className="p-1.5 text-gray-600 hover:text-[#121212] hover:bg-gray-100 rounded-xl transition cursor-pointer"
                     >
-                      <Trash2 className="w-3.5 h-3.5" />
+                      <Edit2 className="w-3.5 h-3.5" />
                     </button>
-                  )}
-                </div>
+                    {accounts.length > 1 && (
+                      <button
+                        onClick={() => onDeleteAccount(acc.id)}
+                        className="p-1.5 text-gray-400 hover:text-[#FF3D00] hover:bg-[#FF3D00]/10 rounded-xl transition cursor-pointer"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </button>
+                    )}
+                  </div>
+                )}
               </div>
 
               {/* Balance Details */}

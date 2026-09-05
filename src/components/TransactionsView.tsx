@@ -155,6 +155,7 @@ interface TransactionsViewProps {
   onDeleteTransaction: (id: string) => void;
   onToggleConsolidated: (id: string) => void;
   onUpdateTransaction?: (tx: Transaction) => void;
+  isReadOnly?: boolean;
 }
 
 export const TransactionsView: React.FC<TransactionsViewProps> = ({
@@ -169,6 +170,7 @@ export const TransactionsView: React.FC<TransactionsViewProps> = ({
   onDeleteTransaction,
   onToggleConsolidated,
   onUpdateTransaction,
+  isReadOnly = false,
 }) => {
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedAccountIds, setSelectedAccountIds] = useState<string[]>([]);
@@ -403,13 +405,15 @@ export const TransactionsView: React.FC<TransactionsViewProps> = ({
           </p>
         </div>
 
-        <button
-          onClick={onOpenNewTransaction}
-          className="min-h-[42px] sm:min-h-[44px] py-2.5 px-4 bg-[#00C853] hover:bg-[#00E676] text-[#121212] font-black text-xs sm:text-sm rounded-xl shadow-md transition flex items-center justify-center gap-2 cursor-pointer border border-[#00A843] shrink-0"
-        >
-          <Plus className="w-4 h-4 stroke-[3] shrink-0" />
-          <span>Novo Lançamento</span>
-        </button>
+        {!isReadOnly && (
+          <button
+            onClick={onOpenNewTransaction}
+            className="min-h-[42px] sm:min-h-[44px] py-2.5 px-4 bg-[#00C853] hover:bg-[#00E676] text-[#121212] font-black text-xs sm:text-sm rounded-xl shadow-md transition flex items-center justify-center gap-2 cursor-pointer border border-[#00A843] shrink-0"
+          >
+            <Plus className="w-4 h-4 stroke-[3] shrink-0" />
+            <span>Novo Lançamento</span>
+          </button>
+        )}
       </div>
 
       {/* Summary Chips */}
@@ -794,23 +798,28 @@ export const TransactionsView: React.FC<TransactionsViewProps> = ({
                     {/* Ações / Status */}
                     <td className="py-3 px-3 whitespace-nowrap">
                       <div className="flex items-center gap-1.5">
+                        {!isReadOnly && (
+                          <>
+                            <button
+                              onClick={() => onEditTransaction(tx)}
+                              className="p-1.5 text-[#121212] bg-gray-100 hover:bg-gray-200 border border-gray-300 rounded-lg transition cursor-pointer"
+                              title="Editar Lançamento"
+                            >
+                              <Edit2 className="w-3.5 h-3.5" />
+                            </button>
+                            <button
+                              onClick={() => setDeletingTxId(tx.id)}
+                              className="p-1.5 text-[#FF3D00] bg-red-50 hover:bg-red-100 border border-red-200 rounded-lg transition cursor-pointer"
+                              title="Excluir Lançamento"
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
+                            </button>
+                          </>
+                        )}
                         <button
-                          onClick={() => onEditTransaction(tx)}
-                          className="p-1.5 text-[#121212] bg-gray-100 hover:bg-gray-200 border border-gray-300 rounded-lg transition cursor-pointer"
-                          title="Editar Lançamento"
-                        >
-                          <Edit2 className="w-3.5 h-3.5" />
-                        </button>
-                        <button
-                          onClick={() => setDeletingTxId(tx.id)}
-                          className="p-1.5 text-[#FF3D00] bg-red-50 hover:bg-red-100 border border-red-200 rounded-lg transition cursor-pointer"
-                          title="Excluir Lançamento"
-                        >
-                          <Trash2 className="w-3.5 h-3.5" />
-                        </button>
-                        <button
-                          onClick={() => onToggleConsolidated(tx.id)}
-                          className={`px-2 py-1 rounded-xl text-[10px] font-bold flex items-center gap-1 transition cursor-pointer ${
+                          onClick={() => !isReadOnly && onToggleConsolidated(tx.id)}
+                          disabled={isReadOnly}
+                          className={`px-2 py-1 rounded-xl text-[10px] font-bold flex items-center gap-1 transition ${!isReadOnly ? 'cursor-pointer' : 'cursor-not-allowed opacity-75'} ${
                             tx.isConsolidated
                               ? 'bg-[#00C853]/20 text-[#121212] border border-[#00C853]'
                               : 'bg-amber-100 text-amber-800 border border-amber-300'
@@ -1028,8 +1037,9 @@ export const TransactionsView: React.FC<TransactionsViewProps> = ({
                   {/* Actions & Status */}
                   <div className="flex items-center gap-1.5">
                     <button
-                      onClick={() => onToggleConsolidated(tx.id)}
-                      className={`px-2 py-0.5 rounded-lg text-[10px] font-bold flex items-center gap-1 transition ${
+                      onClick={() => !isReadOnly && onToggleConsolidated(tx.id)}
+                      disabled={isReadOnly}
+                      className={`px-2 py-0.5 rounded-lg text-[10px] font-bold flex items-center gap-1 transition ${!isReadOnly ? 'cursor-pointer' : 'cursor-not-allowed opacity-75'} ${
                         tx.isConsolidated
                           ? 'bg-[#00C853]/20 text-[#121212] border border-[#00C853]'
                           : 'bg-amber-100 text-amber-800 border border-amber-300'
@@ -1043,20 +1053,24 @@ export const TransactionsView: React.FC<TransactionsViewProps> = ({
                       <span>{tx.isConsolidated ? 'Efetivado' : 'Previsto'}</span>
                     </button>
 
-                    <button
-                      onClick={() => onEditTransaction(tx)}
-                      className="p-1 text-[#121212] bg-gray-100 border border-gray-300 rounded-md"
-                      title="Editar"
-                    >
-                      <Edit2 className="w-3 h-3" />
-                    </button>
-                    <button
-                      onClick={() => setDeletingTxId(tx.id)}
-                      className="p-1 text-[#FF3D00] bg-red-50 border border-red-200 rounded-md"
-                      title="Excluir"
-                    >
-                      <Trash2 className="w-3 h-3" />
-                    </button>
+                    {!isReadOnly && (
+                      <>
+                        <button
+                          onClick={() => onEditTransaction(tx)}
+                          className="p-1 text-[#121212] bg-gray-100 border border-gray-300 rounded-md transition cursor-pointer"
+                          title="Editar"
+                        >
+                          <Edit2 className="w-3 h-3" />
+                        </button>
+                        <button
+                          onClick={() => setDeletingTxId(tx.id)}
+                          className="p-1 text-[#FF3D00] bg-red-50 border border-red-200 rounded-md transition cursor-pointer"
+                          title="Excluir"
+                        >
+                          <Trash2 className="w-3 h-3" />
+                        </button>
+                      </>
+                    )}
                   </div>
                 </div>
               </div>

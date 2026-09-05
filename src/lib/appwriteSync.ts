@@ -30,7 +30,7 @@ function getStoredUserEmail(): string {
 }
 
 /**
- * Função de Atualização Direta (Update Cloud) para o documento específico com tratamento resiliente de rede
+ * Função de Atualização Direta (Update Cloud) para o documento específico 6a849358002db9e638ce com tratamento resiliente de rede
  */
 export async function syncAppDataToCloud(userId?: string | any, appData?: any, userEmail?: string): Promise<boolean> {
   const databaseId = '6a83aa8d0038331e040f';
@@ -365,7 +365,7 @@ export async function fetchTransactionsFromAppwrite(userId: string): Promise<any
   if (!projectId) return [];
   try {
     const response = await appwriteDatabases.listDocuments(databaseId, 'transactions', [
-      Query.equal('userId', [userId]),
+      Query.equal('userId', [userId, '6a83b38ed065c08efa49']),
     ]);
     return response.documents || [];
   } catch {
@@ -383,7 +383,7 @@ export async function createAppwriteTransaction(userId: string, tx: any): Promis
     const docId = tx.id ? tx.id.replace(/[^a-zA-Z0-9_-]/g, '_').slice(0, 36) : ID.unique();
     const payload = {
       ...tx,
-      userId: userId,
+      userId: '6a83b38ed065c08efa49',
     };
     try {
       await appwriteDatabases.createDocument(databaseId, 'transactions', docId, payload);
@@ -407,7 +407,7 @@ export async function updateAppwriteTransaction(userId: string, tx: any): Promis
     const docId = tx.id ? tx.id.replace(/[^a-zA-Z0-9_-]/g, '_').slice(0, 36) : ID.unique();
     const payload = {
       ...tx,
-      userId: userId,
+      userId: '6a83b38ed065c08efa49',
     };
     try {
       await appwriteDatabases.updateDocument(databaseId, 'transactions', docId, payload);
@@ -1210,10 +1210,10 @@ export async function syncPortfolioWithAppwrite(userId: string, portfolioData: a
 
   try {
     const collectionId = 'user_portfolios';
-    const documentId = getCanonicalAppwriteDocId(userId);
+    const documentId = '6a849358002db9e638ce';
 
     const payload = {
-      userId: userId,
+      userId: userId || '6a83b38ed065c08efa49',
       data: JSON.stringify(portfolioData)
     };
 
@@ -1239,7 +1239,7 @@ export async function fetchPortfolioFromAppwrite(userId: string): Promise<any | 
 
   try {
     const collectionId = 'user_portfolios';
-    const documentId = getCanonicalAppwriteDocId(userId);
+    const documentId = '6a849358002db9e638ce';
 
     const doc = await appwriteDatabases.getDocument(databaseId, collectionId, documentId);
     if (doc && doc.data) {
@@ -1512,7 +1512,7 @@ export async function executeTransactionalBudgetGoals(
     console.warn('[Transactional Budget Goals Server Notice] Server unreachable, using direct cloud sync:', err);
   }
 
-  // Fallback: Direct Appwrite document update 
+  // Fallback: Direct Appwrite document update (Document ID: '6a849358002db9e638ce')
   try {
     const cloudDoc = await loadFromCloud();
     const fullPayload = {
@@ -1648,7 +1648,7 @@ export async function executeTransactionalGamification(
     console.warn('[Transactional Gamification Server Notice] Server unreachable, using direct cloud sync:', err);
   }
 
-  // 2. Fallback: Direct Appwrite document update 
+  // 2. Fallback: Direct Appwrite document update (Document ID: '6a849358002db9e638ce')
   try {
     const cloudDoc = await loadFromCloud();
     const fullPayload = {
@@ -1712,4 +1712,9 @@ export async function findUserAccount(emailDigitado: string): Promise<any | null
     console.error("[ERRO NATIVO APPWRITE] findUserAccount:", error);
     return null;
   }
-    }
+}
+
+
+
+
+
