@@ -327,17 +327,27 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
             const shared = StorageService.getSharedBudget(effectiveId, user);
             const emailDoDono = shared.ownerEmail || effectiveId;
             const isReadOnly = StorageService.isCurrentUserReadOnly(user);
-            return !isReadOnly ? (
-              <button
-                onClick={onOpenNewTransaction}
-                className="py-1.5 px-3 bg-[#00C853] hover:bg-[#00E676] text-[#121212] font-bold text-xs rounded-xl shadow-sm transition flex items-center justify-center gap-1.5 cursor-pointer border border-[#00A843] w-auto shrink-0"
-              >
-                <Plus className="w-3.5 h-3.5 text-[#121212] stroke-[3] shrink-0" />
-                <span>Novo Lançamento</span>
-              </button>
-            ) : (
-              <div style={{ padding: '12px', backgroundColor: '#fff3cd', color: '#856404', borderRadius: '8px', textAlign: 'center', fontSize: '13px', fontWeight: 'bold', border: '1px solid #ffeeba', marginTop: '10px' }}>
-                🔒 MODO LEITURA: Você está visualizando o orçamento de {emailDoDono}. Edições estão desabilitadas.
+            return (
+              <div className="flex flex-col items-end gap-2">
+                <button
+                  onClick={() => {
+                    if (isReadOnly) {
+                      alert('Ação bloqueada: Você possui apenas permissão de LEITURA neste orçamento.');
+                      return;
+                    }
+                    onOpenNewTransaction();
+                  }}
+                  disabled={isReadOnly}
+                  className={`py-1.5 px-3 bg-[#00C853] text-[#121212] font-bold text-xs rounded-xl shadow-sm transition flex items-center justify-center gap-1.5 border border-[#00A843] w-auto shrink-0 ${isReadOnly ? 'opacity-50 cursor-not-allowed' : 'hover:bg-[#00E676] cursor-pointer'}`}
+                >
+                  <Plus className="w-3.5 h-3.5 text-[#121212] stroke-[3] shrink-0" />
+                  <span>Novo Lançamento</span>
+                </button>
+                {isReadOnly && (
+                  <div className="text-[11px] text-[#856404] bg-[#fff3cd] border border-[#ffeeba] px-3 py-1 rounded-xl font-bold">
+                    🔒 MODO LEITURA: Orçamento de {emailDoDono} (Apenas Visualização)
+                  </div>
+                )}
               </div>
             );
           })()}

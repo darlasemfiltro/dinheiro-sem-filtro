@@ -297,6 +297,7 @@ interface PortfolioViewProps {
   investmentTransactions?: any[];
   onSaveInvestmentTransaction?: (item: any) => Promise<any> | void;
   onDeleteInvestmentTransaction?: (id: string) => Promise<any> | void;
+  isReadOnly?: boolean;
 }
 
 export const PortfolioView: React.FC<PortfolioViewProps> = ({
@@ -307,7 +308,15 @@ export const PortfolioView: React.FC<PortfolioViewProps> = ({
   investmentTransactions,
   onSaveInvestmentTransaction,
   onDeleteInvestmentTransaction,
+  isReadOnly = false,
 }) => {
+  const checkReadOnly = () => {
+    if (isReadOnly) {
+      alert('Ação bloqueada: Você possui apenas permissão de LEITURA neste orçamento.');
+      return true;
+    }
+    return false;
+  };
   const [activeSubTab, setActiveSubTab] = useState<PortfolioSubTab>(initialSubTab);
   const isPrivacyActive = usePrivacyMode();
   const showValues = !isPrivacyActive;

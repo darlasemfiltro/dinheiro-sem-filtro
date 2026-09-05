@@ -1794,6 +1794,7 @@ export default function App() {
             onMoveSubcategory={handleMoveSubcategory}
             onRestoreDefaultCategories={handleRestoreDefaultCategories}
             userId={effectiveBudgetId}
+            isReadOnly={isReadOnly}
           />
         )}
 
@@ -1804,6 +1805,7 @@ export default function App() {
             onUpdateGoalProgress={handleUpdateGoalProgress}
             onDeleteGoal={handleDeleteGoal}
             userId={effectiveBudgetId}
+            isReadOnly={isReadOnly}
           />
         )}
 
@@ -1849,6 +1851,7 @@ export default function App() {
                 investmentTransactions={investmentTransactions}
                 onSaveInvestmentTransaction={saveInvestmentTransaction}
                 onDeleteInvestmentTransaction={deleteInvestmentTransaction}
+                isReadOnly={isReadOnly}
                 onDataChanged={async () => {
                   await persistAllData(accounts, transactions, investmentTransactions);
                 }}

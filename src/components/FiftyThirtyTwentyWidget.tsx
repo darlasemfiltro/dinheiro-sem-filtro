@@ -42,6 +42,7 @@ interface FiftyThirtyTwentyWidgetProps {
   userId?: string;
   onEditTransaction?: (transaction: Transaction) => void;
   onUpdateSingleTransaction?: (transaction: Transaction) => void;
+  isReadOnly?: boolean;
 }
 
 export const FiftyThirtyTwentyWidget: React.FC<FiftyThirtyTwentyWidgetProps> = ({
@@ -53,8 +54,11 @@ export const FiftyThirtyTwentyWidget: React.FC<FiftyThirtyTwentyWidgetProps> = (
   userId,
   onEditTransaction,
   onUpdateSingleTransaction,
+  isReadOnly: propsIsReadOnly,
 }) => {
   const effectiveUserId = userId || StorageService.getCurrentUser()?.id || 'default';
+  const currentUser = StorageService.getCurrentUser();
+  const isReadOnly = propsIsReadOnly !== undefined ? propsIsReadOnly : (currentUser ? StorageService.isCurrentUserReadOnly(currentUser) : false);
 
   // Period filter state
   const [period, setPeriod] = useState<PerformancePeriod>('monthly');
@@ -615,6 +619,10 @@ export const FiftyThirtyTwentyWidget: React.FC<FiftyThirtyTwentyWidgetProps> = (
   };
 
   const handleSaveTargets = () => {
+    if (isReadOnly) {
+      alert('Ação bloqueada: Você possui apenas permissão de LEITURA neste orçamento.');
+      return;
+    }
     handleSaveBudgetGoals(tempTargets);
   };
 
@@ -700,10 +708,15 @@ export const FiftyThirtyTwentyWidget: React.FC<FiftyThirtyTwentyWidgetProps> = (
           <button
             type="button"
             onClick={() => {
+              if (isReadOnly) {
+                alert('Ação bloqueada: Você possui apenas permissão de LEITURA neste orçamento.');
+                return;
+              }
               setTempTargets({ ...targets });
               setIsEditModalOpen(true);
             }}
-            className="min-h-[42px] sm:min-h-[44px] py-2 px-3.5 bg-[#D4AF37] hover:bg-[#c4a02e] text-[#121212] font-black text-xs sm:text-sm rounded-xl transition cursor-pointer flex items-center justify-center gap-2 shadow-md shrink-0 border border-amber-600/30"
+            disabled={isReadOnly}
+            className={`min-h-[42px] sm:min-h-[44px] py-2 px-3.5 bg-[#D4AF37] text-[#121212] font-black text-xs sm:text-sm rounded-xl transition flex items-center justify-center gap-2 shadow-md shrink-0 border border-amber-600/30 ${isReadOnly ? 'opacity-50 cursor-not-allowed' : 'hover:bg-[#c4a02e] cursor-pointer'}`}
           >
             <Edit3 className="w-4 h-4 shrink-0" />
             <span>Editar Meta %</span>

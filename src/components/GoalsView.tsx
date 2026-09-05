@@ -17,6 +17,7 @@ interface GoalsViewProps {
   onUpdateGoalProgress: (goalId: string, addedAmount: number) => void;
   onDeleteGoal: (id: string) => void;
   userId: string;
+  isReadOnly?: boolean;
 }
 
 function isoToBrDate(isoStr: string): string {
@@ -58,7 +59,15 @@ export const GoalsView: React.FC<GoalsViewProps> = ({
   onUpdateGoalProgress,
   onDeleteGoal,
   userId,
+  isReadOnly = false,
 }) => {
+  const checkReadOnly = () => {
+    if (isReadOnly) {
+      alert('Ação bloqueada: Você possui apenas permissão de LEITURA neste orçamento.');
+      return true;
+    }
+    return false;
+  };
   const [isGoalModalOpen, setIsGoalModalOpen] = useState(false);
   const [editingGoal, setEditingGoal] = useState<Goal | null>(null);
 

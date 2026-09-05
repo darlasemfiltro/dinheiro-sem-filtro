@@ -297,6 +297,7 @@ interface CategoriesViewProps {
   onMoveSubcategory?: (sub: Subcategory, sourceCat: Category, targetCat: Category) => void;
   onRestoreDefaultCategories?: () => void;
   userId: string;
+  isReadOnly?: boolean;
 }
 
 export const CategoriesView: React.FC<CategoriesViewProps> = ({
@@ -312,7 +313,15 @@ export const CategoriesView: React.FC<CategoriesViewProps> = ({
   onMoveSubcategory: propsOnMoveSubcategory,
   onRestoreDefaultCategories: propsOnRestoreDefaultCategories,
   userId,
+  isReadOnly = false,
 }) => {
+  const checkReadOnly = () => {
+    if (isReadOnly) {
+      alert('Ação bloqueada: Você possui apenas permissão de LEITURA neste orçamento.');
+      return true;
+    }
+    return false;
+  };
   const [mainView, setMainView] = useState<'categories' | 'family'>('categories');
   const [ruleFilter, setRuleFilter] = useState<'all' | RuleGroup>('all');
 
