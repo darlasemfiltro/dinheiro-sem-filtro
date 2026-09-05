@@ -3768,6 +3768,23 @@ export class StorageService {
     const emailDoDono = String(budget.ownerEmail || effectiveBudgetId).toLowerCase().trim();
     if (meuEmailLido === emailDoDono) return false;
 
+    // 0. Check notificacoes for recent 'permissao_alterada' matching this user (Highest Priority)
+    try {
+      const notifsStr = localStorage.getItem(STORAGE_KEYS.NOTIFICATIONS) || '[]';
+      const notifs: BudgetNotification[] = JSON.parse(notifsStr);
+      const userNotifs = notifs.filter(n => 
+        String(n.userId || '').toLowerCase().trim() === meuEmailLido && 
+        n.tipo === 'permissao_alterada'
+      );
+      if (userNotifs.length > 0) {
+        userNotifs.sort((a, b) => new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime());
+        const latest = userNotifs[0];
+        const msg = String(latest.mensagem || '').toLowerCase();
+        if (msg.includes('leitura') || msg.includes('read')) return true;
+        if (msg.includes('edicao') || msg.includes('edição') || msg.includes('edit')) return false;
+      }
+    } catch(e) {}
+
     // 1. Check member_permissions from user financials in localStorage FIRST (Authoritative owner setting)
     try {
       const allFinStr = localStorage.getItem('DINHEIRO_SEM_FILTRO_USER_FINANCIALS') || '{}';
@@ -3819,6 +3836,23 @@ export class StorageService {
     const meuEmailLido = String(user?.email || '').toLowerCase().trim();
     const ownerNormalized = String(ownerEmail).toLowerCase().trim();
     if (ownerNormalized === meuEmailLido) return 'edit';
+
+    // 0. Check notificacoes for recent 'permissao_alterada' matching this user (Highest Priority)
+    try {
+      const notifsStr = localStorage.getItem(STORAGE_KEYS.NOTIFICATIONS) || '[]';
+      const notifs: BudgetNotification[] = JSON.parse(notifsStr);
+      const userNotifs = notifs.filter(n => 
+        String(n.userId || '').toLowerCase().trim() === meuEmailLido && 
+        n.tipo === 'permissao_alterada'
+      );
+      if (userNotifs.length > 0) {
+        userNotifs.sort((a, b) => new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime());
+        const latest = userNotifs[0];
+        const msg = String(latest.mensagem || '').toLowerCase();
+        if (msg.includes('leitura') || msg.includes('read')) return 'read';
+        if (msg.includes('edicao') || msg.includes('edição') || msg.includes('edit')) return 'edit';
+      }
+    } catch(e) {}
 
     // 1. Check member_permissions from user financials in localStorage FIRST (Authoritative)
     try {
