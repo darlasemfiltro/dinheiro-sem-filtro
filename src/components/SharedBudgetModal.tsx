@@ -555,6 +555,24 @@ export const SharedBudgetModal: React.FC<SharedBudgetModalProps> = ({
           await StorageService.updateCollaboratorAccessMode(sharedBudget.budgetId, emailMembro, accessMode);
         }
 
+        // 4.5. Criar registro na coleção notificacoes para sincronização em tempo real do membro
+        try {
+          const notifPayload = {
+            userId: emailMembro.toLowerCase().trim(),
+            budgetId: StorageService.getEffectiveBudgetId(currentUser),
+            mensagem: `Seu nível de acesso foi alterado para: ${permissaoEscolhida}`,
+            tipo: 'permissao_alterada',
+            createdAt: new Date().toISOString()
+          };
+          await databases.createDocument(config.databaseId, 'notificacoes', 'unique()', notifPayload, [
+            Permission.read(Role.users()),
+            Permission.update(Role.users()),
+            Permission.delete(Role.users())
+          ]);
+        } catch (err) {
+          console.warn("Could not create document in 'notificacoes':", err);
+        }
+
         // 5. Broadcast final (Para recarregar o Realtime entre abas)
         window.dispatchEvent(new CustomEvent('shared_budgets_updated'));
         window.dispatchEvent(new Event('remote_data_updated'));
@@ -584,6 +602,33 @@ export const SharedBudgetModal: React.FC<SharedBudgetModalProps> = ({
       setAvailableBudgets(StorageService.getAvailableBudgetsForUser(user));
       setNotifications(StorageService.getPendingNotifications(user.email, curBudget.code));
       setSentNotifications(StorageService.getSentPendingNotifications(user.email));
+
+      // Consulta a coleção notificacoes para verificar alterações recentes de permissão
+      (async () => {
+        try {
+          const config = getAppwriteConfig();
+          const listaNotifs = await databases.listDocuments(config.databaseId, 'notificacoes');
+          const userEmailLower = user.email.toLowerCase().trim();
+          const minhasAlteracoes = listaNotifs.documents.filter((d: any) => 
+            String(d.userId || '').toLowerCase().trim() === userEmailLower &&
+            d.tipo === 'permissao_alterada'
+          );
+          if (minhasAlteracoes.length > 0) {
+            minhasAlteracoes.sort((a: any, b: any) => new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime());
+            const maisRecente = minhasAlteracoes[0];
+            const msg = String(maisRecente.mensagem || '').toLowerCase();
+            let novaPerm = 'edicao';
+            if (msg.includes('leitura') || msg.includes('read')) {
+              novaPerm = 'leitura';
+            } else if (msg.includes('edicao') || msg.includes('edição') || msg.includes('edit')) {
+              novaPerm = 'edicao';
+            }
+            setPermissoesLocais(prev => ({ ...prev, [userEmailLower]: novaPerm }));
+          }
+        } catch (err) {
+          console.warn("Could not fetch notifications collection for permissions sync:", err);
+        }
+      })();
 
       StorageService.syncNotificationsWithServer(user.email, curBudget.code).then((notifs) => {
         setNotifications(notifs);
