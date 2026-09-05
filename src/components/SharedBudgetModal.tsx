@@ -127,8 +127,47 @@ export const SharedBudgetModal: React.FC<SharedBudgetModalProps> = ({
             if (d.$id !== docId && d.userId !== currentUser.email) {
               try {
                 const dJson = typeof d.data === 'string' ? JSON.parse(d.data || '{}') : (d.data || {});
-                const allowed = Array.isArray(dJson.allowed_users) ? dJson.allowed_users : (Array.isArray(dJson.shared_members) ? dJson.shared_members : []);
                 const ownerEmail = d.userId || d.email || d.$id;
+                
+                // Check server-side member_permissions for current user
+                const memberPerms = dJson.member_permissions || {};
+                const serverPerm = memberPerms[currentUser.email.toLowerCase().trim()];
+                if (serverPerm) {
+                  const accessMode = (serverPerm === 'edicao' || serverPerm === 'edit' || serverPerm === 'edição') ? 'edit' : 'read';
+                  
+                  // Update localStorage SHARED_BUDGETS if different
+                  try {
+                    const allSharedStr = localStorage.getItem('darla_shared_budgets') || '[]';
+                    const allShared = JSON.parse(allSharedStr);
+                    let foundB = allShared.find((b: any) => b.ownerEmail?.toLowerCase() === ownerEmail.toLowerCase() || b.budgetId === ownerEmail);
+                    if (foundB) {
+                      let col = foundB.collaborators?.find((c: any) => c.email.toLowerCase() === currentUser.email.toLowerCase());
+                      if (col && col.accessMode !== accessMode) {
+                        col.accessMode = accessMode;
+                        localStorage.setItem('darla_shared_budgets', JSON.stringify(allShared));
+                        window.dispatchEvent(new CustomEvent('shared_budgets_updated'));
+                      }
+                    }
+                  } catch (err) {}
+
+                  // Update localStorage DINHEIRO_SEM_FILTRO_USER_FINANCIALS if different
+                  try {
+                    const allFinStr = localStorage.getItem('DINHEIRO_SEM_FILTRO_USER_FINANCIALS') || '{}';
+                    const allFin = JSON.parse(allFinStr);
+                    if (allFin[ownerEmail] && allFin[ownerEmail].data) {
+                      const fData = typeof allFin[ownerEmail].data === 'string' ? JSON.parse(allFin[ownerEmail].data) : allFin[ownerEmail].data;
+                      fData.member_permissions = fData.member_permissions || {};
+                      if (fData.member_permissions[currentUser.email.toLowerCase().trim()] !== serverPerm) {
+                        fData.member_permissions[currentUser.email.toLowerCase().trim()] = serverPerm;
+                        allFin[ownerEmail].data = JSON.stringify(fData);
+                        localStorage.setItem('DINHEIRO_SEM_FILTRO_USER_FINANCIALS', JSON.stringify(allFin));
+                        window.dispatchEvent(new Event('remote_data_updated'));
+                      }
+                    }
+                  } catch (err) {}
+                }
+
+                const allowed = Array.isArray(dJson.allowed_users) ? dJson.allowed_users : (Array.isArray(dJson.shared_members) ? dJson.shared_members : []);
                 if (allowed.some((m: string) => m && m.toLowerCase().trim() === currentUser.email.toLowerCase().trim())) {
                   if (ownerEmail && !sharedWithMeList.includes(ownerEmail)) {
                     sharedWithMeList.push(ownerEmail);

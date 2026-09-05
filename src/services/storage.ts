@@ -3739,6 +3739,12 @@ export class StorageService {
     }
     localStorage.setItem(STORAGE_KEYS.SHARED_BUDGETS, JSON.stringify(allBudgets));
 
+    // Clear local budget transaction/cache for the affected user to force immediate lock/unlock
+    try {
+      localStorage.removeItem(`darla_transactions_${budgetId}`);
+      localStorage.removeItem(`darla_transactions_${emailToUpdate}`);
+    } catch(e) {}
+
     try {
       const res = await fetch('/api/shared-budgets', {
         method: 'POST',
@@ -3753,6 +3759,8 @@ export class StorageService {
 
     if (typeof window !== 'undefined') {
       window.dispatchEvent(new CustomEvent('shared_budgets_updated'));
+      window.dispatchEvent(new Event('remote_data_updated'));
+      window.dispatchEvent(new CustomEvent('financial_data_mutated'));
     }
 
     return budget;
