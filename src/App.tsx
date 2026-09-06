@@ -159,6 +159,8 @@ export default function App() {
   const [editingTx, setEditingTx] = useState<Transaction | null>(null);
 
   // Sync Progress State & Notifications
+  type SyncStatus = 'idle' | 'syncing' | 'synced' | 'error';
+  const [syncStatus, setSyncStatus] = useState<SyncStatus>('synced');
   const [syncProgress, setSyncProgress] = useState<number | null>(null);
   const [syncMessage, setSyncMessage] = useState<string>('');
   const [pendingSyncCount, setPendingSyncCount] = useState(0);
@@ -649,6 +651,7 @@ export default function App() {
     // 2. Synchronize with remote server with clean progress tracking
     try {
       if (forceRemote) {
+        setSyncStatus('syncing');
         setPendingSyncCount(1);
         setSyncProgress(25);
         setSyncMessage('Sincronizando contas e transações...');
@@ -673,27 +676,20 @@ export default function App() {
       }
 
       if (forceRemote) {
-        // Show completion toast
         setSyncProgress(100);
         setSyncMessage('Tudo atualizado!');
-        setSyncToastMessage('Todas as atualizações foram concluídas!');
-
-        setTimeout(() => {
-          setSyncToastMessage(prev => (prev === 'Todas as atualizações foram concluídas!' ? null : prev));
-        }, 3500);
-
-        setTimeout(() => {
-          setSyncProgress(null);
-        }, 1000);
       }
     } catch (e) {
       console.warn('[refreshData sync remote error]', e);
-      if (forceRemote) setSyncProgress(null);
+      if (forceRemote) {
+        setSyncStatus('error');
+        setSyncProgress(null);
+      }
     } finally {
       isSyncingRemoteRef.current = false;
       if (forceRemote) setPendingSyncCount(0);
 
-      // Re-read storage once remote sync finishes to capture any inbound changes
+      // Re-read storage once remote sync finishes to capture any inbound changes & update state setters
       const newAccounts = StorageService.getAccounts(budgetId);
       const newCategories = StorageService.getCategories(budgetId);
       const newTransactions = StorageService.getTransactions(budgetId);
@@ -705,6 +701,20 @@ export default function App() {
       setTransactions(prev => JSON.stringify(prev) === JSON.stringify(newTransactions) ? prev : newTransactions);
       setGoals(prev => JSON.stringify(prev) === JSON.stringify(newGoals) ? prev : newGoals);
       setFamilyMembers(prev => JSON.stringify(prev) === JSON.stringify(newFamily) ? prev : newFamily);
+
+      if (forceRemote) {
+        // Guarantee synced status and success toast only AFTER data is fully loaded and setters executed
+        setSyncStatus('synced');
+        setSyncToastMessage('SINCRONIZAÇÃO CONCLUÍDA');
+
+        setTimeout(() => {
+          setSyncToastMessage(prev => (prev === 'SINCRONIZAÇÃO CONCLUÍDA' ? null : prev));
+        }, 3800);
+
+        setTimeout(() => {
+          setSyncProgress(null);
+        }, 1000);
+      }
 
       if (hasPendingRefreshRef.current) {
         hasPendingRefreshRef.current = false;
@@ -1850,6 +1860,7 @@ export default function App() {
       <Header
         user={currentUser}
         syncProgress={syncProgress}
+        syncStatus={syncStatus}
         currentYear={currentYear}
         currentMonth={currentMonth}
         onYearMonthChange={(year, month) => {

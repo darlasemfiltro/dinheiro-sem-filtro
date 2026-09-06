@@ -14,6 +14,7 @@ import { persistCurrentStateToAppwrite } from '../lib/appwriteSync';
 interface HeaderProps {
   user: User;
   syncProgress: number | null;
+  syncStatus?: 'idle' | 'syncing' | 'synced' | 'error';
   currentYear: number;
   currentMonth: number;
   onYearMonthChange: (year: number, month: number) => void;
@@ -36,6 +37,7 @@ interface HeaderProps {
 export const Header: React.FC<HeaderProps> = ({
   user,
   syncProgress,
+  syncStatus: propSyncStatus,
   currentYear,
   currentMonth,
   onYearMonthChange,
@@ -66,6 +68,7 @@ export const Header: React.FC<HeaderProps> = ({
   );
   
   const [syncStatus, setSyncStatus] = useState<'syncing' | 'synced' | 'error'>('synced');
+  const activeSyncStatus = propSyncStatus !== undefined ? propSyncStatus : syncStatus;
   const [imageError, setImageError] = useState(false);
   const userInitial = user.name ? user.name.trim().charAt(0).toUpperCase() : 'U';
 
@@ -337,26 +340,26 @@ export const Header: React.FC<HeaderProps> = ({
               id="test-appwrite-sync-btn"
               title="Status de Sincronização Nuvem"
             >
-              {syncStatus === 'syncing' && (
+              {activeSyncStatus === 'syncing' && (
                 <div className="relative flex items-center justify-center">
                   <Cloud className="w-4 h-4 text-amber-400 shrink-0 stroke-[2.5]" />
                   <RefreshCw className="w-2.5 h-2.5 text-amber-400 absolute animate-spin" />
                 </div>
               )}
-              {syncStatus === 'synced' && (
+              {activeSyncStatus === 'synced' && (
                 <div className="relative flex items-center justify-center">
                   <Cloud className="w-4 h-4 text-emerald-400 shrink-0 stroke-[2.5]" />
                   <Check className="w-2.5 h-2.5 text-white bg-emerald-600 rounded-full absolute -bottom-1 -right-1 stroke-[3]" />
                 </div>
               )}
-              {syncStatus === 'error' && (
+              {activeSyncStatus === 'error' && (
                 <div className="relative flex items-center justify-center">
                   <Cloud className="w-4 h-4 text-rose-500 shrink-0 stroke-[2.5]" />
                   <X className="w-2.5 h-2.5 text-white bg-rose-600 rounded-full absolute -bottom-1 -right-1 stroke-[3]" />
                 </div>
               )}
               <span className="hidden sm:inline">
-                {syncStatus === 'syncing' ? 'Sincronizando...' : syncStatus === 'synced' ? 'Nuvem Sincronizada' : 'Erro na Nuvem'}
+                {activeSyncStatus === 'syncing' ? 'Sincronizando...' : activeSyncStatus === 'synced' ? 'Nuvem Sincronizada' : 'Erro na Nuvem'}
               </span>
             </button>
 
