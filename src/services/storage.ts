@@ -2517,7 +2517,19 @@ export class StorageService {
     // 2. Hard Re-creation (Delete + Create) in Appwrite Database user_financials
     const config = getAppwriteConfig();
     if (config.projectId && config.projectId !== 'default-placeholder') {
-      const targetDocId = budgetId || getCanonicalAppwriteDocId(budgetId);
+      let userEmail = '';
+      try {
+        const storedUser = localStorage.getItem('darla_current_user') || localStorage.getItem('currentUser');
+        if (storedUser) {
+          const parsedUser = JSON.parse(storedUser);
+          userEmail = parsedUser.email || '';
+        }
+      } catch {}
+
+      const effectiveEmail = userEmail || (budgetId && budgetId.includes('@') ? budgetId : '');
+      const targetDocId = effectiveEmail ? getCanonicalAppwriteDocId(effectiveEmail) : (budgetId || 'user_default');
+      const userIdValue = effectiveEmail ? effectiveEmail.toLowerCase().trim() : targetDocId;
+
       const freshUserData = {
         transactions: [],
         accounts: freshAccounts,
@@ -2536,20 +2548,22 @@ export class StorageService {
         updatedAt: new Date().toISOString()
       };
 
-      try {
-        await appwriteDatabases.deleteDocument(config.databaseId, 'user_financials', targetDocId);
-      } catch (e) {
-        console.warn('Documento anterior já não existia ou falhou ao deletar por ID:', e);
-      }
-
-      // Delete ALL documents matching targetDocId or email
+      // Delete ALL documents matching targetDocId, budgetId, or email
       try {
         const list = await appwriteDatabases.listDocuments(config.databaseId, 'user_financials');
         for (const doc of list.documents) {
-          if (doc.$id === targetDocId || doc.userId === targetDocId || (doc.userId && targetDocId && doc.userId.toLowerCase() === targetDocId.toLowerCase())) {
+          const docUserId = (doc.userId || '').toLowerCase();
+          const docId = doc.$id;
+          if (
+            docId === targetDocId ||
+            docId === budgetId ||
+            docUserId === userIdValue ||
+            (effectiveEmail && docUserId.includes(effectiveEmail.toLowerCase())) ||
+            (budgetId && docUserId.includes(budgetId.toLowerCase()))
+          ) {
             try {
-              await appwriteDatabases.deleteDocument(config.databaseId, 'user_financials', doc.$id);
-              console.log('[DEDO-DURO] Deletado documento obsoleto no Appwrite:', doc.$id);
+              await appwriteDatabases.deleteDocument(config.databaseId, 'user_financials', docId);
+              console.log('[DEDO-DURO] Deletado documento obsoleto no Appwrite:', docId);
             } catch (delErr) {
               console.warn('Falha ao deletar doc obsoleto:', delErr);
             }
@@ -2565,10 +2579,11 @@ export class StorageService {
           'user_financials',
           targetDocId,
           {
-            userId: targetDocId,
+            userId: userIdValue,
             data: JSON.stringify(freshUserData)
           }
         );
+        console.log('[DEDO-DURO SUCESSO] Documento recriado no Appwrite com userId:', userIdValue, 'e ID:', targetDocId);
       } catch (createErr) {
         // Fallback to unique id if targetDocId already taken or invalid
         await appwriteDatabases.createDocument(
@@ -2576,7 +2591,7 @@ export class StorageService {
           'user_financials',
           ID.unique(),
           {
-            userId: targetDocId,
+            userId: userIdValue,
             data: JSON.stringify(freshUserData)
           }
         );
