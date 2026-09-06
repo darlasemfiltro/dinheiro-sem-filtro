@@ -1221,6 +1221,18 @@ export default function App() {
         return;
       }
 
+      // Limpeza imediata local para refletir zero na UI instantaneamente
+      const authKeys = ['cookie', 'session', 'appwrite'];
+      Object.keys(localStorage).forEach(key => {
+        if (!authKeys.some(k => key.toLowerCase().includes(k))) {
+          localStorage.removeItem(key);
+        }
+      });
+
+      setTransactions([]);
+      setAccounts([{ id: 'default', userId: targetDocId, name: 'Conta Principal', initialBalance: 0, color: '#4F46E5', icon: 'Wallet', type: 'checking' }]);
+      setGoals([]);
+
       try {
         console.log('[DEDO-DURO] Iniciando reset de fábrica completo para Doc ID:', targetDocId);
 
@@ -1228,18 +1240,6 @@ export default function App() {
         await StorageService.resetUserBudgetToZero(targetDocId);
 
         console.log('[DEDO-DURO SUCESSO] Documento recriado no Appwrite com estado zerado:', targetDocId);
-
-        // 3. Faxina total do LocalStorage (exceto token de login)
-        const authKeys = ['cookie', 'session', 'appwrite'];
-        Object.keys(localStorage).forEach(key => {
-          if (!authKeys.some(k => key.toLowerCase().includes(k))) {
-            localStorage.removeItem(key);
-          }
-        });
-
-        setTransactions([]);
-        setAccounts([{ id: 'default', userId: targetDocId, name: 'Conta Principal', initialBalance: 0, color: '#4F46E5', icon: 'Wallet', type: 'checking' }]);
-        setGoals([]);
 
         alert('[DEDO-DURO SUCESSO]\nOrçamento zerado e reiniciado como novo usuário com sucesso no Appwrite!');
 
