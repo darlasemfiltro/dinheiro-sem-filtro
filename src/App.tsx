@@ -762,6 +762,7 @@ export default function App() {
     let mounted = true;
 
     const checkSession = async () => {
+      setIsAuthLoading(true);
       try {
         const searchParams = new URLSearchParams(window.location.search);
         const hashParams = new URLSearchParams(window.location.hash.split('?')[1] || '');
@@ -792,16 +793,36 @@ export default function App() {
           return;
         }
 
-        const session = await account.get().catch(() => null);
+        // Retry logic for OAuth redirect session settling
+        let session = null;
+        for (let attempt = 0; attempt < 3; attempt++) {
+          try {
+            session = await account.get();
+            if (session && session.email) break;
+          } catch (err) {
+            if (attempt < 2) {
+              await new Promise((res) => setTimeout(res, 400));
+            }
+          }
+        }
+
         if (session && session.email) {
           const userObj: User = {
             id: session.$id || session.id || 'usr_' + Date.now(),
             name: session.name || session.email.split('@')[0],
             email: session.email,
-            authProvider: 'email',
+            authProvider: 'google',
             createdAt: session.$createdAt || new Date().toISOString(),
           };
           StorageService.setCurrentUser(userObj);
+          localStorage.removeItem('darla_explicit_logout');
+          localStorage.removeItem('darla_oauth_pending');
+
+          // Clean up URL parameters after successful OAuth callback
+          if (window.location.search || window.location.hash) {
+            window.history.replaceState({}, document.title, window.location.pathname);
+          }
+
           if (mounted) {
             setCurrentUser(userObj);
             setIsAuthLoading(false);
@@ -824,7 +845,8 @@ export default function App() {
           setCurrentUser(null);
           setIsAuthLoading(false);
         }
-      } catch (error) {
+      } catch (error: any) {
+        console.log('Sem sessão ativa:', error?.message);
         if (mounted) {
           setCurrentUser(null);
           setIsAuthLoading(false);

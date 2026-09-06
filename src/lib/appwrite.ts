@@ -211,9 +211,8 @@ export async function appwriteCompleteOAuthSession(userId: string, secret: strin
 
 export async function appwriteGoogleOAuthLogin(successUrl?: string, failureUrl?: string) {
   const cfg = getAppwriteConfig();
-  const currentOrigin = typeof window !== 'undefined' ? window.location.origin + window.location.pathname : 'https://dinheiro-sem-filtro.darla-semfiltro-9c5.workers.dev/';
-  const targetSuccess = successUrl || currentOrigin;
-  const targetFailure = failureUrl || currentOrigin;
+  const targetSuccess = successUrl || `${window.location.origin}/`;
+  const targetFailure = failureUrl || `${window.location.origin}/?auth_error=true`;
   try {
     if (cfg.projectId && cfg.projectId !== 'default-placeholder') {
       appwriteAccount.createOAuth2Session(
@@ -224,10 +223,9 @@ export async function appwriteGoogleOAuthLogin(successUrl?: string, failureUrl?:
       return;
     }
   } catch (err) {
-    console.warn('[Appwrite OAuth redirect error, falling back to Google Auth simulation]', err);
+    console.warn('[Appwrite OAuth redirect error]', err);
   }
 
-  // Fallback direct native Google OAuth popup/redirect simulation or account picker
   throw new Error('Google OAuth requires active Appwrite project configuration.');
 }
 
