@@ -1240,7 +1240,7 @@ export default function App() {
 
       // Dedo-duro de identificação
       if (!targetDocId) {
-        alert('[DEDO-DURO ERRO] ID do orçamento/documento é NULO ou INDEFINIDO! Verifique a sessão.');
+        console.error('[Reset Error] ID do orçamento/documento é NULO ou INDEFINIDO! Verifique a sessão.');
         sessionStorage.removeItem('IS_PERFORMING_RESET');
         (window as any).__KILL_AUTOSAVE__ = false;
         (window as any).__IS_RESETTING__ = false;
@@ -1248,10 +1248,10 @@ export default function App() {
       }
 
       try {
-        // Dedo-duro do Appwrite: Re-criação física (Delete + Create) no servidor
+        // Re-criação física (Delete + Create) no servidor
         await StorageService.resetUserBudgetToZero(targetDocId);
 
-        console.log('[DEDO-DURO SUCESSO] Documento re-criado no Appwrite para Doc ID:', targetDocId);
+        console.log('[Reset Success] Documento re-criado no Appwrite para Doc ID:', targetDocId);
 
         // 3. Faxina total do LocalStorage (exceto token de login)
         const authKeys = ['cookie', 'session', 'appwrite'];
@@ -1265,9 +1265,7 @@ export default function App() {
         setAccounts([{ id: 'default', userId: targetDocId, name: 'Conta Principal', initialBalance: 0, color: '#4F46E5', icon: 'Wallet', type: 'checking' }]);
         setGoals([]);
 
-        alert(`[DEDO-DURO] RE-CRIADO COM SUCESSO NO SERVIDOR (DELETE + CREATE)!\nDoc ID: ${targetDocId}\nO app será reiniciado zerado.`);
-
-        // Hard redirect para a raiz limpa
+        // Hard redirect para a raiz limpa sem popups
         window.location.replace('/');
 
       } catch (err: any) {
@@ -1276,8 +1274,7 @@ export default function App() {
         (window as any).__IS_RESETTING__ = false;
         isResettingRef.current = false;
         isSyncingRemoteRef.current = false;
-        alert(`[DEDO-DURO DETECTOU ERRO NO APPWRITE]\n\nCódigo: ${err.code || 'Desconhecido'}\nMensagem: ${err.message || err.type || JSON.stringify(err)}\nDocID tentado: ${targetDocId}`);
-        console.error('[Reset Dedo-Duro Error]', err);
+        console.error('[Reset Error in Appwrite]', err);
       }
     }
   };
