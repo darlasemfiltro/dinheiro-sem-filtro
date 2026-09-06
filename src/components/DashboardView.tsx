@@ -411,24 +411,29 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
       {/* Rolling Balance & Month Status Cards Grid */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4" id="dashboard-summary-cards">
         {/* Card 1: Saldo Anterior (Rolling Balance) */}
-        <div className="bg-white border border-gray-200 rounded-2xl p-4 shadow-xs hover:shadow-md transition relative overflow-hidden flex flex-col justify-between">
-          <div className="flex items-center justify-between">
-            <span className="text-[11px] font-bold text-gray-500 uppercase tracking-wider">
-              Saldo Anterior (Rollover)
-            </span>
-            <div className="p-1.5 bg-gray-100 rounded-xl text-gray-700">
-              <ArrowRightLeft className="w-4 h-4" />
+        {(() => {
+          const displayRollover = (!transactions || transactions.length === 0) ? 0 : summary.startingBalance;
+          return (
+            <div className="bg-white border border-gray-200 rounded-2xl p-4 shadow-xs hover:shadow-md transition relative overflow-hidden flex flex-col justify-between">
+              <div className="flex items-center justify-between">
+                <span className="text-[11px] font-bold text-gray-500 uppercase tracking-wider">
+                  Saldo Anterior (Rollover)
+                </span>
+                <div className="p-1.5 bg-gray-100 rounded-xl text-gray-700">
+                  <ArrowRightLeft className="w-4 h-4" />
+                </div>
+              </div>
+              <div className="mt-2">
+                <span className="text-lg font-extrabold text-[#121212] font-serif">
+                  {formatCurrency(displayRollover)}
+                </span>
+                <p className="text-[10px] text-gray-500 mt-0.5">
+                  Acumulado dos meses anteriores
+                </p>
+              </div>
             </div>
-          </div>
-          <div className="mt-2">
-            <span className="text-lg font-extrabold text-[#121212] font-serif">
-              {formatCurrency(summary.startingBalance)}
-            </span>
-            <p className="text-[10px] text-gray-500 mt-0.5">
-              Acumulado dos meses anteriores
-            </p>
-          </div>
-        </div>
+          );
+        })()}
 
         {/* Card 2: Entradas (Receitas) - ALWAYS GREEN */}
         <div className="bg-emerald-50/40 border border-emerald-200 rounded-2xl p-4 shadow-xs hover:shadow-md transition flex flex-col justify-between">
