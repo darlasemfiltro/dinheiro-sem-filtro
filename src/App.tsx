@@ -174,6 +174,7 @@ export default function App() {
 
   const isSyncingRemoteRef = useRef(false);
   const hasPendingRefreshRef = useRef(false);
+  const lastSyncTimeRef = useRef(0);
 
   useEffect(() => {
     const handleSyncError = (e: any) => {
@@ -641,11 +642,13 @@ export default function App() {
     setGoals(prev => JSON.stringify(prev) === JSON.stringify(localGoals) ? prev : localGoals);
     setFamilyMembers(prev => JSON.stringify(prev) === JSON.stringify(localFamily) ? prev : localFamily);
 
-    if (isSyncingRemoteRef.current) {
-      hasPendingRefreshRef.current = true;
+    const now = Date.now();
+    if (isSyncingRemoteRef.current || (forceRemote && now - lastSyncTimeRef.current < 2000)) {
+      if (forceRemote) hasPendingRefreshRef.current = true;
       return;
     }
     isSyncingRemoteRef.current = true;
+    lastSyncTimeRef.current = now;
     hasPendingRefreshRef.current = false;
 
     // 2. Synchronize with remote server with clean progress tracking
@@ -1192,22 +1195,28 @@ export default function App() {
         });
         return;
       }
-      await StorageService.resetUserBudgetToZero(effectiveBudgetId);
+      isSyncingRemoteRef.current = true;
+      try {
+        await StorageService.resetUserBudgetToZero(effectiveBudgetId);
 
-      setTransactions([]);
-      setAccounts([{ id: 'default', name: 'Conta Principal', balance: 0, initialBalance: 0, type: 'checking' }]);
-      setGoals([]);
+        setTransactions([]);
+        setAccounts([{ id: 'default', name: 'Conta Principal', balance: 0, initialBalance: 0, type: 'checking' }]);
+        setGoals([]);
 
-      setGlobalAlert({
-        isOpen: true,
-        title: 'Reset de Fábrica Concluído',
-        message: 'Orçamento e ativos zerados com sucesso! O aplicativo será recarregado no estado inicial.',
-        type: 'success',
-        confirmText: 'OK',
-        onConfirm: () => {
-          window.location.reload();
-        }
-      });
+        setGlobalAlert({
+          isOpen: true,
+          title: 'Reset de Fábrica Concluído',
+          message: 'Orçamento, saldos e ativos zerados com sucesso! O aplicativo será recarregado no estado inicial.',
+          type: 'success',
+          confirmText: 'OK',
+          onConfirm: () => {
+            window.location.reload();
+          }
+        });
+      } catch (e) {
+        isSyncingRemoteRef.current = false;
+        console.error('[Reset Error]', e);
+      }
     }
   };
 
