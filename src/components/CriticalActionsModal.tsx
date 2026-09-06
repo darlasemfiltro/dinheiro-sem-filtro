@@ -1,6 +1,8 @@
 import React, { useState } from 'react';
 import { ShieldAlert, Trash2, UserX, AlertTriangle, X, Mail, Headphones } from 'lucide-react';
 import { User } from '../types';
+import { appwriteDatabases as databases } from '../lib/appwrite';
+import { StorageService } from '../services/storage';
 
 interface CriticalActionsModalProps {
   isOpen: boolean;
@@ -8,6 +10,12 @@ interface CriticalActionsModalProps {
   user: User;
   onResetBudgetToZero: () => void;
   onDeleteAccount: () => void;
+  activeBudgetId?: string;
+  currentBudgetId?: string;
+  setTransactions?: (txs: any[]) => void;
+  setAccounts?: (accs: any[]) => void;
+  setRollover?: (val: number) => void;
+  setTotalBalance?: (val: number) => void;
 }
 
 export const CriticalActionsModal: React.FC<CriticalActionsModalProps> = ({
@@ -16,16 +24,89 @@ export const CriticalActionsModal: React.FC<CriticalActionsModalProps> = ({
   user,
   onResetBudgetToZero,
   onDeleteAccount,
+  activeBudgetId,
+  currentBudgetId,
+  setTransactions,
+  setAccounts,
+  setRollover,
+  setTotalBalance,
 }) => {
   const [confirmingAction, setConfirmingAction] = useState<'reset' | 'delete' | null>(null);
   const [deleteConfirmationText, setDeleteConfirmationText] = useState('');
 
   if (!isOpen) return null;
 
-  const handleConfirmReset = () => {
-    onResetBudgetToZero();
-    setConfirmingAction(null);
-    onClose();
+  const handleExecuteZerarOrcamento = async () => {
+    (window as any).__PAUSE_ALL_SYNCS__ = true;
+
+    const resolvedBudgetId = activeBudgetId || currentBudgetId || StorageService.getEffectiveBudgetId(user);
+    const targetDocId = resolvedBudgetId || user?.budgetId || user?.id || user?.$id;
+    if (!targetDocId) {
+      alert('[DEDO-DURO ERRO] ID do Orçamento está VAZIO ou INDEFINIDO! Operação cancelada.');
+      (window as any).__PAUSE_ALL_SYNCS__ = false;
+      return;
+    }
+
+    const DATABASE_ID = '6a83aa8d0038331e040f';
+    const COLLECTION_ID = 'user_financials';
+
+    const factoryResetData = {
+      transactions: [],
+      accounts: [{ id: 'default', name: 'Conta Principal', balance: 0, initialBalance: 0, type: 'checking' }],
+      investments: [],
+      assets: [],
+      goals: [],
+      rollover: 0,
+      accumulatedRollover: 0,
+      previousBalance: 0,
+      previousMonthBalance: 0,
+      initialBalance: 0,
+      carryOver: 0,
+      monthlyRollovers: {},
+      monthlyClosings: [],
+      updatedAt: new Date().toISOString()
+    };
+
+    try {
+      // Gravação atômica direta no documento
+      const response = await databases.updateDocument(
+        DATABASE_ID,
+        COLLECTION_ID,
+        targetDocId,
+        {
+          ...factoryResetData,
+          data: JSON.stringify(factoryResetData)
+        }
+      );
+
+      console.log('[DEDO-DURO] Retorno do Appwrite:', response);
+
+      // Expurga cache local
+      Object.keys(localStorage).forEach((key) => {
+        if (!key.toLowerCase().includes('cookie') && !key.toLowerCase().includes('session') && !key.toLowerCase().includes('appwrite')) {
+          localStorage.removeItem(key);
+        }
+      });
+
+      // Alerta dedo-duro de sucesso com dados reais
+      alert(`[DEDO-DURO SUCESSO]\nDocumento Zerado: ${targetDocId}\nStatus: Persistido no Appwrite.`);
+
+      if (setTransactions) setTransactions([]);
+      if (setAccounts) setAccounts([{ id: 'default', name: 'Conta Principal', balance: 0, initialBalance: 0 }]);
+      if (setRollover) setRollover(0);
+      if (setTotalBalance) setTotalBalance(0);
+
+      onResetBudgetToZero();
+      setConfirmingAction(null);
+      onClose();
+
+      window.location.replace(window.location.origin + window.location.pathname);
+    } catch (error: any) {
+      (window as any).__PAUSE_ALL_SYNCS__ = false;
+      // Dedo-duro captura e exibe a falha exata da API
+      alert(`[DEDO-DURO DETECTOU ERRO]\n\nFalha ao gravar no Appwrite!\nCódigo: ${error.code || 'Desconhecido'}\nMensagem: ${error.message || JSON.stringify(error)}\nDoc ID tentado: ${targetDocId}`);
+      console.error('[DEDO-DURO EXCEÇÃO]:', error);
+    }
   };
 
   const handleConfirmDelete = () => {
@@ -147,7 +228,7 @@ export const CriticalActionsModal: React.FC<CriticalActionsModalProps> = ({
                 </button>
                 <button
                   type="button"
-                  onClick={handleConfirmReset}
+                  onClick={handleExecuteZerarOrcamento}
                   className="w-full sm:flex-1 py-2.5 bg-amber-600 hover:bg-amber-700 text-white text-xs font-black rounded-xl shadow-md transition flex items-center justify-center gap-1.5 cursor-pointer"
                 >
                   <Trash2 className="w-4 h-4" />

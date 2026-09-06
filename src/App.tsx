@@ -549,6 +549,10 @@ export default function App() {
       unsubscribe = client.subscribe(
         `databases.${DATABASE_ID}.collections.${COLLECTION_ID}.documents.${DOCUMENT_ID}`,
         (response: any) => {
+          if ((window as any).__PAUSE_ALL_SYNCS__) {
+            console.warn('[DEDO-DURO] Sincronização bloqueada: Reset em andamento.');
+            return;
+          }
           if (response.payload?.data) {
             const remote = typeof response.payload.data === 'string' ? JSON.parse(response.payload.data) : response.payload.data;
             const user = StorageService.getCurrentUser();
@@ -1579,6 +1583,10 @@ export default function App() {
 
   // Account Handlers
   const persistAllData = async (updatedAccounts?: any[], updatedTransactions?: any[], updatedInvestmentTransactions?: any[]) => {
+    if ((window as any).__PAUSE_ALL_SYNCS__) {
+      console.warn('[DEDO-DURO] Sincronização bloqueada: Reset em andamento.');
+      return false;
+    }
     if (!isInitialLoadComplete.current) {
       console.warn('[Autosave Blocked] Initial load not complete yet.');
       return false;
@@ -2189,6 +2197,9 @@ export default function App() {
           isOpen={isCriticalActionsModalOpen}
           onClose={() => setIsCriticalActionsModalOpen(false)}
           user={currentUser}
+          activeBudgetId={effectiveBudgetId}
+          setTransactions={setTransactions}
+          setAccounts={setAccounts}
           onResetBudgetToZero={handleResetBudgetToZero}
           onDeleteAccount={handleDeleteUserAccount}
         />
