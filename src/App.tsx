@@ -1193,11 +1193,21 @@ export default function App() {
         return;
       }
       await StorageService.resetUserBudgetToZero(effectiveBudgetId);
+
+      setTransactions([]);
+      const resetAccounts = accounts.map(acc => ({
+        ...acc,
+        balance: 0,
+        initialBalance: 0
+      }));
+      setAccounts(resetAccounts);
+      setGoals([]);
+
       refreshData(currentUser);
       setGlobalAlert({
         isOpen: true,
         title: 'Orçamento Zerado',
-        message: 'Todos os lançamentos foram removidos com sucesso e sincronizados com a nuvem.',
+        message: 'Orçamento zerado com sucesso! Saldo reiniciado em R$ 0,00.',
         type: 'success'
       });
     }

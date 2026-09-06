@@ -2477,43 +2477,47 @@ export class StorageService {
     const filteredTx = allTx.filter((t) => t.userId !== budgetId);
     localStorage.setItem(STORAGE_KEYS.TRANSACTIONS, JSON.stringify(filteredTx));
 
-    // 2. Set initial balance of all user accounts to 0
+    // 2. Set initial balance and balance of all user accounts to 0
     const allAccStr = localStorage.getItem(STORAGE_KEYS.ACCOUNTS) || '[]';
     const allAcc: Account[] = JSON.parse(allAccStr);
     const updatedAcc = allAcc.map((a) => {
-      if (a.userId === budgetId) {
-        return { ...a, initialBalance: 0.0 };
+      if (!budgetId || a.userId === budgetId || !a.userId) {
+        return { ...a, initialBalance: 0.0, balance: 0.0 };
       }
       return a;
     });
     localStorage.setItem(STORAGE_KEYS.ACCOUNTS, JSON.stringify(updatedAcc));
 
-    // 3. Update Appwrite Database user_financials document immediately
+    // 3. Update Appwrite Database user_financials document immediately with await
     try {
       const config = getAppwriteConfig();
       if (config.projectId && config.projectId !== 'default-placeholder') {
         const docId = getCanonicalAppwriteDocId(budgetId);
+        const cleanPayload = {
+          transactions: [],
+          accounts: updatedAcc,
+          initialBalance: 0,
+          goals: [],
+          updatedAt: new Date().toISOString()
+        };
+
         try {
-          const doc = await appwriteDatabases.getDocument(config.databaseId, 'user_financials', docId);
-          let rawData = doc.data;
-          let parsedData = typeof rawData === 'string' ? JSON.parse(rawData || '{}') : (rawData || {});
-          parsedData.transactions = [];
-          parsedData.initialBalance = 0;
           await appwriteDatabases.updateDocument(config.databaseId, 'user_financials', docId, {
             userId: docId,
-            data: JSON.stringify(parsedData)
+            data: JSON.stringify(cleanPayload)
           });
         } catch (e) {
           const list = await appwriteDatabases.listDocuments(config.databaseId, 'user_financials');
           const found = list.documents.find(d => d.userId === budgetId || d.$id === docId);
           if (found) {
-            let rawData = found.data;
-            let parsedData = typeof rawData === 'string' ? JSON.parse(rawData || '{}') : (rawData || {});
-            parsedData.transactions = [];
-            parsedData.initialBalance = 0;
             await appwriteDatabases.updateDocument(config.databaseId, 'user_financials', found.$id, {
               userId: found.userId || found.$id,
-              data: JSON.stringify(parsedData)
+              data: JSON.stringify(cleanPayload)
+            });
+          } else {
+            await appwriteDatabases.createDocument(config.databaseId, 'user_financials', docId, {
+              userId: docId,
+              data: JSON.stringify(cleanPayload)
             });
           }
         }
