@@ -468,6 +468,19 @@ export default function App() {
     // Carga inicial isolada para evitar flickering e race conditions
     async function fetchInitialData() {
       try {
+        if (sessionStorage.getItem('IS_PERFORMING_RESET') === 'true') {
+          sessionStorage.removeItem('IS_PERFORMING_RESET');
+          setTransactions([]);
+          const user = StorageService.getCurrentUser();
+          const effectiveBudgetId = user ? StorageService.getEffectiveBudgetId(user) : 'default';
+          const freshAccs = [{ id: 'default', userId: effectiveBudgetId, name: 'Conta Principal', initialBalance: 0, color: '#4F46E5', icon: 'Wallet', type: 'checking' as const }];
+          setAccounts(freshAccs);
+          StorageService.setTransactions([]);
+          StorageService.setAccounts(freshAccs);
+          isInitialLoadComplete.current = true;
+          return;
+        }
+
         const user = StorageService.getCurrentUser();
         const effectiveBudgetId = user ? StorageService.getEffectiveBudgetId(user) : 'default';
         const remoteData = await loadFromCloud(effectiveBudgetId, user?.email);
@@ -1215,7 +1228,8 @@ export default function App() {
         return;
       }
       
-      // 1. Mata o autosave no mesmo milissegundo
+      // 1. Marca flag permanente de reset no sessionStorage para sobreviver ao reload
+      sessionStorage.setItem('IS_PERFORMING_RESET', 'true');
       (window as any).__KILL_AUTOSAVE__ = true;
       (window as any).__IS_RESETTING__ = true;
       isResettingRef.current = true;
@@ -1227,36 +1241,37 @@ export default function App() {
       // Dedo-duro de identificação
       if (!targetDocId) {
         alert('[DEDO-DURO ERRO] ID do orçamento/documento é NULO ou INDEFINIDO! Verifique a sessão.');
+        sessionStorage.removeItem('IS_PERFORMING_RESET');
         (window as any).__KILL_AUTOSAVE__ = false;
         (window as any).__IS_RESETTING__ = false;
         return;
       }
 
       try {
-        // Dedo-duro do Appwrite: tenta gravar e aguarda confirmação real do servidor via StorageService
+        // Dedo-duro do Appwrite: Re-criação física (Delete + Create) no servidor
         await StorageService.resetUserBudgetToZero(targetDocId);
 
-        console.log('[DEDO-DURO SUCESSO] Resposta confirmada do Appwrite para Doc ID:', targetDocId);
+        console.log('[DEDO-DURO SUCESSO] Documento re-criado no Appwrite para Doc ID:', targetDocId);
 
         // 3. Faxina total do LocalStorage (exceto token de login)
+        const authKeys = ['cookie', 'session', 'appwrite'];
         Object.keys(localStorage).forEach(key => {
-          const isAuth = ['cookie', 'session', 'appwrite', 'user_session'].some(k => key.toLowerCase().includes(k));
-          if (!isAuth) {
+          if (!authKeys.some(k => key.toLowerCase().includes(k))) {
             localStorage.removeItem(key);
           }
         });
 
         setTransactions([]);
-        setAccounts([{ id: 'default', name: 'Conta Principal', balance: 0, initialBalance: 0, type: 'checking' }]);
+        setAccounts([{ id: 'default', userId: targetDocId, name: 'Conta Principal', initialBalance: 0, color: '#4F46E5', icon: 'Wallet', type: 'checking' }]);
         setGoals([]);
 
-        alert(`[DEDO-DURO] GRAVADO COM SUCESSO NO SERVIDOR!\nDoc ID: ${targetDocId}\nO app será reiniciado zerado.`);
+        alert(`[DEDO-DURO] RE-CRIADO COM SUCESSO NO SERVIDOR (DELETE + CREATE)!\nDoc ID: ${targetDocId}\nO app será reiniciado zerado.`);
 
-        // Hard reload direto na URL raiz limpa
-        window.location.replace(window.location.origin + window.location.pathname);
+        // Hard redirect para a raiz limpa
+        window.location.replace('/');
 
       } catch (err: any) {
-        // O DEDO-DURO REAL: expõe na tela o motivo exato de o Appwrite ter recusado
+        sessionStorage.removeItem('IS_PERFORMING_RESET');
         (window as any).__KILL_AUTOSAVE__ = false;
         (window as any).__IS_RESETTING__ = false;
         isResettingRef.current = false;

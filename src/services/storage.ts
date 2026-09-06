@@ -33,7 +33,7 @@ import {
   findUserAccount,
 } from '../lib/appwriteSync';
 import { getAppwriteUser, appwriteDatabases, getAppwriteConfig, appwritePasswordReset, account } from '../lib/appwrite';
-import { Permission, Role, ID } from 'appwrite';
+import { Permission, Role, ID, Query } from 'appwrite';
 
 export interface InMemoryFinancialStore {
   currentUser: User | null;
@@ -2504,10 +2504,10 @@ export class StorageService {
     localStorage.setItem(STORAGE_KEYS.ACCOUNTS, JSON.stringify(freshAccounts));
     localStorage.setItem(STORAGE_KEYS.GOALS, JSON.stringify([]));
 
-    // 2. Update Appwrite Database user_financials document with strict throwing on error
+    // 2. Hard Re-creation (Delete + Create) in Appwrite Database user_financials
     const config = getAppwriteConfig();
     if (config.projectId && config.projectId !== 'default-placeholder') {
-      const activeDocId = budgetId || getCanonicalAppwriteDocId(budgetId);
+      const targetDocId = budgetId || getCanonicalAppwriteDocId(budgetId);
       const freshUserData = {
         transactions: [],
         accounts: freshAccounts,
@@ -2526,25 +2526,32 @@ export class StorageService {
       };
 
       try {
-        await appwriteDatabases.updateDocument(config.databaseId, 'user_financials', activeDocId, {
-          userId: activeDocId,
-          data: JSON.stringify(freshUserData)
-        });
-      } catch (e: any) {
-        const list = await appwriteDatabases.listDocuments(config.databaseId, 'user_financials');
-        const found = list.documents.find(d => d.userId === budgetId || d.$id === activeDocId);
-        if (found) {
-          await appwriteDatabases.updateDocument(config.databaseId, 'user_financials', found.$id, {
-            userId: found.userId || found.$id,
-            data: JSON.stringify(freshUserData)
-          });
-        } else {
-          await appwriteDatabases.createDocument(config.databaseId, 'user_financials', activeDocId, {
-            userId: activeDocId,
-            data: JSON.stringify(freshUserData)
-          });
-        }
+        await appwriteDatabases.deleteDocument(config.databaseId, 'user_financials', targetDocId);
+      } catch (e) {
+        console.warn('Documento anterior já não existia ou falhou ao deletar:', e);
       }
+
+      // Also clean up any list documents matching userId
+      try {
+        const list = await appwriteDatabases.listDocuments(config.databaseId, 'user_financials', [
+          Query.equal('userId', [targetDocId])
+        ]);
+        for (const doc of list.documents) {
+          if (doc.$id !== targetDocId) {
+            await appwriteDatabases.deleteDocument(config.databaseId, 'user_financials', doc.$id);
+          }
+        }
+      } catch (e) {}
+
+      await appwriteDatabases.createDocument(
+        config.databaseId,
+        'user_financials',
+        targetDocId,
+        {
+          userId: targetDocId,
+          data: JSON.stringify(freshUserData)
+        }
+      );
     }
 
     fetch('/api/data/reset', {
