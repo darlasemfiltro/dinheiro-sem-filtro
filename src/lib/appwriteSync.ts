@@ -235,6 +235,7 @@ export async function loadFromCloud(userId?: string, userEmail?: string): Promis
           parsed.accumulatedRollover = 0;
           parsed.previousBalance = 0;
           parsed.previousMonthBalance = 0;
+          parsed.initialBalance = 0;
           parsed.carryOver = 0;
           parsed.monthlyRollovers = {};
           if (parsed.accounts && Array.isArray(parsed.accounts)) {
@@ -243,9 +244,12 @@ export async function loadFromCloud(userId?: string, userEmail?: string): Promis
               balance: 0,
               initialBalance: 0
             }));
+          } else {
+            parsed.accounts = [{ id: 'default', name: 'Conta Principal', balance: 0, initialBalance: 0, type: 'checking' }];
           }
           try {
             localStorage.setItem('darla_transactions', JSON.stringify([]));
+            localStorage.setItem('darla_accounts', JSON.stringify(parsed.accounts));
           } catch {}
         }
 

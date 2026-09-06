@@ -1378,6 +1378,14 @@ export class StorageService {
       _inMemoryStore.transactions = Array.from(txMap.values());
       _inMemoryStore.goals = Array.from(goalMap.values());
 
+      if (!_inMemoryStore.transactions || _inMemoryStore.transactions.length === 0) {
+        _inMemoryStore.accounts = _inMemoryStore.accounts.map(a => ({
+          ...a,
+          balance: 0,
+          initialBalance: 0
+        }));
+      }
+
       // Save to localStorage immediately
       try {
         localStorage.setItem(STORAGE_KEYS.ACCOUNTS, JSON.stringify(_inMemoryStore.accounts));
@@ -2487,7 +2495,7 @@ export class StorageService {
     Object.keys(localStorage).forEach(key => {
       const lower = key.toLowerCase();
       if (
-        (lower.startsWith('dsf_') || lower.includes('rollover') || lower.includes('previous') || lower.includes('carry') || lower.includes('closing') || lower.includes('history')) &&
+        (lower.startsWith('dsf_') || lower.includes('rollover') || lower.includes('previous') || lower.includes('carry') || lower.includes('closing') || lower.includes('history') || lower.includes('balance') || lower.includes('initial')) &&
         !lower.includes('session') &&
         !lower.includes('cookie') &&
         !lower.includes('appwrite')
