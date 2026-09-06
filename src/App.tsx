@@ -1213,6 +1213,7 @@ export default function App() {
 
       // Dedo-duro de identificação
       if (!targetDocId) {
+        alert('[DEDO-DURO ERRO] ID do orçamento/documento é NULO ou INDEFINIDO! Verifique a sessão.');
         console.error('[Reset Error] ID do orçamento/documento é NULO ou INDEFINIDO! Verifique a sessão.');
         sessionStorage.removeItem('IS_PERFORMING_RESET');
         (window as any).__KILL_AUTOSAVE__ = false;
@@ -1221,10 +1222,12 @@ export default function App() {
       }
 
       try {
-        // Re-criação física (Delete + Create) no servidor
+        console.log('[DEDO-DURO] Iniciando reset de fábrica completo para Doc ID:', targetDocId);
+
+        // Re-criação física (Delete + Create) no servidor como novo usuário
         await StorageService.resetUserBudgetToZero(targetDocId);
 
-        console.log('[Reset Success] Documento re-criado no Appwrite para Doc ID:', targetDocId);
+        console.log('[DEDO-DURO SUCESSO] Documento recriado no Appwrite com estado zerado:', targetDocId);
 
         // 3. Faxina total do LocalStorage (exceto token de login)
         const authKeys = ['cookie', 'session', 'appwrite'];
@@ -1238,8 +1241,10 @@ export default function App() {
         setAccounts([{ id: 'default', userId: targetDocId, name: 'Conta Principal', initialBalance: 0, color: '#4F46E5', icon: 'Wallet', type: 'checking' }]);
         setGoals([]);
 
+        alert('[DEDO-DURO SUCESSO]\nOrçamento zerado e reiniciado como novo usuário com sucesso no Appwrite!');
+
         // Hard redirect para a raiz limpa sem popups
-        window.location.replace('/');
+        window.location.replace(window.location.origin + window.location.pathname);
 
       } catch (err: any) {
         sessionStorage.removeItem('IS_PERFORMING_RESET');
@@ -1247,7 +1252,8 @@ export default function App() {
         (window as any).__IS_RESETTING__ = false;
         isResettingRef.current = false;
         isSyncingRemoteRef.current = false;
-        console.error('[Reset Error in Appwrite]', err);
+        console.error('[DEDO-DURO ERRO EXCEÇÃO]:', err);
+        alert(`[DEDO-DURO DETECTOU ERRO]\n\nFalha ao zerar orçamento no Appwrite!\nCódigo: ${err.code || 'Desconhecido'}\nMensagem: ${err.message || JSON.stringify(err)}\nDoc ID: ${targetDocId}`);
       }
     }
   };
@@ -1265,11 +1271,19 @@ export default function App() {
       }
       realtimeSync.disconnect();
       try {
+        console.log('[DEDO-DURO] Iniciando exclusão de sessões de auth...');
         await account.deleteSessions();
       } catch (e) {
         console.warn('Sessões já invalidadas:', e);
       }
-      await StorageService.deleteUserAccount(currentUser.id);
+      try {
+        console.log('[DEDO-DURO] Iniciando remoção da conta do usuário:', currentUser.id);
+        await StorageService.deleteUserAccount(currentUser.id);
+        alert('[DEDO-DURO SUCESSO]\nConta e todos os dados foram excluídos com sucesso do servidor!');
+      } catch (delErr: any) {
+        console.error('[DEDO-DURO ERRO AO EXCLUIR CONTA]:', delErr);
+        alert(`[DEDO-DURO DETECTOU ERRO]\n\nFalha ao excluir conta no servidor!\nMensagem: ${delErr.message || JSON.stringify(delErr)}`);
+      }
       setCurrentUser(null);
       localStorage.clear();
       sessionStorage.clear();
