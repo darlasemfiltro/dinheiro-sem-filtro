@@ -1297,7 +1297,9 @@ export default function App() {
       await StorageService.deleteUserAccount(currentUser.id);
       setCurrentUser(null);
       localStorage.clear();
-      window.location.href = '/';
+      sessionStorage.clear();
+      alert('Sua conta e dados foram excluídos com sucesso.');
+      window.location.replace(window.location.origin);
     }
   };
 

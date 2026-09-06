@@ -18,6 +18,7 @@ export const CriticalActionsModal: React.FC<CriticalActionsModalProps> = ({
   onDeleteAccount,
 }) => {
   const [confirmingAction, setConfirmingAction] = useState<'reset' | 'delete' | null>(null);
+  const [deleteConfirmationText, setDeleteConfirmationText] = useState('');
 
   if (!isOpen) return null;
 
@@ -29,6 +30,7 @@ export const CriticalActionsModal: React.FC<CriticalActionsModalProps> = ({
 
   const handleConfirmDelete = () => {
     onDeleteAccount();
+    setDeleteConfirmationText('');
     setConfirmingAction(null);
     onClose();
   };
@@ -158,23 +160,43 @@ export const CriticalActionsModal: React.FC<CriticalActionsModalProps> = ({
             <div className="space-y-4 animate-in fade-in bg-red-50 p-4 rounded-2xl border-2 border-red-400">
               <div className="flex items-center gap-2 text-[#FF3D00] font-black text-xs sm:text-sm uppercase tracking-wider">
                 <AlertTriangle className="w-5 h-5 text-[#FF3D00] shrink-0 animate-bounce" />
-                <span>Confirmação de Segurança</span>
+                <span>Confirmação Dupla de Segurança</span>
               </div>
               <p className="text-xs text-red-950 leading-relaxed">
                 <strong>⚠️ ATENÇÃO EXTREMA:</strong> A exclusão da conta é <strong>permanente e não poderá ser desfeita</strong>. Seu cadastro ({user.email}), dados e configurações serão excluídos do sistema.
               </p>
+              <div className="space-y-1.5">
+                <label className="text-[11px] font-bold text-red-900 block">
+                  Digite <span className="bg-red-200 px-1 py-0.5 rounded font-mono font-black">EXCLUIR</span> para confirmar:
+                </label>
+                <input
+                  type="text"
+                  value={deleteConfirmationText}
+                  onChange={(e) => setDeleteConfirmationText(e.target.value)}
+                  placeholder="EXCLUIR"
+                  className="w-full px-3 py-2 bg-white border border-red-300 rounded-xl text-xs font-mono font-bold text-gray-900 focus:outline-none focus:ring-2 focus:ring-red-500"
+                />
+              </div>
               <div className="flex flex-col sm:flex-row items-center gap-2 pt-2">
                 <button
                   type="button"
-                  onClick={() => setConfirmingAction(null)}
+                  onClick={() => {
+                    setDeleteConfirmationText('');
+                    setConfirmingAction(null);
+                  }}
                   className="w-full sm:flex-1 py-2.5 bg-white border border-gray-300 text-gray-700 text-xs font-bold rounded-xl hover:bg-gray-100 transition cursor-pointer"
                 >
                   Cancelar
                 </button>
                 <button
                   type="button"
+                  disabled={deleteConfirmationText.trim().toUpperCase() !== 'EXCLUIR'}
                   onClick={handleConfirmDelete}
-                  className="w-full sm:flex-1 py-2.5 bg-[#FF3D00] hover:bg-red-700 text-white text-xs font-black rounded-xl shadow-md transition flex items-center justify-center gap-1.5 cursor-pointer"
+                  className={`w-full sm:flex-1 py-2.5 text-xs font-black rounded-xl shadow-md transition flex items-center justify-center gap-1.5 cursor-pointer ${
+                    deleteConfirmationText.trim().toUpperCase() === 'EXCLUIR'
+                      ? 'bg-[#FF3D00] hover:bg-red-700 text-white'
+                      : 'bg-gray-300 text-gray-500 cursor-not-allowed'
+                  }`}
                 >
                   <UserX className="w-4 h-4" />
                   Sim, Excluir Minha Conta
