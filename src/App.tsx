@@ -177,6 +177,7 @@ export default function App() {
   const isResettingRef = useRef(false);
   const hasPendingRefreshRef = useRef(false);
   const lastSyncTimeRef = useRef(0);
+  const isInitialLoadComplete = useRef(false);
 
   useEffect(() => {
     const handleSyncError = (e: any) => {
@@ -471,13 +472,20 @@ export default function App() {
         const effectiveBudgetId = user ? StorageService.getEffectiveBudgetId(user) : 'default';
         const remoteData = await loadFromCloud(effectiveBudgetId, user?.email);
         if (remoteData) {
-          if (remoteData.transactions && Array.isArray(remoteData.transactions) && remoteData.transactions.length > 0) {
+          if (remoteData.transactions && Array.isArray(remoteData.transactions)) {
             setTransactions(remoteData.transactions);
             StorageService.setTransactions(remoteData.transactions);
+          } else {
+            setTransactions([]);
+            StorageService.setTransactions([]);
           }
-          if (remoteData.accounts && Array.isArray(remoteData.accounts) && remoteData.accounts.length > 0) {
+          if (remoteData.accounts && Array.isArray(remoteData.accounts)) {
             setAccounts(remoteData.accounts);
             StorageService.setAccounts(remoteData.accounts);
+          } else {
+            const defaultAccs = [{ id: 'default', userId: effectiveBudgetId, name: 'Conta Principal', initialBalance: 0, color: '#4F46E5', icon: 'Wallet', type: 'checking' as const }];
+            setAccounts(defaultAccs);
+            StorageService.setAccounts(defaultAccs);
           }
           if (remoteData.budgets) {
             setBudgets(remoteData.budgets);
@@ -496,7 +504,7 @@ export default function App() {
           if (remoteData.investorPortfolio) {
             PortfolioStorageService.saveAssets(remoteData.investorPortfolio, bId);
           }
-          if (remoteData.investmentTransactions && Array.isArray(remoteData.investmentTransactions) && remoteData.investmentTransactions.length > 0) {
+          if (remoteData.investmentTransactions && Array.isArray(remoteData.investmentTransactions)) {
             const mergedInvTxs = mergeRemoteInvestmentTransactionsWithOptimistic(remoteData.investmentTransactions);
             setInvestmentTransactions(mergedInvTxs);
             (PortfolioStorageService as any).saveToAllAliasKeys('darla_portfolio_transactions', bId, mergedInvTxs);
@@ -518,6 +526,8 @@ export default function App() {
         if (!isNetworkError) {
           console.warn('[Initial Load Notice]', err?.message || err);
         }
+      } finally {
+        isInitialLoadComplete.current = true;
       }
     }
     fetchInitialData();
@@ -1577,6 +1587,15 @@ export default function App() {
 
   // Account Handlers
   const persistAllData = async (updatedAccounts?: any[], updatedTransactions?: any[], updatedInvestmentTransactions?: any[]) => {
+    if (!isInitialLoadComplete.current) {
+      console.warn('[Autosave Blocked] Initial load not complete yet.');
+      return false;
+    }
+    if ((window as any).__KILL_AUTOSAVE__ || (window as any).__IS_RESETTING__) {
+      console.warn('[Autosave Blocked] Reset in progress.');
+      return false;
+    }
+
     const accountsToPersist = updatedAccounts || accounts;
     const transactionsToPersist = updatedTransactions || transactions;
     

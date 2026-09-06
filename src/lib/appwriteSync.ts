@@ -227,17 +227,27 @@ export async function loadFromCloud(userId?: string, userEmail?: string): Promis
         const parsed = typeof doc.data === 'string' ? JSON.parse(doc.data) : doc.data;
         console.log('[Appwrite Load Success] Dados carregados da nuvem para usuário:', emailSanitizado || currentUserId);
         
-        // Safety check against zeroing out local transactions
-        try {
-          const localStoredTx = localStorage.getItem('darla_transactions');
-          if (localStoredTx) {
-            const parsedLocalTx = JSON.parse(localStoredTx);
-            if (Array.isArray(parsedLocalTx) && parsedLocalTx.length > 0 && (!parsed.transactions || parsed.transactions.length === 0)) {
-              console.log('[Appwrite Sync Safety] Cloud data had empty transactions while local has data. Preserving local data.');
-              parsed.transactions = parsedLocalTx;
-            }
+        // Sanitização estrita: se cloud data está zerado (transactions: [] ou vazio), força todos os rollovers e saldos anteriores para 0 e limpa cache local obsoleto
+        if (!parsed.transactions || !Array.isArray(parsed.transactions) || parsed.transactions.length === 0) {
+          console.log('[Appwrite Sanitization] Cloud data is empty/reset. Forcing rollover, previous balance, and carryOver to 0.');
+          parsed.transactions = [];
+          parsed.rollover = 0;
+          parsed.accumulatedRollover = 0;
+          parsed.previousBalance = 0;
+          parsed.previousMonthBalance = 0;
+          parsed.carryOver = 0;
+          parsed.monthlyRollovers = {};
+          if (parsed.accounts && Array.isArray(parsed.accounts)) {
+            parsed.accounts = parsed.accounts.map((acc: any) => ({
+              ...acc,
+              balance: 0,
+              initialBalance: 0
+            }));
           }
-        } catch {}
+          try {
+            localStorage.setItem('darla_transactions', JSON.stringify([]));
+          } catch {}
+        }
 
         try {
           localStorage.setItem('cached_app_data', JSON.stringify(parsed));
