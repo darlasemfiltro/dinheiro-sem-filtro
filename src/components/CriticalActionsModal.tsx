@@ -70,8 +70,15 @@ export const CriticalActionsModal: React.FC<CriticalActionsModalProps> = ({
         console.warn('Coleção de transações avulsas não encontrada ou já limpa:', err);
       }
 
-      // 2. Reset completo do documento de configuração / orçamento
-      const freshData = {
+      // 2. Obtém o documento atual para inspecionar o schema e chaves de vínculo
+      let currentDoc: any = {};
+      try {
+        currentDoc = await databases.getDocument(DATABASE_ID, BUDGET_COLLECTION_ID, targetDocId);
+      } catch (docErr) {
+        console.warn('Não foi possível buscar o documento atual, prosseguindo com dados padrão:', docErr);
+      }
+
+      const cleanState = {
         transactions: [],
         accounts: [{ id: 'default', name: 'Conta Principal', balance: 0, initialBalance: 0, type: 'checking' }],
         investments: [],
@@ -81,32 +88,39 @@ export const CriticalActionsModal: React.FC<CriticalActionsModalProps> = ({
         accumulatedRollover: 0,
         previousBalance: 0,
         previousMonthBalance: 0,
+        initialBalance: 0,
         carryOver: 0,
         monthlyRollovers: {},
         monthlyClosings: [],
         updatedAt: new Date().toISOString()
       };
 
+      const updatePayload: Record<string, any> = {
+        data: JSON.stringify(cleanState),
+        updatedAt: new Date().toISOString()
+      };
+
+      if (currentDoc.userId) updatePayload.userId = currentDoc.userId;
+      if (currentDoc.budgetId) updatePayload.budgetId = currentDoc.budgetId;
+
       const response = await databases.updateDocument(
         DATABASE_ID,
         BUDGET_COLLECTION_ID,
         targetDocId,
-        {
-          ...freshData,
-          data: JSON.stringify(freshData)
-        }
+        updatePayload
       );
 
       console.log('[DEDO-DURO] Retorno do Appwrite:', response);
 
-      // 3. Expurgo local e reload seco
+      // 3. Expurgo local completo de chaves financeiras e recarga seca
       Object.keys(localStorage).forEach((k) => {
-        if (!k.toLowerCase().includes('cookie') && !k.toLowerCase().includes('session') && !k.toLowerCase().includes('appwrite')) {
+        const lower = k.toLowerCase();
+        if (!lower.includes('cookie') && !lower.includes('session') && !lower.includes('appwrite')) {
           localStorage.removeItem(k);
         }
       });
 
-      alert('[SUCESSO] Todas as transações e saldos foram apagados no servidor!');
+      alert('[SUCESSO] Orçamento zerado com sucesso no servidor!');
 
       if (setTransactions) setTransactions([]);
       if (setAccounts) setAccounts([{ id: 'default', name: 'Conta Principal', balance: 0, initialBalance: 0 }]);
