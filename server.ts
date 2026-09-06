@@ -1416,7 +1416,7 @@ async function startServer() {
       });
       saveServerUsers(updatedUsers);
 
-      // 2. Remove from FINANCIALS_FILE
+      // 2. Remove from FINANCIALS_FILE and remove user as member/collaborator from all financials
       const financials = loadServerFinancials();
       if (canonicalId && financials[canonicalId]) delete financials[canonicalId];
       if (cleanEmail) {
@@ -1424,6 +1424,35 @@ async function startServer() {
         if (financials[altId]) delete financials[altId];
       }
       if (userId && financials[userId]) delete financials[userId];
+
+      Object.keys(financials).forEach((key) => {
+        const fin = financials[key] as any;
+        if (fin) {
+          let modified = false;
+          if (Array.isArray(fin.allowed_users) && cleanEmail) {
+            const beforeLen = fin.allowed_users.length;
+            fin.allowed_users = fin.allowed_users.filter((e: string) => e.toLowerCase() !== cleanEmail);
+            if (fin.allowed_users.length !== beforeLen) modified = true;
+          }
+          if (Array.isArray(fin.shared_members) && cleanEmail) {
+            const beforeLen = fin.shared_members.length;
+            fin.shared_members = fin.shared_members.filter((e: string) => e.toLowerCase() !== cleanEmail);
+            if (fin.shared_members.length !== beforeLen) modified = true;
+          }
+          if (fin.member_permissions && cleanEmail && fin.member_permissions[cleanEmail]) {
+            delete fin.member_permissions[cleanEmail];
+            modified = true;
+          }
+          if (Array.isArray(fin.collaborators) && cleanEmail) {
+            const beforeLen = fin.collaborators.length;
+            fin.collaborators = fin.collaborators.filter((c: any) => (c.email || '').toLowerCase() !== cleanEmail);
+            if (fin.collaborators.length !== beforeLen) modified = true;
+          }
+          if (modified) {
+            financials[key] = fin;
+          }
+        }
+      });
       saveServerFinancials(financials);
 
       // 3. Remove from PORTFOLIO_FILE

@@ -4582,6 +4582,9 @@ export class StorageService {
   // --- USER ACCOUNT DELETION ---
   static async deleteUserAccount(userId: string): Promise<void> {
     this.initialize();
+    try {
+      localStorage.setItem('DARLA_FORCE_ZERO', 'true');
+    } catch (e) {}
 
     const cleanInput = (userId || '').trim().toLowerCase();
     const isInputEmail = cleanInput.includes('@');
