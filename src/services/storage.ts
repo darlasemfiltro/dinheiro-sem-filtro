@@ -2504,50 +2504,46 @@ export class StorageService {
     localStorage.setItem(STORAGE_KEYS.ACCOUNTS, JSON.stringify(freshAccounts));
     localStorage.setItem(STORAGE_KEYS.GOALS, JSON.stringify([]));
 
-    // 2. Update Appwrite Database user_financials document immediately with await
-    try {
-      const config = getAppwriteConfig();
-      if (config.projectId && config.projectId !== 'default-placeholder') {
-        const docId = getCanonicalAppwriteDocId(budgetId);
-        const freshUserData = {
-          transactions: [],
-          accounts: freshAccounts,
-          investments: [],
-          assets: [],
-          goals: [],
-          categories: freshCategories,
-          rollover: 0,
-          previousBalance: 0,
-          previousMonthBalance: 0,
-          initialBalance: 0,
-          carryOver: 0,
-          monthlyRollovers: {},
-          updatedAt: new Date().toISOString()
-        };
+    // 2. Update Appwrite Database user_financials document with strict throwing on error
+    const config = getAppwriteConfig();
+    if (config.projectId && config.projectId !== 'default-placeholder') {
+      const activeDocId = budgetId || getCanonicalAppwriteDocId(budgetId);
+      const freshUserData = {
+        transactions: [],
+        accounts: freshAccounts,
+        investments: [],
+        assets: [],
+        goals: [],
+        categories: freshCategories,
+        rollover: 0,
+        previousBalance: 0,
+        previousMonthBalance: 0,
+        initialBalance: 0,
+        carryOver: 0,
+        monthlyRollovers: {},
+        updatedAt: new Date().toISOString()
+      };
 
-        try {
-          await appwriteDatabases.updateDocument(config.databaseId, 'user_financials', docId, {
-            userId: docId,
+      try {
+        await appwriteDatabases.updateDocument(config.databaseId, 'user_financials', activeDocId, {
+          userId: activeDocId,
+          data: JSON.stringify(freshUserData)
+        });
+      } catch (e: any) {
+        const list = await appwriteDatabases.listDocuments(config.databaseId, 'user_financials');
+        const found = list.documents.find(d => d.userId === budgetId || d.$id === activeDocId);
+        if (found) {
+          await appwriteDatabases.updateDocument(config.databaseId, 'user_financials', found.$id, {
+            userId: found.userId || found.$id,
             data: JSON.stringify(freshUserData)
           });
-        } catch (e) {
-          const list = await appwriteDatabases.listDocuments(config.databaseId, 'user_financials');
-          const found = list.documents.find(d => d.userId === budgetId || d.$id === docId);
-          if (found) {
-            await appwriteDatabases.updateDocument(config.databaseId, 'user_financials', found.$id, {
-              userId: found.userId || found.$id,
-              data: JSON.stringify(freshUserData)
-            });
-          } else {
-            await appwriteDatabases.createDocument(config.databaseId, 'user_financials', docId, {
-              userId: docId,
-              data: JSON.stringify(freshUserData)
-            });
-          }
+        } else {
+          await appwriteDatabases.createDocument(config.databaseId, 'user_financials', activeDocId, {
+            userId: activeDocId,
+            data: JSON.stringify(freshUserData)
+          });
         }
       }
-    } catch (e) {
-      console.warn('[StorageService] Appwrite factory reset cloud error:', e);
     }
 
     fetch('/api/data/reset', {
