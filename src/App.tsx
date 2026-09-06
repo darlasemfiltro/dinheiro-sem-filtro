@@ -66,10 +66,8 @@ import { Heart, CheckCircle2, RefreshCw, ShieldAlert, AlertTriangle, Check, X, C
 
 export default function App() {
   const isPrivacyActive = usePrivacyMode();
-  const [isAuthLoading, setIsAuthLoading] = useState(false);
-  const [currentUser, setCurrentUser] = useState<User | null>(() => {
-    return StorageService.getCurrentUser();
-  });
+  const [isAuthLoading, setIsAuthLoading] = useState(true);
+  const [currentUser, setCurrentUser] = useState<User | null>(null);
   const [activeTab, setActiveTab] = useState<string>(() => {
     return localStorage.getItem('app_active_tab') || 'dashboard';
   });
@@ -763,136 +761,78 @@ export default function App() {
   useEffect(() => {
     let mounted = true;
 
-    const searchParams = new URLSearchParams(window.location.search);
-    const hashParams = new URLSearchParams(window.location.hash.split('?')[1] || '');
-
-    const rUserId = searchParams.get('userId') || hashParams.get('userId');
-    const rSecret = searchParams.get('secret') || hashParams.get('secret');
-
-    if (rUserId && rSecret && !searchParams.has('code')) {
-      setRecoveryTokens({ userId: rUserId, secret: rSecret });
-      setIsResetPasswordOpen(true);
-    }
-
-    if (sessionStorage.getItem('FORCE_LOGIN_VIEW') === 'true') {
-      sessionStorage.removeItem('FORCE_LOGIN_VIEW');
-      setCurrentUser(null);
-      setIsAuthLoading(false);
-      return;
-    }
-
-    const savedUserInitial = StorageService.getCurrentUser();
-    const urlParams = new URLSearchParams(window.location.search);
-    const oauthUserId = urlParams.get('userId');
-    const oauthSecret = urlParams.get('secret') || urlParams.get('code');
-    const hasOAuthParams = Boolean(oauthUserId || oauthSecret || urlParams.has('code') || urlParams.has('secret') || urlParams.has('userId') || window.location.hash.includes('secret') || window.location.hash.includes('code') || window.location.search.includes('code') || window.location.search.includes('oauth') || urlParams.has('success'));
-    const isOAuthPending = localStorage.getItem('darla_oauth_pending') === 'true';
-    const isExplicitLogout = localStorage.getItem('darla_explicit_logout') === 'true';
-
-    if (isExplicitLogout && !hasOAuthParams && !isOAuthPending) {
-      setCurrentUser(null);
-      setIsAuthLoading(false);
-      return;
-    }
-
-    // Always ensure an active user session upon OAuth return or startup
-    let initialUser = savedUserInitial;
-    if (hasOAuthParams || isOAuthPending || !initialUser || !initialUser.email) {
-      initialUser = {
-        id: oauthUserId || 'usr_darla_main',
-        name: 'Darla Sem Filtro',
-        email: 'darla.semfiltro@gmail.com',
-        authProvider: 'google',
-        createdAt: new Date().toISOString()
-      } as any;
-      StorageService.setCurrentUser(initialUser);
-      localStorage.removeItem('darla_explicit_logout');
-      localStorage.removeItem('darla_oauth_pending');
-    }
-
-    if (isExplicitLogout && !hasOAuthParams && !isOAuthPending) {
-      setCurrentUser(null);
-      setIsAuthLoading(false);
-      return;
-    }
-
-    const savedBudgetId = localStorage.getItem('dsf_current_active_budget') || localStorage.getItem('darla_active_budget_id');
-    if (savedBudgetId && initialUser) {
-      initialUser.budgetId = savedBudgetId;
-    }
-
-    setCurrentUser(initialUser);
-    localStorage.setItem('darla_current_user', JSON.stringify(initialUser));
-    setIsAuthLoading(false);
-    refreshData(initialUser, false);
-
-    // Background sync with Appwrite / storage
-    const initAuthBackground = async () => {
+    const checkSession = async () => {
       try {
-        let email = initialUser.email;
-        let name = initialUser.name;
-        let avatar = (initialUser as any).avatarUrl;
+        const searchParams = new URLSearchParams(window.location.search);
+        const hashParams = new URLSearchParams(window.location.hash.split('?')[1] || '');
 
-        if (hasOAuthParams || isOAuthPending) {
-          try {
-            if (oauthUserId && oauthSecret) {
-              await appwriteCompleteOAuthSession(oauthUserId, oauthSecret);
-            }
-            const appwriteUserActive = await getAppwriteUser();
-            if (appwriteUserActive?.email) {
-              email = appwriteUserActive.email;
-              name = appwriteUserActive.name || email.split('@')[0];
-              avatar = appwriteUserActive?.prefs?.avatar;
-            }
-          } catch (e) {
-            console.warn('[OAuth session exchange error]', e);
-          } finally {
-            window.history.replaceState({}, document.title, window.location.pathname);
-            localStorage.removeItem('darla_explicit_logout');
-            localStorage.removeItem('darla_oauth_pending');
+        const rUserId = searchParams.get('userId') || hashParams.get('userId');
+        const rSecret = searchParams.get('secret') || hashParams.get('secret');
+
+        if (rUserId && rSecret && !searchParams.has('code')) {
+          setRecoveryTokens({ userId: rUserId, secret: rSecret });
+          setIsResetPasswordOpen(true);
+        }
+
+        if (sessionStorage.getItem('FORCE_LOGIN_VIEW') === 'true') {
+          sessionStorage.removeItem('FORCE_LOGIN_VIEW');
+          if (mounted) {
+            setCurrentUser(null);
+            setIsAuthLoading(false);
           }
+          return;
         }
 
-        let authAccount = null;
-        try {
-          authAccount = await getAppwriteUser();
-        } catch (e) {}
-
-        const sessionEmail = (authAccount?.email || email).trim().toLowerCase();
-        const sessionName = authAccount?.name || name || sessionEmail.split('@')[0];
-        const sessionId = authAccount?.$id || initialUser.id;
-
-        await StorageService.ensureUserAndDataSyncedAsync(
-          sessionEmail,
-          undefined,
-          sessionName,
-          avatar,
-          'google'
-        );
-
-        const savedActiveBudget = localStorage.getItem('dsf_current_active_budget') || localStorage.getItem('darla_active_budget_id');
-        const loggedUser: User = {
-          id: sessionId,
-          email: sessionEmail,
-          name: sessionName,
-          authProvider: 'google',
-          createdAt: initialUser.createdAt || new Date().toISOString(),
-          budgetId: savedActiveBudget && savedActiveBudget !== sessionEmail && savedActiveBudget !== sessionId 
-            ? savedActiveBudget 
-            : null
-        };
-
-        if (loggedUser && mounted) {
-          localStorage.setItem('darla_current_user', JSON.stringify(loggedUser));
-          setCurrentUser(loggedUser);
-          refreshData(loggedUser, false);
+        const isExplicitLogout = localStorage.getItem('darla_explicit_logout') === 'true';
+        if (isExplicitLogout) {
+          if (mounted) {
+            setCurrentUser(null);
+            setIsAuthLoading(false);
+          }
+          return;
         }
-      } catch (e) {
-        console.warn('[OAuth initAuth background error]', e);
+
+        const session = await account.get().catch(() => null);
+        if (session && session.email) {
+          const userObj: User = {
+            id: session.$id || session.id || 'usr_' + Date.now(),
+            name: session.name || session.email.split('@')[0],
+            email: session.email,
+            authProvider: 'email',
+            createdAt: session.$createdAt || new Date().toISOString(),
+          };
+          StorageService.setCurrentUser(userObj);
+          if (mounted) {
+            setCurrentUser(userObj);
+            setIsAuthLoading(false);
+            refreshData(userObj, false);
+          }
+          return;
+        }
+
+        const localUser = StorageService.getCurrentUser();
+        if (localUser && localUser.email && !isExplicitLogout) {
+          if (mounted) {
+            setCurrentUser(localUser);
+            setIsAuthLoading(false);
+            refreshData(localUser, false);
+          }
+          return;
+        }
+
+        if (mounted) {
+          setCurrentUser(null);
+          setIsAuthLoading(false);
+        }
+      } catch (error) {
+        if (mounted) {
+          setCurrentUser(null);
+          setIsAuthLoading(false);
+        }
       }
     };
 
-    initAuthBackground();
+    checkSession();
 
     return () => {
       mounted = false;
@@ -1313,11 +1253,10 @@ export default function App() {
     }
   };
 
-  if (isAuthLoading && !currentUser) {
+  if (isAuthLoading) {
     return (
-      <div className="min-h-screen bg-[#FDFBF7] flex flex-col items-center justify-center p-6 space-y-4">
-        <div className="w-12 h-12 border-4 border-[#D4AF37] border-t-transparent rounded-full animate-spin"></div>
-        <p className="text-sm font-bold text-gray-700 tracking-wide">Abrindo o aplicativo...</p>
+      <div className="flex h-screen items-center justify-center bg-black text-white">
+        <div className="text-center font-bold">Carregando...</div>
       </div>
     );
   }
