@@ -2467,44 +2467,57 @@ export class StorageService {
     return null;
   }
 
-  // Reset all transactions and account initial balances to 0 for clean start
+  // Reset all transactions, accounts, investments, and categories to factory default (Factory Reset)
   static async resetUserBudgetToZero(budgetId: string): Promise<void> {
     this.initialize();
 
-    // 1. Remove all transactions for this budgetId
-    const allTxStr = localStorage.getItem(STORAGE_KEYS.TRANSACTIONS) || '[]';
-    const allTx: Transaction[] = JSON.parse(allTxStr);
-    const filteredTx = allTx.filter((t) => t.userId !== budgetId);
-    localStorage.setItem(STORAGE_KEYS.TRANSACTIONS, JSON.stringify(filteredTx));
+    // 1. Clear local storage financial keys
+    const keysToRemove = [
+      STORAGE_KEYS.TRANSACTIONS,
+      STORAGE_KEYS.ACCOUNTS,
+      STORAGE_KEYS.GOALS,
+      STORAGE_KEYS.CATEGORIES,
+      'darla_portfolio_assets',
+      'darla_portfolio_transactions',
+      'darla_portfolio_dividends',
+      'darla_portfolio_goals',
+    ];
+    keysToRemove.forEach(k => localStorage.removeItem(k));
 
-    // 2. Set initial balance and balance of all user accounts to 0
-    const allAccStr = localStorage.getItem(STORAGE_KEYS.ACCOUNTS) || '[]';
-    const allAcc: Account[] = JSON.parse(allAccStr);
-    const updatedAcc = allAcc.map((a) => {
-      if (!budgetId || a.userId === budgetId || !a.userId) {
-        return { ...a, initialBalance: 0.0, balance: 0.0 };
+    Object.keys(localStorage).forEach(key => {
+      if (key.startsWith('dsf_') && !key.includes('session') && !key.includes('cookie') && !key.includes('appwrite')) {
+        localStorage.removeItem(key);
       }
-      return a;
     });
-    localStorage.setItem(STORAGE_KEYS.ACCOUNTS, JSON.stringify(updatedAcc));
 
-    // 3. Update Appwrite Database user_financials document immediately with await
+    // Fresh default structure
+    const freshAccounts = [{ id: 'default', name: 'Conta Principal', balance: 0, initialBalance: 0, type: 'checking' as const }];
+    const freshCategories = SEED_CATEGORIES.map(c => ({ ...c, userId: budgetId }));
+
+    localStorage.setItem(STORAGE_KEYS.TRANSACTIONS, JSON.stringify([]));
+    localStorage.setItem(STORAGE_KEYS.ACCOUNTS, JSON.stringify(freshAccounts));
+    localStorage.setItem(STORAGE_KEYS.GOALS, JSON.stringify([]));
+
+    // 2. Update Appwrite Database user_financials document immediately with await
     try {
       const config = getAppwriteConfig();
       if (config.projectId && config.projectId !== 'default-placeholder') {
         const docId = getCanonicalAppwriteDocId(budgetId);
-        const cleanPayload = {
+        const freshUserData = {
           transactions: [],
-          accounts: updatedAcc,
-          initialBalance: 0,
+          accounts: freshAccounts,
+          investments: [],
+          assets: [],
           goals: [],
+          categories: freshCategories,
+          initialBalance: 0,
           updatedAt: new Date().toISOString()
         };
 
         try {
           await appwriteDatabases.updateDocument(config.databaseId, 'user_financials', docId, {
             userId: docId,
-            data: JSON.stringify(cleanPayload)
+            data: JSON.stringify(freshUserData)
           });
         } catch (e) {
           const list = await appwriteDatabases.listDocuments(config.databaseId, 'user_financials');
@@ -2512,18 +2525,18 @@ export class StorageService {
           if (found) {
             await appwriteDatabases.updateDocument(config.databaseId, 'user_financials', found.$id, {
               userId: found.userId || found.$id,
-              data: JSON.stringify(cleanPayload)
+              data: JSON.stringify(freshUserData)
             });
           } else {
             await appwriteDatabases.createDocument(config.databaseId, 'user_financials', docId, {
               userId: docId,
-              data: JSON.stringify(cleanPayload)
+              data: JSON.stringify(freshUserData)
             });
           }
         }
       }
     } catch (e) {
-      console.warn('[StorageService] Appwrite reset budget cloud error:', e);
+      console.warn('[StorageService] Appwrite factory reset cloud error:', e);
     }
 
     fetch('/api/data/reset', {

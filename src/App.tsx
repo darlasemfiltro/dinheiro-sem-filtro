@@ -1195,20 +1195,18 @@ export default function App() {
       await StorageService.resetUserBudgetToZero(effectiveBudgetId);
 
       setTransactions([]);
-      const resetAccounts = accounts.map(acc => ({
-        ...acc,
-        balance: 0,
-        initialBalance: 0
-      }));
-      setAccounts(resetAccounts);
+      setAccounts([{ id: 'default', name: 'Conta Principal', balance: 0, initialBalance: 0, type: 'checking' }]);
       setGoals([]);
 
-      refreshData(currentUser);
       setGlobalAlert({
         isOpen: true,
-        title: 'Orçamento Zerado',
-        message: 'Orçamento zerado com sucesso! Saldo reiniciado em R$ 0,00.',
-        type: 'success'
+        title: 'Reset de Fábrica Concluído',
+        message: 'Orçamento e ativos zerados com sucesso! O aplicativo será recarregado no estado inicial.',
+        type: 'success',
+        confirmText: 'OK',
+        onConfirm: () => {
+          window.location.reload();
+        }
       });
     }
   };
