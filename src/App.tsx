@@ -1204,16 +1204,35 @@ export default function App() {
         });
         return;
       }
+      
+      // 1. Mata o autosave no mesmo milissegundo
+      (window as any).__KILL_AUTOSAVE__ = true;
       (window as any).__IS_RESETTING__ = true;
       isResettingRef.current = true;
       isSyncingRemoteRef.current = true;
-      try {
-        const targetBudgetId = effectiveBudgetId || currentUser.budgetId || currentUser.id;
-        await StorageService.resetUserBudgetToZero(targetBudgetId);
 
-        Object.keys(localStorage).forEach(k => {
-          if (!k.includes('cookie') && !k.includes('session') && !k.includes('appwrite')) {
-            localStorage.removeItem(k);
+      // 2. Coleta as chaves reais
+      const targetDocId = effectiveBudgetId || currentUser?.budgetId || currentUser?.id || currentUser?.$id;
+
+      // Dedo-duro de identificação
+      if (!targetDocId) {
+        alert('[DEDO-DURO ERRO] ID do orçamento/documento é NULO ou INDEFINIDO! Verifique a sessão.');
+        (window as any).__KILL_AUTOSAVE__ = false;
+        (window as any).__IS_RESETTING__ = false;
+        return;
+      }
+
+      try {
+        // Dedo-duro do Appwrite: tenta gravar e aguarda confirmação real do servidor via StorageService
+        await StorageService.resetUserBudgetToZero(targetDocId);
+
+        console.log('[DEDO-DURO SUCESSO] Resposta confirmada do Appwrite para Doc ID:', targetDocId);
+
+        // 3. Faxina total do LocalStorage (exceto token de login)
+        Object.keys(localStorage).forEach(key => {
+          const isAuth = ['cookie', 'session', 'appwrite', 'user_session'].some(k => key.toLowerCase().includes(k));
+          if (!isAuth) {
+            localStorage.removeItem(key);
           }
         });
 
@@ -1221,27 +1240,19 @@ export default function App() {
         setAccounts([{ id: 'default', name: 'Conta Principal', balance: 0, initialBalance: 0, type: 'checking' }]);
         setGoals([]);
 
-        setGlobalAlert({
-          isOpen: true,
-          title: 'Reset de Fábrica Concluído',
-          message: 'Orçamento, saldos e ativos zerados com sucesso! O aplicativo será recarregado no estado inicial.',
-          type: 'success',
-          confirmText: 'OK',
-          onConfirm: () => {
-            window.location.replace(window.location.origin + window.location.pathname);
-          }
-        });
-      } catch (e: any) {
+        alert(`[DEDO-DURO] GRAVADO COM SUCESSO NO SERVIDOR!\nDoc ID: ${targetDocId}\nO app será reiniciado zerado.`);
+
+        // Hard reload direto na URL raiz limpa
+        window.location.replace(window.location.origin + window.location.pathname);
+
+      } catch (err: any) {
+        // O DEDO-DURO REAL: expõe na tela o motivo exato de o Appwrite ter recusado
+        (window as any).__KILL_AUTOSAVE__ = false;
         (window as any).__IS_RESETTING__ = false;
         isResettingRef.current = false;
         isSyncingRemoteRef.current = false;
-        console.error('[Reset Error]', e);
-        setGlobalAlert({
-          isOpen: true,
-          title: 'Erro no Reset',
-          message: 'Erro ao zerar orçamento no servidor: ' + (e?.message || JSON.stringify(e)),
-          type: 'error'
-        });
+        alert(`[DEDO-DURO DETECTOU ERRO NO APPWRITE]\n\nCódigo: ${err.code || 'Desconhecido'}\nMensagem: ${err.message || err.type || JSON.stringify(err)}\nDocID tentado: ${targetDocId}`);
+        console.error('[Reset Dedo-Duro Error]', err);
       }
     }
   };

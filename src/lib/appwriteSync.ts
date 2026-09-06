@@ -33,8 +33,8 @@ function getStoredUserEmail(): string {
  * Função de Atualização Direta (Update Cloud) para o documento específico 6a849358002db9e638ce com tratamento resiliente de rede
  */
 export async function syncAppDataToCloud(userId?: string | any, appData?: any, userEmail?: string): Promise<boolean> {
-  if (typeof window !== 'undefined' && (window as any).__IS_RESETTING__) {
-    console.warn('Autosave abortado: Reset de fábrica em andamento.');
+  if (typeof window !== 'undefined' && ((window as any).__KILL_AUTOSAVE__ || (window as any).__IS_RESETTING__)) {
+    console.error('[DEDO-DURO] Tentativa de Autosave bloqueada durante o Reset!');
     return false;
   }
   const databaseId = '6a83aa8d0038331e040f';
