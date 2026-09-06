@@ -211,10 +211,13 @@ export async function appwriteCompleteOAuthSession(userId: string, secret: strin
 
 export async function appwriteGoogleOAuthLogin(successUrl?: string, failureUrl?: string) {
   const cfg = getAppwriteConfig();
-  const targetSuccess = successUrl || `${window.location.origin}/`;
-  const targetFailure = failureUrl || `${window.location.origin}/?auth_error=true`;
+  const targetSuccess = successUrl || window.location.origin;
+  const targetFailure = failureUrl || `${window.location.origin}?auth_failed=true`;
   try {
     if (cfg.projectId && cfg.projectId !== 'default-placeholder') {
+      sessionStorage.removeItem('FORCE_LOGIN_VIEW');
+      localStorage.removeItem('FORCE_LOGIN_VIEW');
+      localStorage.removeItem('darla_explicit_logout');
       appwriteAccount.createOAuth2Session(
         'google' as any,
         targetSuccess,
