@@ -219,6 +219,22 @@ export function calculateMonthSummary(
 ): MonthSummary {
   const initialAccountsBalance = getTotalAccountsInitialBalance(accounts);
 
+  if (initialAccountsBalance === 0 && (!transactions || transactions.length === 0)) {
+    return {
+      year,
+      month,
+      startingBalance: 0,
+      totalIncome: 0,
+      totalExpenses: 0,
+      endingBalance: 0,
+      consolidatedIncome: 0,
+      consolidatedExpenses: 0,
+      consolidatedBalance: 0,
+      pendingIncome: 0,
+      pendingExpenses: 0,
+    };
+  }
+
   // Target month key cutoff: transactions strictly before year-month
   const targetKey = getYearMonthKey(year, month);
 

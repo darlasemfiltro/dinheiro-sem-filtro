@@ -2471,7 +2471,7 @@ export class StorageService {
   static async resetUserBudgetToZero(budgetId: string): Promise<void> {
     this.initialize();
 
-    // 1. Clear local storage financial keys
+    // 1. Clear local storage financial keys & rollover keys
     const keysToRemove = [
       STORAGE_KEYS.TRANSACTIONS,
       STORAGE_KEYS.ACCOUNTS,
@@ -2485,7 +2485,13 @@ export class StorageService {
     keysToRemove.forEach(k => localStorage.removeItem(k));
 
     Object.keys(localStorage).forEach(key => {
-      if (key.startsWith('dsf_') && !key.includes('session') && !key.includes('cookie') && !key.includes('appwrite')) {
+      const lower = key.toLowerCase();
+      if (
+        (lower.startsWith('dsf_') || lower.includes('rollover') || lower.includes('previous') || lower.includes('carry')) &&
+        !lower.includes('session') &&
+        !lower.includes('cookie') &&
+        !lower.includes('appwrite')
+      ) {
         localStorage.removeItem(key);
       }
     });
@@ -2510,7 +2516,12 @@ export class StorageService {
           assets: [],
           goals: [],
           categories: freshCategories,
+          rollover: 0,
+          previousBalance: 0,
+          previousMonthBalance: 0,
           initialBalance: 0,
+          carryOver: 0,
+          monthlyRollovers: {},
           updatedAt: new Date().toISOString()
         };
 
