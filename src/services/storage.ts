@@ -2489,13 +2489,15 @@ export class StorageService {
       'darla_portfolio_transactions',
       'darla_portfolio_dividends',
       'darla_portfolio_goals',
+      'DINHEIRO_SEM_FILTRO_USER_FINANCIALS',
+      'cached_app_data',
     ];
     keysToRemove.forEach(k => localStorage.removeItem(k));
 
     Object.keys(localStorage).forEach(key => {
       const lower = key.toLowerCase();
       if (
-        (lower.startsWith('dsf_') || lower.includes('rollover') || lower.includes('previous') || lower.includes('carry') || lower.includes('closing') || lower.includes('history') || lower.includes('balance') || lower.includes('initial')) &&
+        (lower.startsWith('dsf_') || lower.includes('rollover') || lower.includes('previous') || lower.includes('carry') || lower.includes('closing') || lower.includes('history') || lower.includes('balance') || lower.includes('initial') || lower.includes('financials') || lower.includes('cache')) &&
         !lower.includes('session') &&
         !lower.includes('cookie') &&
         !lower.includes('appwrite')
@@ -2537,30 +2539,48 @@ export class StorageService {
       try {
         await appwriteDatabases.deleteDocument(config.databaseId, 'user_financials', targetDocId);
       } catch (e) {
-        console.warn('Documento anterior já não existia ou falhou ao deletar:', e);
+        console.warn('Documento anterior já não existia ou falhou ao deletar por ID:', e);
       }
 
-      // Also clean up any list documents matching userId
+      // Delete ALL documents matching targetDocId or email
       try {
-        const list = await appwriteDatabases.listDocuments(config.databaseId, 'user_financials', [
-          Query.equal('userId', [targetDocId])
-        ]);
+        const list = await appwriteDatabases.listDocuments(config.databaseId, 'user_financials');
         for (const doc of list.documents) {
-          if (doc.$id !== targetDocId) {
-            await appwriteDatabases.deleteDocument(config.databaseId, 'user_financials', doc.$id);
+          if (doc.$id === targetDocId || doc.userId === targetDocId || (doc.userId && targetDocId && doc.userId.toLowerCase() === targetDocId.toLowerCase())) {
+            try {
+              await appwriteDatabases.deleteDocument(config.databaseId, 'user_financials', doc.$id);
+              console.log('[DEDO-DURO] Deletado documento obsoleto no Appwrite:', doc.$id);
+            } catch (delErr) {
+              console.warn('Falha ao deletar doc obsoleto:', delErr);
+            }
           }
         }
-      } catch (e) {}
+      } catch (listErr) {
+        console.warn('Erro ao listar documentos para limpeza:', listErr);
+      }
 
-      await appwriteDatabases.createDocument(
-        config.databaseId,
-        'user_financials',
-        targetDocId,
-        {
-          userId: targetDocId,
-          data: JSON.stringify(freshUserData)
-        }
-      );
+      try {
+        await appwriteDatabases.createDocument(
+          config.databaseId,
+          'user_financials',
+          targetDocId,
+          {
+            userId: targetDocId,
+            data: JSON.stringify(freshUserData)
+          }
+        );
+      } catch (createErr) {
+        // Fallback to unique id if targetDocId already taken or invalid
+        await appwriteDatabases.createDocument(
+          config.databaseId,
+          'user_financials',
+          ID.unique(),
+          {
+            userId: targetDocId,
+            data: JSON.stringify(freshUserData)
+          }
+        );
+      }
 
       // 3. Purge separate 'transactions' collection in Appwrite
       try {
