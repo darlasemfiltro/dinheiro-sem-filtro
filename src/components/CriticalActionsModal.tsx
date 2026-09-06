@@ -39,6 +39,8 @@ export const CriticalActionsModal: React.FC<CriticalActionsModalProps> = ({
 
   const handleExecuteZerarOrcamento = async () => {
     (window as any).__PAUSE_ALL_SYNCS__ = true;
+    (window as any).__KILL_AUTOSAVE__ = true;
+    (window as any).__IS_RESETTING__ = true;
 
     const resolvedBudgetId = activeBudgetId || currentBudgetId || StorageService.getEffectiveBudgetId(user);
     const targetDocId = resolvedBudgetId || user?.budgetId || user?.id || user?.$id;
@@ -48,80 +50,7 @@ export const CriticalActionsModal: React.FC<CriticalActionsModalProps> = ({
       return;
     }
 
-    const DATABASE_ID = '6a83aa8d0038331e040f';
-    const BUDGET_COLLECTION_ID = 'user_financials';
-    const TRANSACTIONS_COLLECTION_ID = 'transactions';
-
     try {
-      // 1. Busca e remove todas as transações persistidas na coleção avulsa (se houver)
-      try {
-        const userTransactions = await databases.listDocuments(
-          DATABASE_ID,
-          TRANSACTIONS_COLLECTION_ID,
-          [Query.equal('budgetId', targetDocId)]
-        );
-
-        await Promise.all(
-          userTransactions.documents.map((doc) =>
-            databases.deleteDocument(DATABASE_ID, TRANSACTIONS_COLLECTION_ID, doc.$id)
-          )
-        );
-      } catch (err) {
-        console.warn('Coleção de transações avulsas não encontrada ou já limpa:', err);
-      }
-
-      // 2. Obtém o documento atual para inspecionar o schema e chaves de vínculo
-      let currentDoc: any = {};
-      try {
-        currentDoc = await databases.getDocument(DATABASE_ID, BUDGET_COLLECTION_ID, targetDocId);
-      } catch (docErr) {
-        console.warn('Não foi possível buscar o documento atual, prosseguindo com dados padrão:', docErr);
-      }
-
-      const cleanState = {
-        transactions: [],
-        accounts: [{ id: 'default', name: 'Conta Principal', balance: 0, initialBalance: 0, type: 'checking' }],
-        investments: [],
-        assets: [],
-        goals: [],
-        rollover: 0,
-        accumulatedRollover: 0,
-        previousBalance: 0,
-        previousMonthBalance: 0,
-        initialBalance: 0,
-        carryOver: 0,
-        monthlyRollovers: {},
-        monthlyClosings: [],
-        updatedAt: new Date().toISOString()
-      };
-
-      const updatePayload: Record<string, any> = {
-        data: JSON.stringify(cleanState),
-        updatedAt: new Date().toISOString()
-      };
-
-      if (currentDoc.userId) updatePayload.userId = currentDoc.userId;
-      if (currentDoc.budgetId) updatePayload.budgetId = currentDoc.budgetId;
-
-      const response = await databases.updateDocument(
-        DATABASE_ID,
-        BUDGET_COLLECTION_ID,
-        targetDocId,
-        updatePayload
-      );
-
-      console.log('[DEDO-DURO] Retorno do Appwrite:', response);
-
-      // 3. Expurgo local completo de chaves financeiras e recarga seca
-      Object.keys(localStorage).forEach((k) => {
-        const lower = k.toLowerCase();
-        if (!lower.includes('cookie') && !lower.includes('session') && !lower.includes('appwrite')) {
-          localStorage.removeItem(k);
-        }
-      });
-
-      alert('[SUCESSO] Orçamento zerado com sucesso no servidor!');
-
       if (setTransactions) setTransactions([]);
       if (setAccounts) setAccounts([{ id: 'default', name: 'Conta Principal', balance: 0, initialBalance: 0 }]);
       if (setRollover) setRollover(0);
@@ -130,10 +59,10 @@ export const CriticalActionsModal: React.FC<CriticalActionsModalProps> = ({
       onResetBudgetToZero();
       setConfirmingAction(null);
       onClose();
-
-      window.location.replace(window.location.origin + window.location.pathname);
     } catch (error: any) {
       (window as any).__PAUSE_ALL_SYNCS__ = false;
+      (window as any).__KILL_AUTOSAVE__ = false;
+      (window as any).__IS_RESETTING__ = false;
       alert(`[DEDO-DURO DETECTOU ERRO]\n\nFalha ao gravar no Appwrite!\nCódigo: ${error.code || 'Desconhecido'}\nMensagem: ${error.message || JSON.stringify(error)}\nDoc ID tentado: ${targetDocId}`);
       console.error('[DEDO-DURO EXCEÇÃO]:', error);
     }
