@@ -44,8 +44,6 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({ onLoginSuccess }) => {
   // Password Reset State
   const [resetStep, setResetStep] = useState<1 | 2>(1);
   const [resetEmail, setResetEmail] = useState('');
-  const [generatedCode, setGeneratedCode] = useState('');
-  const [inputCode, setInputCode] = useState('');
   const [newPassword, setNewPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [recoveryUserId, setRecoveryUserId] = useState<string | null>(null);
@@ -130,52 +128,42 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({ onLoginSuccess }) => {
 
   const [isSendingEmail, setIsSendingEmail] = useState(false);
 
-  // Step 1: Send Password Reset Code by Email (Appwrite Cloud + Fallback)
+  // Step 1: Send Password Reset Link via Appwrite account.createRecovery
   const handleSendResetCode = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
     setSuccessMsg('');
 
     if (!resetEmail || !resetEmail.includes('@')) {
-      setError('Por favor, digite um e-mail cadastrado válido (ex: seu.nome@gmail.com, hotmail.com, etc).');
+      setError('Por favor, informe um e-mail válido.');
       return;
     }
 
     setIsSendingEmail(true);
     try {
-      // 1. Call Appwrite Cloud native createRecovery
-      try {
-        await appwritePasswordReset(resetEmail);
-        console.log('[Appwrite Cloud] createRecovery disparado com sucesso para:', resetEmail);
-      } catch (appwriteErr: any) {
-        console.warn('[Appwrite createRecovery Warning - Verifique se o e-mail existe no Appwrite e se a plataforma Web está cadastrada]:', appwriteErr?.message || appwriteErr);
-      }
-
-      // 2. Call local storage / backend fallback
-      const res = await StorageService.sendPasswordResetCodeAsync(resetEmail);
-      if (res.success) {
-        setGeneratedCode(res.code || '');
-        setInputCode('');
-        setSuccessMsg(res.message || 'E-mail de recuperação enviado! Verifique sua Caixa de Entrada e a pasta de Spam/Lixo Eletrônico.');
-        setResetStep(2);
-      } else {
-        setError(res.message);
-      }
+      const redirectUrl = window.location.origin;
+      await appwritePasswordReset(resetEmail.trim());
+      alert('Link de recuperação enviado com sucesso! Acesse seu e-mail e clique no link recebido (verifique também a pasta de Spam/Lixo Eletrônico).');
+      setMode('auth');
+      setResetStep(1);
+      setResetEmail('');
     } catch (err: any) {
-      setError('Não foi possível enviar o e-mail no momento. Verifique sua conexão.');
+      console.error('Erro ao enviar recuperação:', err);
+      alert('Falha ao enviar e-mail: ' + (err.message || 'Verifique o e-mail informado.'));
+      setError('Falha ao enviar e-mail: ' + (err.message || 'Verifique o e-mail informado.'));
     } finally {
       setIsSendingEmail(false);
     }
   };
 
-  // Step 2: Set New Password
+  // Step 2: Set New Password via Appwrite account.updateRecovery
   const handleConfirmReset = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
     setSuccessMsg('');
 
-    if (!newPassword || newPassword.length < 6) {
-      setError('A nova senha deve possuir pelo menos 6 caracteres.');
+    if (!newPassword || newPassword.length < 8) {
+      setError('A nova senha deve possuir pelo menos 8 caracteres.');
       return;
     }
 
@@ -184,46 +172,24 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({ onLoginSuccess }) => {
       return;
     }
 
-    // If Appwrite recovery query params exist, complete recovery via Appwrite SDK
-    if (recoveryUserId && recoverySecret) {
-      try {
-        await appwriteCompleteRecovery(recoveryUserId, recoverySecret, newPassword);
-        setSuccessMsg('Senha redefinida com sucesso pelo Appwrite! Faça login com suas novas credenciais.');
-        setMode('auth');
-        setResetStep(1);
-        setRecoveryUserId(null);
-        setRecoverySecret(null);
-        return;
-      } catch (err: any) {
-        setError(`Erro ao redefinir senha no Appwrite: ${err.message || 'Token expirado ou inválido.'}`);
-        return;
-      }
-    }
-
-    // Otherwise standard code-based verification
-    if (!inputCode.trim()) {
-      setError('Digite o código de 6 dígitos enviado ao seu e-mail.');
+    if (!recoveryUserId || !recoverySecret) {
+      setError('Parâmetros de recuperação inválidos ou expirados.');
       return;
     }
 
-    if (inputCode.trim() !== generatedCode.trim()) {
-      setError('Código incorreto. Verifique o e-mail ou reenvie o código.');
-      return;
-    }
-
-    const res = StorageService.updateUserPassword(resetEmail, newPassword);
-    if (res.success) {
-      setEmail(resetEmail);
-      setPassword(newPassword);
-      setSuccessMsg(res.message);
+    try {
+      await appwriteCompleteRecovery(recoveryUserId, recoverySecret, newPassword, confirmPassword);
+      alert('Senha alterada com sucesso! Você já pode entrar com sua nova senha.');
+      window.history.replaceState({}, document.title, window.location.pathname);
+      setRecoveryUserId(null);
+      setRecoverySecret(null);
       setMode('auth');
-      setIsRegister(false);
       setResetStep(1);
-      setResetEmail('');
       setNewPassword('');
       setConfirmPassword('');
-    } else {
-      setError(res.message);
+    } catch (err: any) {
+      console.error('Erro ao redefinir senha:', err);
+      setError('Erro ao redefinir senha: ' + (err.message || 'Token expirado ou inválido.'));
     }
   };
 
@@ -450,12 +416,12 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({ onLoginSuccess }) => {
               </div>
               <p className="text-[11px] text-gray-700 leading-snug">
                 {resetStep === 1
-                  ? 'Digite o seu e-mail cadastrado. Enviaremos um código de verificação para o seu e-mail.'
-                  : 'Digite o código de 6 dígitos enviado para o seu e-mail e escolha sua nova senha.'}
+                  ? 'Digite o seu e-mail cadastrado. Enviaremos um link de recuperação oficial do Appwrite para o seu e-mail.'
+                  : 'Digite sua nova senha (mínimo de 8 caracteres).'}
               </p>
             </div>
 
-            {/* Step 1: Send Email Code */}
+            {/* Step 1: Send Email Link */}
             {resetStep === 1 && (
               <form onSubmit={handleSendResetCode} className="space-y-3.5">
                 <div className="space-y-1">
@@ -479,7 +445,7 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({ onLoginSuccess }) => {
                   className="w-full py-3 px-4 bg-[#121212] hover:bg-gray-800 disabled:opacity-50 text-[#D4AF37] font-extrabold text-xs sm:text-sm rounded-xl shadow-md transition flex items-center justify-center gap-2 cursor-pointer border border-[#D4AF37]"
                 >
                   <Mail className="w-4 h-4 text-[#D4AF37]" />
-                  <span>{isSendingEmail ? 'Enviando e-mail...' : 'Enviar Código para o E-mail'}</span>
+                  <span>{isSendingEmail ? 'Enviando link...' : 'Enviar Link de Recuperação'}</span>
                 </button>
 
                 <button
@@ -497,23 +463,9 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({ onLoginSuccess }) => {
               </form>
             )}
 
-            {/* Step 2: Input Code & New Password */}
+            {/* Step 2: New Password */}
             {resetStep === 2 && (
               <form onSubmit={handleConfirmReset} className="space-y-3.5">
-                <div className="space-y-1">
-                  <label className="text-xs font-extrabold text-[#121212]">Código de Verificação (6 Dígitos)</label>
-                  <input
-                    type="text"
-                    value={inputCode}
-                    onChange={(e) => setInputCode(e.target.value)}
-                    placeholder="Ex: 839201"
-                    maxLength={6}
-                    className="w-full text-center tracking-widest font-mono font-black text-sm py-2.5 bg-amber-50 border border-[#D4AF37]/50 rounded-xl text-[#121212] focus:outline-none focus:ring-2 focus:ring-[#D4AF37]"
-                    required
-                  />
-                  <p className="text-[10px] text-gray-500 text-center">Digite os 6 dígitos recebidos no seu e-mail</p>
-                </div>
-
                 <div className="space-y-1">
                   <label className="text-xs font-extrabold text-[#121212]">Nova Senha</label>
                   <div className="relative">
@@ -522,7 +474,7 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({ onLoginSuccess }) => {
                       type="password"
                       value={newPassword}
                       onChange={(e) => setNewPassword(e.target.value)}
-                      placeholder="Mínimo 6 caracteres"
+                      placeholder="Mínimo 8 caracteres"
                       className="w-full pl-10 pr-4 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-xs text-[#121212] focus:outline-none focus:ring-2 focus:ring-[#D4AF37]"
                       required
                     />
@@ -553,14 +505,6 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({ onLoginSuccess }) => {
                 </button>
 
                 <div className="flex items-center justify-between pt-1 text-xs">
-                  <button
-                    type="button"
-                    onClick={() => setResetStep(1)}
-                    className="text-gray-500 hover:text-black font-bold flex items-center gap-1 cursor-pointer"
-                  >
-                    <ArrowLeft className="w-3 h-3" />
-                    <span>Alterar E-mail</span>
-                  </button>
                   <button
                     type="button"
                     onClick={() => {

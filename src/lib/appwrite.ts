@@ -279,13 +279,11 @@ export async function appwritePasswordReset(email: string) {
   if (!cfg.projectId) {
     throw new Error('Appwrite não configurado.');
   }
-  const currentOrigin = typeof window !== 'undefined' ? window.location.origin : 'https://dinheiro-sem-filtro.darla-semfiltro-9c5.workers.dev';
-  console.log('[Appwrite Audit] Origin atual para Web Platform / CORS:', currentOrigin);
-  const redirectUrl = `${currentOrigin}/`;
+  const redirectUrl = typeof window !== 'undefined' ? window.location.origin : 'https://dinheiro-sem-filtro.darla-semfiltro-9c5.workers.dev';
   return await appwriteAccount.createRecovery(email.trim(), redirectUrl);
 }
 
-export async function appwriteCompleteRecovery(userId: string, secret: string, pass: string) {
-  return await appwriteAccount.updateRecovery(userId, secret, pass, pass);
+export async function appwriteCompleteRecovery(userId: string, secret: string, password: string, passwordAgain: string) {
+  return await appwriteAccount.updateRecovery(userId, secret, password, passwordAgain);
 }
 
