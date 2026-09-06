@@ -61,6 +61,7 @@ import { FeatureLockModal } from './components/FeatureLockModal';
 import { TrialCountdownWidget } from './components/TrialCountdownWidget';
 import { BudgetSubNav } from './components/BudgetSubNav';
 import { AppwriteSettingsModal } from './components/AppwriteSettingsModal';
+import { ResetPasswordModal } from './components/ResetPasswordModal';
 import { Heart, CheckCircle2, RefreshCw, ShieldAlert, AlertTriangle, Check, X, Cloud } from 'lucide-react';
 
 export default function App() {
@@ -94,6 +95,8 @@ export default function App() {
   }, []);
 
   // Modal States
+  const [recoveryTokens, setRecoveryTokens] = useState<{ userId: string; secret: string } | null>(null);
+  const [isResetPasswordOpen, setIsResetPasswordOpen] = useState(false);
   const [isEditProfileModalOpen, setIsEditProfileModalOpen] = useState(false);
   const [isCriticalActionsModalOpen, setIsCriticalActionsModalOpen] = useState(false);
   const [isFeatureLockModalOpen, setIsFeatureLockModalOpen] = useState(false);
@@ -714,6 +717,17 @@ export default function App() {
 
   useEffect(() => {
     let mounted = true;
+
+    const searchParams = new URLSearchParams(window.location.search);
+    const hashParams = new URLSearchParams(window.location.hash.split('?')[1] || '');
+
+    const rUserId = searchParams.get('userId') || hashParams.get('userId');
+    const rSecret = searchParams.get('secret') || hashParams.get('secret');
+
+    if (rUserId && rSecret && !searchParams.has('code')) {
+      setRecoveryTokens({ userId: rUserId, secret: rSecret });
+      setIsResetPasswordOpen(true);
+    }
 
     const savedUserInitial = StorageService.getCurrentUser();
     const urlParams = new URLSearchParams(window.location.search);
@@ -2193,6 +2207,21 @@ export default function App() {
           </div>
         </div>
       </footer>
+
+      {isResetPasswordOpen && recoveryTokens && (
+        <ResetPasswordModal
+          userId={recoveryTokens.userId}
+          secret={recoveryTokens.secret}
+          onSuccess={() => {
+            setIsResetPasswordOpen(false);
+            setRecoveryTokens(null);
+          }}
+          onClose={() => {
+            setIsResetPasswordOpen(false);
+            setRecoveryTokens(null);
+          }}
+        />
+      )}
 
       <CustomAlertModal
         isOpen={!!globalAlert?.isOpen}

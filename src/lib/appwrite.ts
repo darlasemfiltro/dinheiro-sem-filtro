@@ -48,6 +48,11 @@ if (initialConfig.projectId) {
 
 export let appwriteDatabases = new Databases(appwriteClient);
 export let appwriteAccount = new Account(appwriteClient);
+export const account = new Proxy({} as Account, {
+  get(_target, prop) {
+    return (appwriteAccount as any)[prop];
+  }
+});
 export { ID };
 
 export function reinitAppwriteClient() {
@@ -294,7 +299,7 @@ export async function appwritePasswordReset(email: string) {
   }
 }
 
-export async function appwriteCompleteRecovery(userId: string, secret: string, password: string, passwordAgain: string) {
-  return await appwriteAccount.updateRecovery(userId, secret, password, passwordAgain);
+export async function appwriteCompleteRecovery(userId: string, secret: string, password: string, passwordAgain?: string) {
+  return await appwriteAccount.updateRecovery(userId, secret, password);
 }
 
