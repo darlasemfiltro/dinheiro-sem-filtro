@@ -1270,8 +1270,15 @@ export default function App() {
       localStorage.clear();
       sessionStorage.clear();
       sessionStorage.setItem('FORCE_LOGIN_VIEW', 'true');
-      alert('Sua conta e dados foram excluídos com sucesso.');
-      window.location.replace(window.location.origin);
+      setGlobalAlert({
+        isOpen: true,
+        title: 'Conta Excluída',
+        message: 'Sua conta e dados foram excluídos com sucesso.',
+        type: 'success',
+        onConfirm: () => {
+          window.location.replace(window.location.origin);
+        }
+      });
     }
   };
 
