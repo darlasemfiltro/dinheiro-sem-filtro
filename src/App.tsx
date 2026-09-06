@@ -4,7 +4,7 @@ import { User, Account, Category, Transaction, Goal, FamilyMember, Subcategory }
 import { StorageService, SEED_CATEGORIES } from './services/storage';
 import { PortfolioStorageService } from './services/portfolioStorage';
 import { realtimeSync } from './services/websocket';
-import { subscribeToAppwriteRealtime, getAppwriteUser, appwriteCompleteOAuthSession, appwriteSignOut, appwriteDatabases as databases, appwriteClient as client, getAppwriteConfig } from './lib/appwrite';
+import { subscribeToAppwriteRealtime, getAppwriteUser, appwriteCompleteOAuthSession, appwriteSignOut, appwriteDatabases as databases, appwriteClient as client, getAppwriteConfig, account } from './lib/appwrite';
 import { Query } from 'appwrite';
 import {
   saveAppData,
@@ -1171,18 +1171,47 @@ export default function App() {
       setBudgets([]);      window.location.href = '/';      setTimeout(() => window.location.reload(), 100);    }
   };
 
-  const handleResetBudgetToZero = () => {
+  const handleResetBudgetToZero = async () => {
     if (currentUser) {
-      StorageService.resetUserBudgetToZero(effectiveBudgetId);
+      if (isReadOnly) {
+        setGlobalAlert({
+          isOpen: true,
+          title: 'Permissão Negada',
+          message: 'Apenas o titular do orçamento pode zerar os lançamentos. Usuários em modo membro não possuem esta permissão.',
+          type: 'error'
+        });
+        return;
+      }
+      await StorageService.resetUserBudgetToZero(effectiveBudgetId);
       refreshData(currentUser);
+      setGlobalAlert({
+        isOpen: true,
+        title: 'Orçamento Zerado',
+        message: 'Todos os lançamentos foram removidos com sucesso e sincronizados com a nuvem.',
+        type: 'success'
+      });
     }
   };
 
   const handleDeleteUserAccount = async () => {
     if (currentUser) {
+      if (isReadOnly) {
+        setGlobalAlert({
+          isOpen: true,
+          title: 'Permissão Negada',
+          message: 'Apenas o titular do orçamento pode excluir a conta.',
+          type: 'error'
+        });
+        return;
+      }
       realtimeSync.disconnect();
+      try {
+        await account.deleteSession('current');
+      } catch (e) {}
       await StorageService.deleteUserAccount(currentUser.id);
       setCurrentUser(null);
+      localStorage.clear();
+      window.location.href = '/';
     }
   };
 

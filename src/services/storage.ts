@@ -32,7 +32,7 @@ import {
   checkAndMigrateOrFetchUserFinancials,
   findUserAccount,
 } from '../lib/appwriteSync';
-import { getAppwriteUser, appwriteDatabases, getAppwriteConfig, appwritePasswordReset } from '../lib/appwrite';
+import { getAppwriteUser, appwriteDatabases, getAppwriteConfig, appwritePasswordReset, account } from '../lib/appwrite';
 import { Permission, Role, ID } from 'appwrite';
 
 export interface InMemoryFinancialStore {
@@ -2468,7 +2468,7 @@ export class StorageService {
   }
 
   // Reset all transactions and account initial balances to 0 for clean start
-  static resetUserBudgetToZero(budgetId: string) {
+  static async resetUserBudgetToZero(budgetId: string): Promise<void> {
     this.initialize();
 
     // 1. Remove all transactions for this budgetId
@@ -2487,6 +2487,40 @@ export class StorageService {
       return a;
     });
     localStorage.setItem(STORAGE_KEYS.ACCOUNTS, JSON.stringify(updatedAcc));
+
+    // 3. Update Appwrite Database user_financials document immediately
+    try {
+      const config = getAppwriteConfig();
+      if (config.projectId && config.projectId !== 'default-placeholder') {
+        const docId = getCanonicalAppwriteDocId(budgetId);
+        try {
+          const doc = await appwriteDatabases.getDocument(config.databaseId, 'user_financials', docId);
+          let rawData = doc.data;
+          let parsedData = typeof rawData === 'string' ? JSON.parse(rawData || '{}') : (rawData || {});
+          parsedData.transactions = [];
+          parsedData.initialBalance = 0;
+          await appwriteDatabases.updateDocument(config.databaseId, 'user_financials', docId, {
+            userId: docId,
+            data: JSON.stringify(parsedData)
+          });
+        } catch (e) {
+          const list = await appwriteDatabases.listDocuments(config.databaseId, 'user_financials');
+          const found = list.documents.find(d => d.userId === budgetId || d.$id === docId);
+          if (found) {
+            let rawData = found.data;
+            let parsedData = typeof rawData === 'string' ? JSON.parse(rawData || '{}') : (rawData || {});
+            parsedData.transactions = [];
+            parsedData.initialBalance = 0;
+            await appwriteDatabases.updateDocument(config.databaseId, 'user_financials', found.$id, {
+              userId: found.userId || found.$id,
+              data: JSON.stringify(parsedData)
+            });
+          }
+        }
+      }
+    } catch (e) {
+      console.warn('[StorageService] Appwrite reset budget cloud error:', e);
+    }
 
     fetch('/api/data/reset', {
       method: 'POST',
@@ -4544,24 +4578,30 @@ export class StorageService {
 
     try {
       const config = getAppwriteConfig();
-      if (config.projectId && config.projectId !== 'default-placeholder' && userEmail) {
+      if (config.projectId && config.projectId !== 'default-placeholder') {
+        const docId = getCanonicalAppwriteDocId(userEmail || userId);
+        await appwriteDatabases.deleteDocument(config.databaseId, 'user_financials', docId).catch(() => {});
+        try {
+          await account.deleteSession('current');
+        } catch (e) {}
+
         const list = await appwriteDatabases.listDocuments(config.databaseId, 'user_financials');
         for (const doc of list.documents) {
           try {
             const raw = doc.data;
             let json = typeof raw === 'string' ? JSON.parse(raw || '{}') : (raw || {});
             let modified = false;
-            if (Array.isArray(json.allowed_users)) {
+            if (Array.isArray(json.allowed_users) && userEmail) {
               const beforeLen = json.allowed_users.length;
               json.allowed_users = json.allowed_users.filter((e: string) => e.toLowerCase() !== userEmail);
               if (json.allowed_users.length !== beforeLen) modified = true;
             }
-            if (Array.isArray(json.shared_members)) {
+            if (Array.isArray(json.shared_members) && userEmail) {
               const beforeLen = json.shared_members.length;
               json.shared_members = json.shared_members.filter((e: string) => e.toLowerCase() !== userEmail);
               if (json.shared_members.length !== beforeLen) modified = true;
             }
-            if (json.member_permissions && json.member_permissions[userEmail]) {
+            if (json.member_permissions && userEmail && json.member_permissions[userEmail]) {
               delete json.member_permissions[userEmail];
               modified = true;
             }
