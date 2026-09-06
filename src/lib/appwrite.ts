@@ -280,7 +280,18 @@ export async function appwritePasswordReset(email: string) {
     throw new Error('Appwrite não configurado.');
   }
   const redirectUrl = typeof window !== 'undefined' ? window.location.origin : 'https://dinheiro-sem-filtro.darla-semfiltro-9c5.workers.dev';
-  return await appwriteAccount.createRecovery(email.trim(), redirectUrl);
+  console.log('[Appwrite Password Reset] Solicitando recuperação para:', email.trim());
+  console.log('[Appwrite Password Reset] Redirect URL:', redirectUrl);
+  console.warn('[Appwrite Web Platform Check] Certifique-se de que o hostname exato ("', typeof window !== 'undefined' ? window.location.hostname : 'localhost', '") está cadastrado como Web Platform nas configurações do projeto no painel do Appwrite.');
+
+  try {
+    const response = await appwriteAccount.createRecovery(email.trim(), redirectUrl);
+    console.log('[Appwrite Password Reset] Resposta createRecovery:', response);
+    return response;
+  } catch (error: any) {
+    console.error('[Appwrite Password Reset] Erro detalhado createRecovery:', error);
+    throw error;
+  }
 }
 
 export async function appwriteCompleteRecovery(userId: string, secret: string, password: string, passwordAgain: string) {

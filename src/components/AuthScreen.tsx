@@ -143,14 +143,15 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({ onLoginSuccess }) => {
     try {
       const redirectUrl = window.location.origin;
       await appwritePasswordReset(resetEmail.trim());
-      alert('Link de recuperação enviado com sucesso! Acesse seu e-mail e clique no link recebido (verifique também a pasta de Spam/Lixo Eletrônico).');
+      alert('Link de recuperação enviado com sucesso! Verifique a Caixa de Entrada e o Spam.');
       setMode('auth');
       setResetStep(1);
       setResetEmail('');
     } catch (err: any) {
-      console.error('Erro ao enviar recuperação:', err);
-      alert('Falha ao enviar e-mail: ' + (err.message || 'Verifique o e-mail informado.'));
-      setError('Falha ao enviar e-mail: ' + (err.message || 'Verifique o e-mail informado.'));
+      console.error('Erro detalhado createRecovery:', err);
+      const errorMsg = `Falha no envio do e-mail: [${err.code || 'ERRO'}] ${err.message || err.type || 'Falha de comunicação com o Appwrite'}`;
+      alert(errorMsg);
+      setError(errorMsg);
     } finally {
       setIsSendingEmail(false);
     }
