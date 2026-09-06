@@ -1204,16 +1204,16 @@ export default function App() {
         });
         return;
       }
+      (window as any).__IS_RESETTING__ = true;
       isResettingRef.current = true;
       isSyncingRemoteRef.current = true;
       try {
         const targetBudgetId = effectiveBudgetId || currentUser.budgetId || currentUser.id;
         await StorageService.resetUserBudgetToZero(targetBudgetId);
 
-        Object.keys(localStorage).forEach(key => {
-          const isAuth = ['cookie', 'session', 'appwrite', 'user_session'].some(a => key.toLowerCase().includes(a));
-          if (!isAuth && key.startsWith('dsf_')) {
-            localStorage.removeItem(key);
+        Object.keys(localStorage).forEach(k => {
+          if (!k.includes('cookie') && !k.includes('session') && !k.includes('appwrite')) {
+            localStorage.removeItem(k);
           }
         });
 
@@ -1228,10 +1228,11 @@ export default function App() {
           type: 'success',
           confirmText: 'OK',
           onConfirm: () => {
-            window.location.reload();
+            window.location.replace(window.location.origin + window.location.pathname);
           }
         });
       } catch (e: any) {
+        (window as any).__IS_RESETTING__ = false;
         isResettingRef.current = false;
         isSyncingRemoteRef.current = false;
         console.error('[Reset Error]', e);
