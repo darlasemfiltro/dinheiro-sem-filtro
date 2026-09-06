@@ -412,7 +412,14 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4" id="dashboard-summary-cards">
         {/* Card 1: Saldo Anterior (Rolling Balance) */}
         {(() => {
-          const displayRollover = (!transactions || transactions.length === 0) ? 0 : summary.startingBalance;
+          const rawRollover = summary?.startingBalance || 0;
+          const finalRollover = (!transactions || transactions.length === 0) ? 0 : rawRollover;
+          
+          console.log('[ROLLOVER-DEBUG] Valor calculado:', rawRollover, 'Final:', finalRollover, 'Transactions count:', transactions?.length);
+          if (finalRollover !== 0) {
+            console.trace('[ROLLOVER-ORIGEM] Quem está gerando valor diferente de zero:');
+          }
+
           return (
             <div className="bg-white border border-gray-200 rounded-2xl p-4 shadow-xs hover:shadow-md transition relative overflow-hidden flex flex-col justify-between">
               <div className="flex items-center justify-between">
@@ -425,7 +432,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
               </div>
               <div className="mt-2">
                 <span className="text-lg font-extrabold text-[#121212] font-serif">
-                  {formatCurrency(displayRollover)}
+                  {formatCurrency(finalRollover)}
                 </span>
                 <p className="text-[10px] text-gray-500 mt-0.5">
                   Acumulado dos meses anteriores
