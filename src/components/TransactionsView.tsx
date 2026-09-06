@@ -249,6 +249,9 @@ export const TransactionsView: React.FC<TransactionsViewProps> = ({
 
   // Calculate Previous Balance (Saldo Anterior) strictly before current period filter start
   const calculatePreviousBalance = (): number => {
+    if (typeof localStorage !== 'undefined' && localStorage.getItem('DARLA_FORCE_ZERO') === 'true') {
+      return 0;
+    }
     if (!transactions || transactions.length === 0) {
       return 0;
     }

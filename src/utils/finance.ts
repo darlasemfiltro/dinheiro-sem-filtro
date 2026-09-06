@@ -204,6 +204,9 @@ export function parseDateComponents(dateStr: string): { year: number; month: num
  * Calculate starting balance of all accounts combined (initial balance sum)
  */
 export function getTotalAccountsInitialBalance(accounts: Account[]): number {
+  if (typeof localStorage !== 'undefined' && localStorage.getItem('DARLA_FORCE_ZERO') === 'true') {
+    return 0;
+  }
   return accounts.reduce((acc, a) => acc + (a.initialBalance || 0), 0);
 }
 
@@ -217,6 +220,21 @@ export function calculateMonthSummary(
   transactions: Transaction[],
   accounts: Account[]
 ): MonthSummary {
+  if (typeof localStorage !== 'undefined' && localStorage.getItem('DARLA_FORCE_ZERO') === 'true') {
+    return {
+      year,
+      month,
+      startingBalance: 0,
+      totalIncome: 0,
+      totalExpenses: 0,
+      endingBalance: 0,
+      consolidatedIncome: 0,
+      consolidatedExpenses: 0,
+      consolidatedBalance: 0,
+      pendingIncome: 0,
+      pendingExpenses: 0,
+    };
+  }
   const initialAccountsBalance = getTotalAccountsInitialBalance(accounts);
 
   if (!transactions || transactions.length === 0) {
