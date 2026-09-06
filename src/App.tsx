@@ -174,6 +174,7 @@ export default function App() {
 
   const isSyncingRemoteRef = useRef(false);
   const isFetchingRef = useRef(false);
+  const isResettingRef = useRef(false);
   const hasPendingRefreshRef = useRef(false);
   const lastSyncTimeRef = useRef(0);
 
@@ -626,7 +627,7 @@ export default function App() {
 
   // Load User Data & Synchronize with Remote
   const refreshData = async (user: User | null, forceRemote: boolean = true) => {
-    if (!user) return;
+    if (!user || isResettingRef.current) return;
     const budgetId = StorageService.getEffectiveBudgetId(user);
     if (!budgetId) return;
 
@@ -1203,9 +1204,18 @@ export default function App() {
         });
         return;
       }
+      isResettingRef.current = true;
       isSyncingRemoteRef.current = true;
       try {
-        await StorageService.resetUserBudgetToZero(effectiveBudgetId);
+        const targetBudgetId = effectiveBudgetId || currentUser.budgetId || currentUser.id;
+        await StorageService.resetUserBudgetToZero(targetBudgetId);
+
+        Object.keys(localStorage).forEach(key => {
+          const isAuth = ['cookie', 'session', 'appwrite', 'user_session'].some(a => key.toLowerCase().includes(a));
+          if (!isAuth && key.startsWith('dsf_')) {
+            localStorage.removeItem(key);
+          }
+        });
 
         setTransactions([]);
         setAccounts([{ id: 'default', name: 'Conta Principal', balance: 0, initialBalance: 0, type: 'checking' }]);
@@ -1221,9 +1231,16 @@ export default function App() {
             window.location.reload();
           }
         });
-      } catch (e) {
+      } catch (e: any) {
+        isResettingRef.current = false;
         isSyncingRemoteRef.current = false;
         console.error('[Reset Error]', e);
+        setGlobalAlert({
+          isOpen: true,
+          title: 'Erro no Reset',
+          message: 'Erro ao zerar orçamento no servidor: ' + (e?.message || JSON.stringify(e)),
+          type: 'error'
+        });
       }
     }
   };

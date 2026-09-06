@@ -2516,6 +2516,7 @@ export class StorageService {
         goals: [],
         categories: freshCategories,
         rollover: 0,
+        accumulatedRollover: 0,
         previousBalance: 0,
         previousMonthBalance: 0,
         initialBalance: 0,
