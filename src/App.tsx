@@ -1243,8 +1243,14 @@ export default function App() {
 
         alert('[DEDO-DURO SUCESSO]\nOrçamento zerado e reiniciado como novo usuário com sucesso no Appwrite!');
 
-        // Hard redirect para a raiz limpa sem popups
-        window.location.replace(window.location.origin + window.location.pathname);
+        // Permite reativação do autosave e sincronização após o reset concluído com sucesso
+        setTimeout(() => {
+          sessionStorage.removeItem('IS_PERFORMING_RESET');
+          (window as any).__KILL_AUTOSAVE__ = false;
+          (window as any).__IS_RESETTING__ = false;
+          isResettingRef.current = false;
+          isSyncingRemoteRef.current = false;
+        }, 2000);
 
       } catch (err: any) {
         sessionStorage.removeItem('IS_PERFORMING_RESET');
