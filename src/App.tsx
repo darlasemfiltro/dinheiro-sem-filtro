@@ -173,6 +173,7 @@ export default function App() {
   const [isSharedBudgetModalOpen, setIsSharedBudgetModalOpen] = useState(false);
 
   const isSyncingRemoteRef = useRef(false);
+  const isFetchingRef = useRef(false);
   const hasPendingRefreshRef = useRef(false);
   const lastSyncTimeRef = useRef(0);
 
@@ -629,6 +630,11 @@ export default function App() {
     const budgetId = StorageService.getEffectiveBudgetId(user);
     if (!budgetId) return;
 
+    if (isFetchingRef.current && forceRemote) {
+      return;
+    }
+    isFetchingRef.current = true;
+
     // 1. Instant local read so UI responds immediately (0ms delay)
     const localAccounts = StorageService.getAccounts(budgetId);
     const localCategories = StorageService.getCategories(budgetId);
@@ -645,6 +651,7 @@ export default function App() {
     const now = Date.now();
     if (isSyncingRemoteRef.current || (forceRemote && now - lastSyncTimeRef.current < 2000)) {
       if (forceRemote) hasPendingRefreshRef.current = true;
+      isFetchingRef.current = false;
       return;
     }
     isSyncingRemoteRef.current = true;
@@ -690,6 +697,7 @@ export default function App() {
       }
     } finally {
       isSyncingRemoteRef.current = false;
+      isFetchingRef.current = false;
       if (forceRemote) setPendingSyncCount(0);
 
       // Re-read storage once remote sync finishes to capture any inbound changes & update state setters
