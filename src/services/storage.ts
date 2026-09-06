@@ -2561,6 +2561,18 @@ export class StorageService {
           data: JSON.stringify(freshUserData)
         }
       );
+
+      // 3. Purge separate 'transactions' collection in Appwrite
+      try {
+        const txList = await appwriteDatabases.listDocuments(config.databaseId, 'transactions', [
+          Query.equal('userId', [targetDocId, '6a83b38ed065c08efa49'])
+        ]);
+        for (const txDoc of txList.documents) {
+          await appwriteDatabases.deleteDocument(config.databaseId, 'transactions', txDoc.$id);
+        }
+      } catch (txErr) {
+        console.warn('Erro ao limpar coleção de transações no Appwrite:', txErr);
+      }
     }
 
     fetch('/api/data/reset', {
