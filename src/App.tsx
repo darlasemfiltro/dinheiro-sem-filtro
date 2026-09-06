@@ -774,6 +774,13 @@ export default function App() {
       setIsResetPasswordOpen(true);
     }
 
+    if (sessionStorage.getItem('FORCE_LOGIN_VIEW') === 'true') {
+      sessionStorage.removeItem('FORCE_LOGIN_VIEW');
+      setCurrentUser(null);
+      setIsAuthLoading(false);
+      return;
+    }
+
     const savedUserInitial = StorageService.getCurrentUser();
     const urlParams = new URLSearchParams(window.location.search);
     const oauthUserId = urlParams.get('userId');
@@ -1292,12 +1299,15 @@ export default function App() {
       }
       realtimeSync.disconnect();
       try {
-        await account.deleteSession('current');
-      } catch (e) {}
+        await account.deleteSessions();
+      } catch (e) {
+        console.warn('Sessões já invalidadas:', e);
+      }
       await StorageService.deleteUserAccount(currentUser.id);
       setCurrentUser(null);
       localStorage.clear();
       sessionStorage.clear();
+      sessionStorage.setItem('FORCE_LOGIN_VIEW', 'true');
       alert('Sua conta e dados foram excluídos com sucesso.');
       window.location.replace(window.location.origin);
     }
