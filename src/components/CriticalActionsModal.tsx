@@ -3,6 +3,7 @@ import { ShieldAlert, Trash2, UserX, AlertTriangle, X, Mail, Headphones } from '
 import { User } from '../types';
 import { appwriteDatabases as databases } from '../lib/appwrite';
 import { StorageService } from '../services/storage';
+import { Query } from 'appwrite';
 
 interface CriticalActionsModalProps {
   isOpen: boolean;
@@ -48,48 +49,64 @@ export const CriticalActionsModal: React.FC<CriticalActionsModalProps> = ({
     }
 
     const DATABASE_ID = '6a83aa8d0038331e040f';
-    const COLLECTION_ID = 'user_financials';
-
-    const factoryResetData = {
-      transactions: [],
-      accounts: [{ id: 'default', name: 'Conta Principal', balance: 0, initialBalance: 0, type: 'checking' }],
-      investments: [],
-      assets: [],
-      goals: [],
-      rollover: 0,
-      accumulatedRollover: 0,
-      previousBalance: 0,
-      previousMonthBalance: 0,
-      initialBalance: 0,
-      carryOver: 0,
-      monthlyRollovers: {},
-      monthlyClosings: [],
-      updatedAt: new Date().toISOString()
-    };
+    const BUDGET_COLLECTION_ID = 'user_financials';
+    const TRANSACTIONS_COLLECTION_ID = 'transactions';
 
     try {
-      // Gravação atômica direta no documento
+      // 1. Busca e remove todas as transações persistidas na coleção avulsa (se houver)
+      try {
+        const userTransactions = await databases.listDocuments(
+          DATABASE_ID,
+          TRANSACTIONS_COLLECTION_ID,
+          [Query.equal('budgetId', targetDocId)]
+        );
+
+        await Promise.all(
+          userTransactions.documents.map((doc) =>
+            databases.deleteDocument(DATABASE_ID, TRANSACTIONS_COLLECTION_ID, doc.$id)
+          )
+        );
+      } catch (err) {
+        console.warn('Coleção de transações avulsas não encontrada ou já limpa:', err);
+      }
+
+      // 2. Reset completo do documento de configuração / orçamento
+      const freshData = {
+        transactions: [],
+        accounts: [{ id: 'default', name: 'Conta Principal', balance: 0, initialBalance: 0, type: 'checking' }],
+        investments: [],
+        assets: [],
+        goals: [],
+        rollover: 0,
+        accumulatedRollover: 0,
+        previousBalance: 0,
+        previousMonthBalance: 0,
+        carryOver: 0,
+        monthlyRollovers: {},
+        monthlyClosings: [],
+        updatedAt: new Date().toISOString()
+      };
+
       const response = await databases.updateDocument(
         DATABASE_ID,
-        COLLECTION_ID,
+        BUDGET_COLLECTION_ID,
         targetDocId,
         {
-          ...factoryResetData,
-          data: JSON.stringify(factoryResetData)
+          ...freshData,
+          data: JSON.stringify(freshData)
         }
       );
 
       console.log('[DEDO-DURO] Retorno do Appwrite:', response);
 
-      // Expurga cache local
-      Object.keys(localStorage).forEach((key) => {
-        if (!key.toLowerCase().includes('cookie') && !key.toLowerCase().includes('session') && !key.toLowerCase().includes('appwrite')) {
-          localStorage.removeItem(key);
+      // 3. Expurgo local e reload seco
+      Object.keys(localStorage).forEach((k) => {
+        if (!k.toLowerCase().includes('cookie') && !k.toLowerCase().includes('session') && !k.toLowerCase().includes('appwrite')) {
+          localStorage.removeItem(k);
         }
       });
 
-      // Alerta dedo-duro de sucesso com dados reais
-      alert(`[DEDO-DURO SUCESSO]\nDocumento Zerado: ${targetDocId}\nStatus: Persistido no Appwrite.`);
+      alert('[SUCESSO] Todas as transações e saldos foram apagados no servidor!');
 
       if (setTransactions) setTransactions([]);
       if (setAccounts) setAccounts([{ id: 'default', name: 'Conta Principal', balance: 0, initialBalance: 0 }]);
@@ -103,7 +120,6 @@ export const CriticalActionsModal: React.FC<CriticalActionsModalProps> = ({
       window.location.replace(window.location.origin + window.location.pathname);
     } catch (error: any) {
       (window as any).__PAUSE_ALL_SYNCS__ = false;
-      // Dedo-duro captura e exibe a falha exata da API
       alert(`[DEDO-DURO DETECTOU ERRO]\n\nFalha ao gravar no Appwrite!\nCódigo: ${error.code || 'Desconhecido'}\nMensagem: ${error.message || JSON.stringify(error)}\nDoc ID tentado: ${targetDocId}`);
       console.error('[DEDO-DURO EXCEÇÃO]:', error);
     }
