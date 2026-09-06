@@ -44,7 +44,6 @@ export const CriticalActionsModal: React.FC<CriticalActionsModalProps> = ({
       onClose();
     } catch (error: any) {
       console.error('[DEDO-DURO EXCEÇÃO]:', error);
-      alert(`[DEDO-DURO DETECTOU ERRO]\n\nFalha ao zerar orçamento:\n${error.message || JSON.stringify(error)}`);
     }
   };
 
