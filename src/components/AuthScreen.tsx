@@ -143,14 +143,16 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({ onLoginSuccess }) => {
     try {
       const redirectUrl = window.location.origin;
       await appwritePasswordReset(resetEmail.trim());
-      alert('Link de recuperação enviado com sucesso! Verifique a Caixa de Entrada e o Spam.');
-      setMode('auth');
-      setResetStep(1);
-      setResetEmail('');
+      setSuccessMsg('Link de recuperação enviado com sucesso! Verifique a Caixa de Entrada e o Spam.');
+      setTimeout(() => {
+        setMode('auth');
+        setResetStep(1);
+        setResetEmail('');
+        setSuccessMsg('');
+      }, 3000);
     } catch (err: any) {
       console.error('Erro detalhado createRecovery:', err);
       const errorMsg = `Falha no envio do e-mail: [${err.code || 'ERRO'}] ${err.message || err.type || 'Falha de comunicação com o Appwrite'}`;
-      alert(errorMsg);
       setError(errorMsg);
     } finally {
       setIsSendingEmail(false);
@@ -180,14 +182,17 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({ onLoginSuccess }) => {
 
     try {
       await appwriteCompleteRecovery(recoveryUserId, recoverySecret, newPassword, confirmPassword);
-      alert('Senha alterada com sucesso! Você já pode entrar com sua nova senha.');
+      setSuccessMsg('Senha alterada com sucesso! Você já pode entrar com sua nova senha.');
       window.history.replaceState({}, document.title, window.location.pathname);
-      setRecoveryUserId(null);
-      setRecoverySecret(null);
-      setMode('auth');
-      setResetStep(1);
-      setNewPassword('');
-      setConfirmPassword('');
+      setTimeout(() => {
+        setRecoveryUserId(null);
+        setRecoverySecret(null);
+        setMode('auth');
+        setResetStep(1);
+        setNewPassword('');
+        setConfirmPassword('');
+        setSuccessMsg('');
+      }, 3000);
     } catch (err: any) {
       console.error('Erro ao redefinir senha:', err);
       setError('Erro ao redefinir senha: ' + (err.message || 'Token expirado ou inválido.'));
