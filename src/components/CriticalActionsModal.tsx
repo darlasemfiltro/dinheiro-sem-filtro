@@ -38,33 +38,13 @@ export const CriticalActionsModal: React.FC<CriticalActionsModalProps> = ({
   if (!isOpen) return null;
 
   const handleExecuteZerarOrcamento = async () => {
-    (window as any).__PAUSE_ALL_SYNCS__ = true;
-    (window as any).__KILL_AUTOSAVE__ = true;
-    (window as any).__IS_RESETTING__ = true;
-
-    const resolvedBudgetId = activeBudgetId || currentBudgetId || StorageService.getEffectiveBudgetId(user);
-    const targetDocId = resolvedBudgetId || user?.budgetId || user?.id || user?.$id;
-    if (!targetDocId) {
-      alert('[DEDO-DURO ERRO] ID do Orçamento está VAZIO ou INDEFINIDO! Operação cancelada.');
-      (window as any).__PAUSE_ALL_SYNCS__ = false;
-      return;
-    }
-
     try {
-      if (setTransactions) setTransactions([]);
-      if (setAccounts) setAccounts([{ id: 'default', name: 'Conta Principal', balance: 0, initialBalance: 0 }]);
-      if (setRollover) setRollover(0);
-      if (setTotalBalance) setTotalBalance(0);
-
       onResetBudgetToZero();
       setConfirmingAction(null);
       onClose();
     } catch (error: any) {
-      (window as any).__PAUSE_ALL_SYNCS__ = false;
-      (window as any).__KILL_AUTOSAVE__ = false;
-      (window as any).__IS_RESETTING__ = false;
-      alert(`[DEDO-DURO DETECTOU ERRO]\n\nFalha ao gravar no Appwrite!\nCódigo: ${error.code || 'Desconhecido'}\nMensagem: ${error.message || JSON.stringify(error)}\nDoc ID tentado: ${targetDocId}`);
       console.error('[DEDO-DURO EXCEÇÃO]:', error);
+      alert(`[DEDO-DURO DETECTOU ERRO]\n\nFalha ao zerar orçamento:\n${error.message || JSON.stringify(error)}`);
     }
   };
 
