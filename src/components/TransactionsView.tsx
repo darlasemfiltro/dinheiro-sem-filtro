@@ -249,6 +249,9 @@ export const TransactionsView: React.FC<TransactionsViewProps> = ({
 
   // Calculate Previous Balance (Saldo Anterior) strictly before current period filter start
   const calculatePreviousBalance = (): number => {
+    if (!transactions || transactions.length === 0) {
+      return 0;
+    }
     let periodStartDate: string | null = null;
 
     if (periodMode === 'month') {

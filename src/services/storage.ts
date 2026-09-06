@@ -2487,7 +2487,7 @@ export class StorageService {
     Object.keys(localStorage).forEach(key => {
       const lower = key.toLowerCase();
       if (
-        (lower.startsWith('dsf_') || lower.includes('rollover') || lower.includes('previous') || lower.includes('carry')) &&
+        (lower.startsWith('dsf_') || lower.includes('rollover') || lower.includes('previous') || lower.includes('carry') || lower.includes('closing') || lower.includes('history')) &&
         !lower.includes('session') &&
         !lower.includes('cookie') &&
         !lower.includes('appwrite')
@@ -2522,6 +2522,7 @@ export class StorageService {
         initialBalance: 0,
         carryOver: 0,
         monthlyRollovers: {},
+        monthlyClosings: [],
         updatedAt: new Date().toISOString()
       };
 

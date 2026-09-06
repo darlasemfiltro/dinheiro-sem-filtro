@@ -219,7 +219,7 @@ export function calculateMonthSummary(
 ): MonthSummary {
   const initialAccountsBalance = getTotalAccountsInitialBalance(accounts);
 
-  if (initialAccountsBalance === 0 && (!transactions || transactions.length === 0)) {
+  if (!transactions || transactions.length === 0) {
     return {
       year,
       month,
