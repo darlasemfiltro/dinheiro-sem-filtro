@@ -2513,6 +2513,17 @@ export class StorageService {
     localStorage.setItem(STORAGE_KEYS.TRANSACTIONS, JSON.stringify([]));
     localStorage.setItem(STORAGE_KEYS.ACCOUNTS, JSON.stringify(freshAccounts));
     localStorage.setItem(STORAGE_KEYS.GOALS, JSON.stringify([]));
+    localStorage.setItem('DARLA_FORCE_ZERO', 'true');
+    localStorage.setItem('cached_app_data', JSON.stringify({
+      transactions: [],
+      accounts: freshAccounts,
+      categories: freshCategories,
+      goals: [],
+      rollover: 0,
+      accumulatedRollover: 0,
+      previousBalance: 0,
+      initialBalance: 0
+    }));
 
     // 2. Hard Re-creation (Delete + Create) in Appwrite Database user_financials
     const config = getAppwriteConfig();
@@ -2548,13 +2559,24 @@ export class StorageService {
         updatedAt: new Date().toISOString()
       };
 
-      // Delete ALL documents matching targetDocId, budgetId, or email
+      // Force delete hardcoded shared doc ID and targetDocId
       try {
-        const list = await appwriteDatabases.listDocuments(config.databaseId, 'user_financials');
+        await appwriteDatabases.deleteDocument(config.databaseId, 'user_financials', '6a849358002db9e638ce');
+      } catch {}
+      try {
+        await appwriteDatabases.deleteDocument(config.databaseId, 'user_financials', targetDocId);
+      } catch {}
+
+      // Delete ALL documents matching targetDocId, budgetId, or email with limit 500
+      try {
+        const list = await appwriteDatabases.listDocuments(config.databaseId, 'user_financials', [
+          Query.limit(500)
+        ]);
         for (const doc of list.documents) {
           const docUserId = (doc.userId || '').toLowerCase();
           const docId = doc.$id;
           if (
+            docId === '6a849358002db9e638ce' ||
             docId === targetDocId ||
             docId === budgetId ||
             docUserId === userIdValue ||

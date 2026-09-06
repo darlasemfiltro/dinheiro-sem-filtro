@@ -37,6 +37,9 @@ export async function syncAppDataToCloud(userId?: string | any, appData?: any, u
     console.error('[DEDO-DURO] Tentativa de Autosave bloqueada durante o Reset!');
     return false;
   }
+  try {
+    localStorage.removeItem('DARLA_FORCE_ZERO');
+  } catch {}
   const databaseId = '6a83aa8d0038331e040f';
   const collectionId = 'user_financials';
   const currentUserId = typeof userId === 'string' && userId ? userId : 'default';
@@ -177,6 +180,29 @@ export async function syncUserDataWithAppwrite(userId: string, data: any): Promi
  * Carrega diretamente do documento da nuvem com Query estrita por userId/email e proteção contra sobrescrita vazia
  */
 export async function loadFromCloud(userId?: string, userEmail?: string): Promise<any | null> {
+  if (typeof localStorage !== 'undefined' && localStorage.getItem('DARLA_FORCE_ZERO') === 'true') {
+    console.log('[Appwrite Load] DARLA_FORCE_ZERO active. Returning pristine zeroed state.');
+    return {
+      saldo: 0,
+      receitas: 0,
+      despesas: 0,
+      transactions: [],
+      accounts: [{ id: 'default', name: 'Conta Principal', balance: 0, initialBalance: 0, type: 'checking' }],
+      categories: [],
+      goals: [],
+      familyMembers: [],
+      rollover: 0,
+      accumulatedRollover: 0,
+      previousBalance: 0,
+      previousMonthBalance: 0,
+      initialBalance: 0,
+      carryOver: 0,
+      monthlyRollovers: {},
+      monthlyClosings: [],
+      updatedAt: new Date().toISOString()
+    };
+  }
+
   const databaseId = '6a83aa8d0038331e040f';
   const collectionId = 'user_financials';
   const currentUserId = userId || 'default';
