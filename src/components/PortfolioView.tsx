@@ -878,6 +878,7 @@ export const PortfolioView: React.FC<PortfolioViewProps> = ({
 
   // Add / Edit Asset / Transaction via AddAssetModal
   const handleSaveAssetTransaction = (tx: Omit<InvestmentTransaction, 'id' | 'createdAt'> | InvestmentTransaction) => {
+    if (checkReadOnly()) return;
     const tempId = ('id' in tx && tx.id) ? tx.id : `tx_inv_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
     const txItem: InvestmentTransaction = {
       ...tx,
@@ -2039,6 +2040,7 @@ export const PortfolioView: React.FC<PortfolioViewProps> = ({
   };
 
   const handleOpenEditTxModal = (tx: InvestmentTransaction) => {
+    if (checkReadOnly()) return;
     setEditingTx(tx);
     setTxForm({
       assetTicker: tx.assetTicker,
@@ -2054,6 +2056,7 @@ export const PortfolioView: React.FC<PortfolioViewProps> = ({
   };
 
   const handleSaveTxForm = async (e?: React.FormEvent) => {
+    if (checkReadOnly()) return;
     if (e) e.preventDefault();
     if (!txForm.assetTicker || !txForm.quantity || !txForm.unitPrice) return;
 
@@ -2135,6 +2138,7 @@ export const PortfolioView: React.FC<PortfolioViewProps> = ({
   };
 
   const confirmDeleteTx = () => {
+    if (checkReadOnly()) return;
     if (!deletingTxId) return;
     const targetId = deletingTxId;
 

@@ -844,13 +844,15 @@ export const TransactionsView: React.FC<TransactionsViewProps> = ({
                       <input
                         type="date"
                         value={tx.date}
+                        disabled={isReadOnly}
                         onChange={(e) => {
+                          if (isReadOnly) return;
                           if (e.target.value && onUpdateTransaction) {
                             onUpdateTransaction({ ...tx, date: e.target.value });
                           }
                         }}
-                        title="Clique para alterar a data"
-                        className="bg-gray-50 hover:bg-gray-100 border border-gray-300 rounded-lg px-2 py-1 text-xs font-bold text-[#121212] focus:outline-none focus:ring-1 focus:ring-[#D4AF37] cursor-pointer transition"
+                        title={isReadOnly ? "Apenas leitura" : "Clique para alterar a data"}
+                        className={`border border-gray-300 rounded-lg px-2 py-1 text-xs font-bold text-[#121212] focus:outline-none focus:ring-1 focus:ring-[#D4AF37] transition ${isReadOnly ? 'bg-gray-200 cursor-not-allowed opacity-75' : 'bg-gray-50 hover:bg-gray-100 cursor-pointer'}`}
                       />
                     </td>
 
