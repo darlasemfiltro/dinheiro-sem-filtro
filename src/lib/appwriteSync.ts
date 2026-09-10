@@ -200,7 +200,13 @@ export async function syncAppDataToCloud(userId?: string | any, appData?: any, u
           : (jsonDoBanco.accounts || payloadData.accounts || []),
         goals: (Array.isArray(payloadData.goals) && payloadData.goals.length > 0)
           ? payloadData.goals
-          : (jsonDoBanco.goals || jsonDoBanco.investorGoals || payloadData.goals || []),
+          : (jsonDoBanco.goals || payloadData.goals || []),
+        investmentGoals: (Array.isArray(payloadData.investmentGoals) && payloadData.investmentGoals.length > 0)
+          ? payloadData.investmentGoals
+          : (jsonDoBanco.investmentGoals || jsonDoBanco.investorGoals || payloadData.investmentGoals || []),
+        investorGoals: (Array.isArray(payloadData.investmentGoals) && payloadData.investmentGoals.length > 0)
+          ? payloadData.investmentGoals
+          : (jsonDoBanco.investmentGoals || jsonDoBanco.investorGoals || payloadData.investorGoals || []),
         pedidos_acesso: jsonDoBanco.pedidos_acesso || payloadData.pedidos_acesso || [],
         allowed_users: jsonDoBanco.allowed_users || payloadData.allowed_users || [],
         shared_members: jsonDoBanco.shared_members || payloadData.shared_members || [],
@@ -1017,7 +1023,7 @@ export function mergeRemoteGoalsWithOptimistic(remoteGoals: any[]): any[] {
 }
 
 /**
- * Executes an atomic server transaction for goal operations and updates Appwrite directly
+ * Executes an atomic server transaction for family budget goal operations and updates Appwrite directly
  */
 export async function executeTransactionalGoal(
   userId: string,
@@ -1033,7 +1039,6 @@ export async function executeTransactionalGoal(
   }
 
   try {
-    // Call backend server transactional endpoint
     const response = await fetch('/api/data/transactional-goal', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -1059,12 +1064,12 @@ export async function executeTransactionalGoal(
     console.warn('[Transactional Goal Server Notice] Server unreachable, executing direct Appwrite transaction:', err);
   }
 
-  // Fallback: Direct Appwrite document transaction
+  // Fallback: Direct Appwrite document transaction for family budget goals
   try {
     const cloudDoc = await loadFromCloud(userId);
-    const existingGoals = Array.isArray(cloudDoc?.investorGoals)
-      ? cloudDoc.investorGoals
-      : (Array.isArray(cloudDoc?.goals) ? cloudDoc.goals : []);
+    const existingGoals = Array.isArray(cloudDoc?.goals)
+      ? cloudDoc.goals
+      : [];
 
     let updatedGoals = [...existingGoals];
 
@@ -1095,7 +1100,6 @@ export async function executeTransactionalGoal(
     const fullPayload = {
       ...(cloudDoc || {}),
       goals: mergedGoals,
-      investorGoals: mergedGoals,
       familyBudget: [
         ...mergedGoals,
         ...(Array.isArray(cloudDoc?.familyBudget)
@@ -1105,13 +1109,106 @@ export async function executeTransactionalGoal(
       updatedAt: new Date().toISOString(),
     };
 
-    await saveAppData(fullPayload);
+    await saveAppData(userId, fullPayload);
     if (targetId && action !== 'deleteGoal') {
       clearPendingGoalMutation(targetId);
     }
     return { success: true, goals: mergedGoals };
   } catch (appwriteErr) {
-    console.error('[Direct Appwrite Transaction Error]', appwriteErr);
+    console.error('[Direct Appwrite Goal Transaction Error]', appwriteErr);
+    return { success: false, goals: [] };
+  }
+}
+
+/**
+ * Executes an atomic server transaction for investor goal operations and updates Appwrite directly
+ */
+export async function executeTransactionalInvestmentGoal(
+  userId: string,
+  action: 'addGoal' | 'updateGoal' | 'deleteGoal' | 'updateGoalProgress',
+  payload: { goalData?: any; goalId?: string; addedAmount?: number }
+): Promise<{ success: boolean; goals: any[] }> {
+  const targetId = payload.goalId || payload.goalData?.id;
+
+  if (action === 'deleteGoal' && targetId) {
+    recordGoalDeletion(targetId);
+  } else if (targetId) {
+    recordPendingGoalMutation(targetId, action, payload.goalData, payload.addedAmount);
+  }
+
+  try {
+    const response = await fetch('/api/data/transactional-investment-goal', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        userId,
+        action,
+        goalId: targetId,
+        goalData: payload.goalData,
+        addedAmount: payload.addedAmount,
+      }),
+    });
+
+    if (response.ok) {
+      const resData = await response.json();
+      if (resData && resData.success && Array.isArray(resData.goals)) {
+        if (targetId && action !== 'deleteGoal') {
+          clearPendingGoalMutation(targetId);
+        }
+        return { success: true, goals: resData.goals };
+      }
+    }
+  } catch (err) {
+    console.warn('[Transactional Investment Goal Server Notice] Server unreachable, executing direct Appwrite transaction:', err);
+  }
+
+  // Fallback: Direct Appwrite document transaction for investor goals
+  try {
+    const cloudDoc = await loadFromCloud(userId);
+    const existingGoals = Array.isArray(cloudDoc?.investmentGoals)
+      ? cloudDoc.investmentGoals
+      : (Array.isArray(cloudDoc?.investorGoals) ? cloudDoc.investorGoals : []);
+
+    let updatedGoals = [...existingGoals];
+
+    if (action === 'addGoal' || action === 'updateGoal') {
+      const g = payload.goalData;
+      const idx = updatedGoals.findIndex((item: any) => item.id === g.id);
+      if (idx >= 0) {
+        updatedGoals[idx] = { ...updatedGoals[idx], ...g, updatedAt: new Date().toISOString() };
+      } else {
+        updatedGoals.push({ ...g, updatedAt: new Date().toISOString() });
+      }
+    } else if (action === 'deleteGoal') {
+      updatedGoals = updatedGoals.filter((item: any) => item.id !== targetId);
+    } else if (action === 'updateGoalProgress') {
+      const idx = updatedGoals.findIndex((item: any) => item.id === targetId);
+      if (idx >= 0) {
+        const added = payload.addedAmount || 0;
+        updatedGoals[idx] = {
+          ...updatedGoals[idx],
+          currentAmount: Math.max(0, (updatedGoals[idx].currentAmount || 0) + added),
+          updatedAt: new Date().toISOString(),
+        };
+      }
+    }
+
+    const mergedGoals = mergeRemoteGoalsWithOptimistic(updatedGoals);
+
+    const fullPayload = {
+      ...(cloudDoc || {}),
+      investmentGoals: mergedGoals,
+      investorGoals: mergedGoals,
+      updatedAt: new Date().toISOString(),
+    };
+
+    await saveAppData(userId, fullPayload);
+    if (targetId && action !== 'deleteGoal') {
+      clearPendingGoalMutation(targetId);
+    }
+    return { success: true, goals: mergedGoals };
+  } catch (appwriteErr) {
+    console.error('[Direct Appwrite Investment Goal Transaction Error]', appwriteErr);
     return { success: false, goals: [] };
   }
 }

@@ -566,8 +566,9 @@ export default function App() {
           if (remoteData.investments && Array.isArray(remoteData.investments)) {
             PortfolioStorageService.saveAssets(remoteData.investments, bId);
           }
-          if (remoteData.investorGoals && Array.isArray(remoteData.investorGoals)) {
-            PortfolioStorageService.saveGoals(remoteData.investorGoals, bId);
+          const incomingInvGoals = remoteData.investmentGoals || remoteData.investorGoals;
+          if (incomingInvGoals && Array.isArray(incomingInvGoals)) {
+            PortfolioStorageService.saveGoals(incomingInvGoals, bId);
           }
           const investmentsFromCloud = remoteData.investmentTransactions || remoteData.investments || [];
           console.log('[BOOT CLOUD] Ativos recuperados do Appwrite:', investmentsFromCloud);
@@ -970,9 +971,10 @@ export default function App() {
           const budgetId = StorageService.getEffectiveBudgetId(currentUser);
           (PortfolioStorageService as any).saveToAllAliasKeys('darla_portfolio_assets', budgetId, remoteData.investorPortfolio);
         }
-        if (remoteData.investorGoals && Array.isArray(remoteData.investorGoals)) {
+        const incomingInvGoals = remoteData.investmentGoals || remoteData.investorGoals;
+        if (incomingInvGoals && Array.isArray(incomingInvGoals)) {
           const budgetId = StorageService.getEffectiveBudgetId(currentUser);
-          const mergedInvestorGoals = mergeRemoteGoalsWithOptimistic(remoteData.investorGoals);
+          const mergedInvestorGoals = mergeRemoteGoalsWithOptimistic(incomingInvGoals);
           PortfolioStorageService.saveGoals(mergedInvestorGoals, budgetId);
         }
         if (remoteData.goals && Array.isArray(remoteData.goals)) {
@@ -1424,6 +1426,7 @@ export default function App() {
       investments: investmentTransactions,
       investorPortfolio: investorPortfolio,
       investmentTransactions: investmentTransactions,
+      investmentGoals: investorGoals,
       investorGoals: investorGoals,
       assets: investorPortfolio,
       goals: currentGoals,
@@ -2106,7 +2109,6 @@ export default function App() {
     
     // 1. Instant local optimistic update
     StorageService.saveGoal(goal);
-    PortfolioStorageService.addGoal(goal as any, budgetId);
     const freshGoals = StorageService.getGoals(budgetId);
     setGoals(freshGoals);
 
@@ -2143,7 +2145,6 @@ export default function App() {
     // 1. Instant local optimistic update & deletion guard
     recordGoalDeletion(id);
     StorageService.deleteGoal(id);
-    PortfolioStorageService.deleteGoal(id, budgetId);
     const freshGoals = StorageService.getGoals(budgetId).filter((g) => g.id !== id);
     setGoals(freshGoals);
 

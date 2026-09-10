@@ -4,7 +4,7 @@ import { usePrivacyMode } from '../utils/finance';
 import { appwriteDatabases as databases, appwriteClient as client, getAppwriteConfig } from '../lib/appwrite';
 import {
   saveAppData,
-  executeTransactionalGoal,
+  executeTransactionalInvestmentGoal,
   mergeRemoteGoalsWithOptimistic,
   recordGoalDeletion,
   mergeRemoteInvestmentTransactionsWithOptimistic,
@@ -918,7 +918,7 @@ export const PortfolioView: React.FC<PortfolioViewProps> = ({
             try {
               const raw = response.payload.data;
               const remoteData = typeof raw === 'string' ? JSON.parse(raw) : raw;
-              const rawGoals = remoteData.investorGoals;
+              const rawGoals = remoteData.investmentGoals || remoteData.investorGoals;
               if (Array.isArray(rawGoals)) {
                 const mergedGoals = mergeRemoteGoalsWithOptimistic(rawGoals);
                 setGoals(mergedGoals);
@@ -2074,7 +2074,7 @@ export const PortfolioView: React.FC<PortfolioViewProps> = ({
       setGoals(updatedGoals);
 
       // Execute atomic server transaction and direct Appwrite write
-      await executeTransactionalGoal(
+      await executeTransactionalInvestmentGoal(
         userId,
         editingGoal ? 'updateGoal' : 'addGoal',
         {
@@ -2127,7 +2127,7 @@ export const PortfolioView: React.FC<PortfolioViewProps> = ({
       setGoals(updatedGoals as any);
 
       // Execute atomic server transaction and direct Appwrite deletion
-      await executeTransactionalGoal(userId, 'deleteGoal', {
+      await executeTransactionalInvestmentGoal(userId, 'deleteGoal', {
         goalId: idToDelete,
       });
 
