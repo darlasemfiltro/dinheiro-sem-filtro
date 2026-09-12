@@ -44,16 +44,21 @@ function describeArc(
   startPct: number,
   endPct: number
 ): string {
-  const startAngle = (180 - startPct * 1.8) * (Math.PI / 180);
-  const endAngle = (180 - endPct * 1.8) * (Math.PI / 180);
+  const clampedStart = Math.max(0, Math.min(100, startPct));
+  const clampedEnd = Math.max(0, Math.min(100, endPct));
+
+  const startAngle = (180 - clampedStart * 1.8) * (Math.PI / 180);
+  const endAngle = (180 - clampedEnd * 1.8) * (Math.PI / 180);
 
   const x1 = cx + r * Math.cos(startAngle);
   const y1 = cy - r * Math.sin(startAngle);
   const x2 = cx + r * Math.cos(endAngle);
   const y2 = cy - r * Math.sin(endAngle);
 
-  const largeArcFlag = Math.abs(endPct - startPct) > 50 ? 1 : 0;
-  // Sweep flag 1 draws the upper arc (clockwise from left to right in SVG coordinates)
+  // In an upper 180° semicircle gauge (0% to 100%), the arc angle span
+  // between start and end never exceeds 180°. Therefore, largeArcFlag is ALWAYS 0.
+  const largeArcFlag = 0;
+  // Sweep flag 1 draws the upper arc clockwise (from left to right in SVG coordinates)
   return `M ${x1.toFixed(2)} ${y1.toFixed(2)} A ${r} ${r} 0 ${largeArcFlag} 1 ${x2.toFixed(2)} ${y2.toFixed(2)}`;
 }
 
@@ -307,7 +312,7 @@ export const FinancialSpeedometer: React.FC<FinancialSpeedometerProps> = ({
 
             {/* ZONE 1: Verde (Equilíbrio: 0% a 60%) */}
             <path
-              d={describeArc(cx, cy, radius, 0.5, 59.2)}
+              d={describeArc(cx, cy, radius, 1.5, 58.5)}
               fill="none"
               stroke="url(#gradGreen)"
               strokeWidth={strokeWidth}
@@ -317,17 +322,17 @@ export const FinancialSpeedometer: React.FC<FinancialSpeedometerProps> = ({
 
             {/* ZONE 2: Amarela (Atenção: 61% a 80%) */}
             <path
-              d={describeArc(cx, cy, radius, 60.8, 79.2)}
+              d={describeArc(cx, cy, radius, 61.5, 78.5)}
               fill="none"
               stroke="url(#gradYellow)"
               strokeWidth={strokeWidth}
-              strokeLinecap="butt"
+              strokeLinecap="round"
               className="transition-all duration-300"
             />
 
             {/* ZONE 3: Vermelha (Alerta: 81% a 100%) */}
             <path
-              d={describeArc(cx, cy, radius, 80.8, 99.5)}
+              d={describeArc(cx, cy, radius, 81.5, 98.5)}
               fill="none"
               stroke="url(#gradRed)"
               strokeWidth={strokeWidth}
