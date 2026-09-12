@@ -2014,12 +2014,12 @@ async function startServer() {
 
       // Keep portfolio data in sync too
       const portfolioData = loadServerPortfolio();
-      const portfolioEntry = portfolioData[canonicalId] || { assets: [], transactions: [], dividends: [], targetAllocations: [], goals: [], deletedIds: [] };
-      portfolioEntry.goals = existing.goals;
-      portfolioEntry.deletedIds = existing.deletedIds;
-      portfolioEntry.updatedAt = existing.updatedAt;
-      portfolioData[canonicalId] = portfolioEntry;
-      saveServerPortfolio(portfolioData);
+      if (portfolioData[canonicalId]) {
+        portfolioData[canonicalId].goals = existing.goals;
+        portfolioData[canonicalId].deletedIds = existing.deletedIds;
+        portfolioData[canonicalId].updatedAt = existing.updatedAt;
+        saveServerPortfolio(portfolioData);
+      }
 
       // Propagate directly to central Appwrite doc via server-side fetch
       try {
