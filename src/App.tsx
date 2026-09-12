@@ -1674,7 +1674,7 @@ export default function App() {
     window.dispatchEvent(new Event('remote_data_updated'));
     window.dispatchEvent(new CustomEvent('financial_data_mutated', { detail: { userId: portfolioUserId } }));
 
-    // 3. Process cloud sync in background (non-blocking)
+    // 3. Process cloud sync in background (non-blocking, no rollback)
     (async () => {
       try {
         const action = newTx.id ? 'updateInvestmentTransaction' : 'addInvestmentTransaction';
@@ -1689,11 +1689,7 @@ export default function App() {
           (PortfolioStorageService as any).saveToAllAliasKeys('darla_portfolio_transactions', portfolioUserId, merged);
         }
       } catch (error: any) {
-        console.error('Falha na sincronização em background, revertendo estado...', error);
-        // 4. ROLLBACK if background sync fails
-        setInvestmentTransactions(previousList);
-        (PortfolioStorageService as any).saveToAllAliasKeys('darla_portfolio_transactions', portfolioUserId, previousList);
-        setGlobalAlert({ isOpen: true, message: 'Erro ao salvar transação de investimento na nuvem. Verifique sua conexão.', type: 'error' });
+        console.warn('Falha na sincronização em background (salvo localmente):', error);
       }
     })();
 

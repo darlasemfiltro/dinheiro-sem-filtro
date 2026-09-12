@@ -1043,7 +1043,7 @@ export const PortfolioView: React.FC<PortfolioViewProps> = ({
     window.dispatchEvent(new Event('remote_data_updated'));
     window.dispatchEvent(new CustomEvent('financial_data_mutated'));
 
-    // 4. Background Sync without freezing UI
+    // 4. Background Sync without freezing UI (non-blocking, no rollback)
     (async () => {
       try {
         if (onSaveInvestmentTransaction) {
@@ -1056,10 +1056,7 @@ export const PortfolioView: React.FC<PortfolioViewProps> = ({
           });
         }
       } catch (err: any) {
-        console.error('Erro na sincronização de investimento em background:', err);
-        // Rollback on failure
-        setTransactions(previousTxs);
-        setPortfolioAlert({ isOpen: true, message: 'Falha ao sincronizar com a nuvem. Alteração revertida.', type: 'error' });
+        console.warn('Erro na sincronização de investimento em background (salvo localmente):', err);
       }
     })();
   };
@@ -2280,7 +2277,7 @@ export const PortfolioView: React.FC<PortfolioViewProps> = ({
     window.dispatchEvent(new Event('remote_data_updated'));
     window.dispatchEvent(new CustomEvent('financial_data_mutated'));
 
-    // 4. Background Sync without freezing UI
+    // 4. Background Sync without freezing UI (non-blocking, no rollback)
     (async () => {
       try {
         if (onSaveInvestmentTransaction) {
@@ -2293,10 +2290,7 @@ export const PortfolioView: React.FC<PortfolioViewProps> = ({
           });
         }
       } catch (err: any) {
-        console.error('Erro na sincronização de investimento em background:', err);
-        // Rollback on failure
-        setTransactions(previousTxs);
-        setPortfolioAlert({ isOpen: true, message: 'Falha ao sincronizar com a nuvem. Alteração revertida.', type: 'error' });
+        console.warn('Erro na sincronização de investimento em background (salvo localmente):', err);
       }
     })();
   };
