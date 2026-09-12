@@ -1419,18 +1419,47 @@ async function startServer() {
         });
       }
 
-      const birthParts = String(rawBirthDate).split('-');
-      if (birthParts.length !== 3) {
+      let birthYear = 0;
+      let birthMonth = 0;
+      let birthDay = 0;
+      let normalizedIsoBirthDate = '';
+
+      if (rawBirthDate.includes('/')) {
+        const parts = rawBirthDate.split('/');
+        if (parts.length === 3) {
+          birthDay = parseInt(parts[0], 10);
+          birthMonth = parseInt(parts[1], 10) - 1;
+          birthYear = parseInt(parts[2], 10);
+          normalizedIsoBirthDate = `${parts[2]}-${parts[1].padStart(2, '0')}-${parts[0].padStart(2, '0')}`;
+        }
+      } else if (rawBirthDate.includes('-')) {
+        const parts = rawBirthDate.split('-');
+        if (parts.length === 3) {
+          birthYear = parseInt(parts[0], 10);
+          birthMonth = parseInt(parts[1], 10) - 1;
+          birthDay = parseInt(parts[2], 10);
+          normalizedIsoBirthDate = rawBirthDate;
+        }
+      }
+
+      if (
+        !birthYear ||
+        isNaN(birthYear) ||
+        isNaN(birthMonth) ||
+        isNaN(birthDay) ||
+        birthYear < 1900 ||
+        birthMonth < 0 ||
+        birthMonth > 11 ||
+        birthDay < 1 ||
+        birthDay > 31
+      ) {
         return res.status(422).json({
           success: false,
           code: 'INVALID_BIRTHDATE',
-          message: 'Data de nascimento em formato inválido. Utilize o formato AAAA-MM-DD.',
+          message: 'Data de nascimento em formato inválido. Utilize o formato DD/MM/AAAA.',
         });
       }
 
-      const birthYear = parseInt(birthParts[0], 10);
-      const birthMonth = parseInt(birthParts[1], 10) - 1;
-      const birthDay = parseInt(birthParts[2], 10);
       const birthObj = new Date(birthYear, birthMonth, birthDay);
       const now = new Date();
 

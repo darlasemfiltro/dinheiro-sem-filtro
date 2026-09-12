@@ -178,7 +178,9 @@ export const EditProfileModal: React.FC<EditProfileModalProps> = ({
                     <div>
                       <span className="text-[10px] text-gray-500 font-bold uppercase block">Data de Nascimento</span>
                       <span className="font-extrabold text-[#121212]">
-                        {user.birthDate.split('-').reverse().join('/')}
+                        {user.birthDate.includes('-')
+                          ? user.birthDate.split('-').reverse().join('/')
+                          : user.birthDate}
                       </span>
                     </div>
                     <Calendar className="w-4 h-4 text-[#D4AF37]" />

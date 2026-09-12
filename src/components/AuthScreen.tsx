@@ -22,16 +22,21 @@ import {
   MapPin,
   DollarSign,
   FileText,
+  MapPinOff,
 } from 'lucide-react';
 import {
   BRAZIL_STATES,
   POPULAR_CITIES_BY_UF,
   calculateAge,
   getMaxDateFor18YearsOld,
+  formatBirthDateInput,
+  brDateToIso,
+  isoToBrDate,
   formatCurrencyFromDigits,
   parseCurrencyToNumber,
   sanitizeString,
 } from '../utils/brazilLocations';
+import { SearchableSelect, SearchableSelectOption } from './SearchableSelect';
 import { LgpdTermsModal } from './LgpdTermsModal';
 
 
@@ -74,13 +79,30 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({ onLoginSuccess }) => {
 
   // Real-time Age calculation
   const calculatedAge = birthDate ? calculateAge(birthDate) : 0;
-  const isAgeValid = Boolean(birthDate) && calculatedAge >= 18;
+  const isAgeCalculable = birthDate.length === 10 && calculatedAge > 0;
+  const isAgeValid = Boolean(birthDate) && birthDate.length === 10 && calculatedAge >= 18;
   const isLocationValid = Boolean(state) && sanitizeString(city).length >= 2;
   const numericMonthlyIncome = parseCurrencyToNumber(monthlyIncome);
   const isIncomeValid = numericMonthlyIncome > 0;
   const isNameValid = name.trim().length >= 2;
   const isEmailValid = email.trim().includes('@') && email.trim().length >= 5;
   const isPasswordValid = password.length >= 6;
+
+  // State Options for SearchableSelect
+  const stateOptions: SearchableSelectOption[] = BRAZIL_STATES.map((s) => ({
+    value: s.uf,
+    label: `${s.uf} - ${s.name}`,
+    sublabel: s.name,
+  }));
+
+  // City Options for SearchableSelect filtered by selected State
+  const cityOptions: SearchableSelectOption[] = (
+    state && POPULAR_CITIES_BY_UF[state] ? POPULAR_CITIES_BY_UF[state] : []
+  ).map((c) => ({
+    value: c,
+    label: c,
+    sublabel: state,
+  }));
 
   // Form validity strictly enforcing LGPD consent and demographic fields
   const isFormValid = isRegister
@@ -509,13 +531,13 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({ onLoginSuccess }) => {
               {/* EXPANDED SIGN UP FIELDS (LGPD & DEMOGRAPHICS) */}
               {isRegister && (
                 <>
-                  {/* 1. Data de Nascimento (Mínimo 18 anos) */}
+                  {/* 1. Data de Nascimento (Digitada com máscara DD/MM/AAAA e validação de 18+) */}
                   <div className="space-y-1">
                     <div className="flex items-center justify-between">
                       <label className="text-xs sm:text-sm font-bold text-[#121212]">
                         Data de Nascimento <span className="text-[#D4AF37]">*</span>
                       </label>
-                      {birthDate && (
+                      {birthDate && isAgeCalculable && (
                         <span
                           className={`text-[10px] font-extrabold px-2 py-0.5 rounded-md ${
                             isAgeValid
@@ -530,12 +552,14 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({ onLoginSuccess }) => {
                     <div className="relative">
                       <Calendar className="w-4 h-4 text-[#D4AF37] absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none" />
                       <input
-                        type="date"
+                        type="text"
+                        inputMode="numeric"
+                        placeholder="DD/MM/AAAA"
                         value={birthDate}
-                        max={getMaxDateFor18YearsOld()}
-                        onChange={(e) => setBirthDate(e.target.value)}
-                        className={`w-full min-h-[48px] pl-10 pr-4 py-3 bg-gray-50 border rounded-xl text-xs sm:text-sm text-[#121212] focus:outline-none focus:ring-2 focus:bg-white transition ${
-                          birthDate && !isAgeValid
+                        onChange={(e) => setBirthDate(formatBirthDateInput(e.target.value))}
+                        maxLength={10}
+                        className={`w-full min-h-[48px] pl-10 pr-4 py-3 bg-gray-50 border rounded-xl text-xs sm:text-sm text-[#121212] focus:outline-none focus:ring-2 focus:bg-white transition tracking-wider ${
+                          birthDate.length === 10 && !isAgeValid
                             ? 'border-red-400 focus:ring-red-400 bg-red-50/40'
                             : 'border-gray-200 focus:ring-[#D4AF37]'
                         }`}
@@ -543,67 +567,62 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({ onLoginSuccess }) => {
                         id="signup-birthdate"
                       />
                     </div>
-                    {birthDate && !isAgeValid ? (
+                    {birthDate.length === 10 && !isAgeValid ? (
                       <p className="text-[11px] font-bold text-red-600 flex items-center gap-1.5 mt-1">
                         <AlertCircle className="w-3.5 h-3.5 shrink-0" />
-                        <span>É obrigatório ter no mínimo 18 anos completos para criar uma conta.</span>
+                        <span>
+                          {calculatedAge < 18
+                            ? 'É obrigatório ter no mínimo 18 anos completos para criar uma conta.'
+                            : 'Por favor, informe uma data válida no formato DD/MM/AAAA.'}
+                        </span>
                       </p>
                     ) : (
                       <p className="text-[10px] text-gray-500 font-medium">
-                        Obrigatório para conformidade legal e validação de maioridade (18+).
+                        Digite sua data de nascimento (ex: 15/05/1990). Mínimo de 18 anos (LGPD).
                       </p>
                     )}
                   </div>
 
-                  {/* 2. Cidade e Estado (UF) */}
+                  {/* 2. Cidade e Estado (UF) com Seleção e Pesquisa Integrada no Padrão do App */}
                   <div className="space-y-1">
                     <label className="text-xs sm:text-sm font-bold text-[#121212]">
                       Localização (Estado e Cidade) <span className="text-[#D4AF37]">*</span>
                     </label>
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
-                      {/* Estado (UF) Selector */}
-                      <div className="relative">
-                        <select
+                      {/* Estado (UF) - Dropdown com Pesquisa no Padrão do App */}
+                      <div>
+                        <SearchableSelect
+                          options={stateOptions}
                           value={state}
-                          onChange={(e) => setState(e.target.value)}
-                          className="w-full min-h-[48px] px-3.5 py-3 bg-gray-50 border border-gray-200 rounded-xl text-xs sm:text-sm text-[#121212] focus:outline-none focus:ring-2 focus:ring-[#D4AF37] focus:bg-white transition cursor-pointer appearance-none font-medium"
-                          required
+                          onChange={(newUf) => {
+                            setState(newUf);
+                            setCity('');
+                          }}
+                          placeholder="Selecione o Estado (UF)"
+                          searchPlaceholder="Pesquisar estado..."
+                          emptyText="Nenhum estado encontrado"
                           id="signup-state"
-                        >
-                          <option value="">Selecione o Estado (UF)</option>
-                          {BRAZIL_STATES.map((s) => (
-                            <option key={s.uf} value={s.uf}>
-                              {s.uf} - {s.name}
-                            </option>
-                          ))}
-                        </select>
-                        <div className="pointer-events-none absolute right-3.5 top-1/2 -translate-y-1/2 text-gray-500 text-[10px] font-bold">
-                          ▼
-                        </div>
+                        />
                       </div>
 
-                      {/* Cidade com Autocomplete do Estado */}
-                      <div className="relative">
-                        <MapPin className="w-4 h-4 text-[#D4AF37] absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none" />
-                        <input
-                          type="text"
-                          list="city-autocomplete-list"
+                      {/* Cidade - Dropdown com Pesquisa filtrada por Estado no Padrão do App */}
+                      <div>
+                        <SearchableSelect
+                          options={cityOptions}
                           value={city}
-                          onChange={(e) => setCity(e.target.value)}
-                          placeholder="Sua cidade"
-                          className="w-full min-h-[48px] pl-10 pr-3.5 py-3 bg-gray-50 border border-gray-200 rounded-xl text-xs sm:text-sm text-[#121212] placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-[#D4AF37] focus:bg-white transition"
-                          required
+                          onChange={(newCity) => setCity(newCity)}
+                          placeholder={state ? 'Selecione a Cidade' : 'Primeiro selecione o Estado'}
+                          searchPlaceholder="Pesquisar cidade..."
+                          emptyText={state ? 'Nenhuma cidade encontrada' : 'Escolha um estado primeiro'}
+                          disabled={!state}
+                          allowCustomInput={Boolean(state)}
+                          icon={<MapPin className="w-4 h-4 text-[#D4AF37]" />}
                           id="signup-city"
                         />
-                        <datalist id="city-autocomplete-list">
-                          {state && POPULAR_CITIES_BY_UF[state]?.map((c) => (
-                            <option key={c} value={c} />
-                          ))}
-                        </datalist>
                       </div>
                     </div>
                     <p className="text-[10px] text-gray-500 font-medium">
-                      Para estatísticas orçamentárias regionais anônimas.
+                      Pesquise ou selecione seu estado e cidade para calibração de dados regionais anônimos.
                     </p>
                   </div>
 
