@@ -612,8 +612,22 @@ export async function persistCurrentStateToAppwrite(userId?: string | any, state
 
 // --- TRANSACTIONAL GOALS MANAGER (CROSS-DEVICE ATOMICITY & RACE CONDITION FIX) ---
 
-const DELETION_TTL_MS = 30000; // 30 seconds retention to prevent websocket race rollback
+const DELETION_TTL_MS = 30 * 24 * 60 * 60 * 1000; // 30 days permanent retention for definitive deletion
 const recentDeletedGoalIds = new Map<string, number>();
+
+try {
+  if (typeof localStorage !== 'undefined') {
+    const stored = localStorage.getItem('dsf_permanent_deleted_goals');
+    if (stored) {
+      const parsed = JSON.parse(stored);
+      if (Array.isArray(parsed)) {
+        parsed.forEach(([id, time]: [string, number]) => {
+          recentDeletedGoalIds.set(id, time);
+        });
+      }
+    }
+  }
+} catch {}
 const pendingGoalMutations = new Map<
   string,
   {
@@ -925,8 +939,15 @@ export function mergeRemoteMembersWithOptimistic(remoteMembers: any[]): any[] {
 
 export function recordGoalDeletion(goalId: string): void {
   if (!goalId) return;
-  recentDeletedGoalIds.set(goalId, Date.now());
+  const now = Date.now();
+  recentDeletedGoalIds.set(goalId, now);
   pendingGoalMutations.delete(goalId);
+  try {
+    if (typeof localStorage !== 'undefined') {
+      const arr = Array.from(recentDeletedGoalIds.entries());
+      localStorage.setItem('dsf_permanent_deleted_goals', JSON.stringify(arr));
+    }
+  } catch {}
 }
 
 export function isGoalRecentlyDeleted(goalId: string): boolean {

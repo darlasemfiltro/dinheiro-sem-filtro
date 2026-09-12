@@ -1907,23 +1907,18 @@ export default function App() {
       setInvestmentTransactions(updatedInvestmentTransactions);
     }
 
-    // 2. Cloud Persistence to Appwrite using canonical userIdentifier
+    // 2. Cloud Persistence to Appwrite using canonical userIdentifier (Non-blocking / Best-effort)
     try {
       const fullState = buildAppFinancialState(transactionsToPersist, accountsToPersist);
       const userIdentifier = budgetId || currentUser?.email || currentUser?.id || 'default';
       const success = await saveAppData(userIdentifier, fullState);
       if (!success) {
-        throw new Error('Falha ao persistir dados no Appwrite.');
+        console.warn('[Appwrite Sync Warning] Cloud sync returned false, saving locally and continuing.');
+      } else {
+        console.log('[Appwrite Sync] Dados e contas sincronizados na nuvem para:', userIdentifier);
       }
-      console.log('[Appwrite Sync] Dados e contas sincronizados na nuvem para:', userIdentifier);
     } catch (appwriteErr: any) {
-      console.error('[Appwrite Sync Error]', appwriteErr);
-      setGlobalAlert({ 
-        isOpen: true, 
-        message: `Erro ao salvar no Appwrite: ${appwriteErr?.message || appwriteErr}`, 
-        type: 'error' 
-      });
-      return false;
+      console.warn('[Appwrite Sync Non-Blocking Notice]', appwriteErr?.message || appwriteErr);
     }
 
     // 3. Server-side / Firestore sync
