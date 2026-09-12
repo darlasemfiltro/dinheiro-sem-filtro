@@ -1789,16 +1789,7 @@ export default function App() {
   };
 
   const deleteInvestmentTransaction = async (idOrIndex: string | number) => {
-    const cfg = getAppwriteConfig();
-    const DATABASE_ID = cfg.databaseId;
-    const COLLECTION_ID = 'user_financials';
     const budgetId = currentUser ? StorageService.getEffectiveBudgetId(currentUser) : 'default';
-    const targetDocId = getCanonicalAppwriteDocId(budgetId || currentUser?.email || currentUser?.id || 'default');
-
-    if (!targetDocId || !DATABASE_ID) {
-      alert('[ERRO] ID do documento ou DATABASE_ID não encontrado!');
-      return;
-    }
 
     const previousList = [...investmentTransactions];
 
@@ -1809,8 +1800,9 @@ export default function App() {
       return currentId !== String(idOrIndex);
     });
 
-    // Atualização otimista local
+    // Atualização otimista local imediata
     setInvestmentTransactions(updatedList);
+    (PortfolioStorageService as any).saveToAllAliasKeys('darla_portfolio_transactions', budgetId, updatedList);
     localStorage.setItem('dsf_investments_cache', JSON.stringify(updatedList));
     try {
       localStorage.setItem(`dsf_investments_cache_${budgetId}`, JSON.stringify(updatedList));
@@ -1821,48 +1813,24 @@ export default function App() {
       PortfolioStorageService.markPortfolioItemAsDeleted(idOrIndex, 'transactions', budgetId);
     }
 
-    // 2. Persistência limpa no Appwrite
-    try {
-      const currentDoc = await databases.getDocument(DATABASE_ID, COLLECTION_ID, targetDocId);
-      let parsedData: any = {};
-      if (typeof currentDoc.data === 'string') {
-        parsedData = JSON.parse(currentDoc.data);
-      } else {
-        parsedData = currentDoc.data || {};
-      }
+    window.dispatchEvent(new Event('portfolio_updated'));
+    window.dispatchEvent(new Event('remote_data_updated'));
+    window.dispatchEvent(new CustomEvent('financial_data_mutated', { detail: { userId: budgetId } }));
+    window.dispatchEvent(new CustomEvent('app-toast', { detail: 'Transação excluída com sucesso!' }));
 
-      // Atualiza apenas DENTRO do objeto serializado
-      parsedData.investmentTransactions = updatedList;
-      parsedData.investments = updatedList;
-      parsedData.updatedAt = new Date().toISOString();
-
-      // Envio ESTRITO apenas com 'data'
-      await databases.updateDocument(
-        DATABASE_ID,
-        COLLECTION_ID,
-        targetDocId,
-        {
-          data: JSON.stringify(parsedData)
-        }
-      );
-
+    // 2. Background Sync (non-blocking)
+    (async () => {
       try {
-        await executeTransactionalInvestmentTransaction(budgetId, 'deleteInvestmentTransaction', {
-          transactionId: String(idOrIndex),
-        });
-      } catch (e) {}
-
-      window.dispatchEvent(new Event('portfolio_updated'));
-      window.dispatchEvent(new Event('remote_data_updated'));
-      window.dispatchEvent(new CustomEvent('financial_data_mutated', { detail: { userId: budgetId } }));
-
-      console.log('[EXCLUSÃO BEM-SUCEDIDA] Transação apagada do Appwrite com sucesso.');
-      window.dispatchEvent(new CustomEvent('app-toast', { detail: 'Transação excluída com sucesso!' }));
-    } catch (err: any) {
-      alert(`[FALHA NA EXCLUSÃO APPWRITE]\nCódigo: ${err.code || 'N/A'}\nErro: ${err.message || JSON.stringify(err)}`);
-      setInvestmentTransactions(previousList);
-      (PortfolioStorageService as any).saveToAllAliasKeys('darla_portfolio_transactions', budgetId, previousList);
-    }
+        if (typeof idOrIndex === 'string') {
+          await executeTransactionalInvestmentTransaction(budgetId, 'deleteInvestmentTransaction', {
+            transactionId: String(idOrIndex),
+          });
+        }
+        await syncCurrentStateToCloud();
+      } catch (err: any) {
+        console.warn('[Background Investment Transaction Delete Notice]', err);
+      }
+    })();
 
     return true;
   };

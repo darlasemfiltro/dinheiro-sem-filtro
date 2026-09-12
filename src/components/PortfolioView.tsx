@@ -330,8 +330,16 @@ export const PortfolioView: React.FC<PortfolioViewProps> = ({
   const showValues = !isPrivacyActive;
   const [transactions, setTransactions] = useState<any[]>(() => {
     try {
+      const localStored = PortfolioStorageService.getTransactions(userId);
+      if (Array.isArray(localStored) && localStored.length > 0) {
+        return localStored;
+      }
       const local = localStorage.getItem('dsf_investments_cache') || localStorage.getItem(`dsf_investments_cache_${userId}`);
-      return local ? JSON.parse(local) : (investmentTransactions || []);
+      if (local) {
+        const parsed = JSON.parse(local);
+        if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+      }
+      return investmentTransactions || [];
     } catch {
       return investmentTransactions || [];
     }
@@ -345,9 +353,6 @@ export const PortfolioView: React.FC<PortfolioViewProps> = ({
 
   useEffect(() => {
     console.log('[DEBUG TABELA] Quantidade atual de transações na tabela:', transactions?.length);
-    if (transactions?.length === 0) {
-      console.trace('[DEBUG TABELA] Quem esvaziou a tabela:');
-    }
   }, [transactions]);
 
   const [refreshTrigger, setRefreshTrigger] = useState(0);
@@ -359,9 +364,16 @@ export const PortfolioView: React.FC<PortfolioViewProps> = ({
       const targetId = userId || 'default';
       if (!targetId) return;
 
+      const localTxs = PortfolioStorageService.getTransactions(targetId);
+
       try {
         const config = getAppwriteConfig();
-        if (!config || !config.databaseId) return;
+        if (!config || !config.databaseId) {
+          if (localTxs.length > 0 && isMounted) {
+            setTransactions(localTxs);
+          }
+          return;
+        }
         const DATABASE_ID = config.databaseId;
         const COLLECTION_ID = 'user_financials';
 
@@ -377,20 +389,37 @@ export const PortfolioView: React.FC<PortfolioViewProps> = ({
         const savedList = parsedData.investmentTransactions || parsedData.investments || [];
 
         if (isMounted && Array.isArray(savedList)) {
-          if (savedList.length > 0) {
-            setTransactions(savedList);
-            localStorage.setItem('dsf_investments_cache', JSON.stringify(savedList));
-            localStorage.setItem(`dsf_investments_cache_${targetId}`, JSON.stringify(savedList));
-            console.log(`[BOOT SUCESSO] ${savedList.length} ativos recuperados do Appwrite ao carregar.`);
-          } else {
-            setTransactions(prev => (prev.length > 0 ? prev : savedList));
+          const merged = [...savedList];
+          localTxs.forEach(localTx => {
+            if (!merged.some(m => String(m.id) === String(localTx.id))) {
+              merged.push(localTx);
+            }
+          });
+
+          if (merged.length > 0) {
+            setTransactions(merged);
+            localStorage.setItem('dsf_investments_cache', JSON.stringify(merged));
+            localStorage.setItem(`dsf_investments_cache_${targetId}`, JSON.stringify(merged));
+            localStorage.setItem(`darla_portfolio_transactions_${targetId}`, JSON.stringify(merged));
+            console.log(`[BOOT SUCESSO] ${merged.length} ativos recuperados e sincronizados.`);
+          } else if (localTxs.length > 0) {
+            setTransactions(localTxs);
           }
         }
       } catch (err) {
-        console.error('[BOOT ERRO] Falha ao buscar investimentos do Appwrite:', err);
-        const cached = localStorage.getItem('dsf_investments_cache') || localStorage.getItem(`dsf_investments_cache_${targetId}`);
-        if (cached && isMounted) {
-          setTransactions(JSON.parse(cached));
+        console.warn('[BOOT AVISO] Falha ao buscar investimentos do Appwrite (usando local):', err);
+        if (localTxs.length > 0 && isMounted) {
+          setTransactions(localTxs);
+        } else {
+          const cached = localStorage.getItem('dsf_investments_cache') || localStorage.getItem(`dsf_investments_cache_${targetId}`);
+          if (cached && isMounted) {
+            try {
+              const parsedCache = JSON.parse(cached);
+              if (Array.isArray(parsedCache) && parsedCache.length > 0) {
+                setTransactions(parsedCache);
+              }
+            } catch (e) {}
+          }
         }
       }
     };
