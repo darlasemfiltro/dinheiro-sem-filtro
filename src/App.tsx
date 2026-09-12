@@ -1731,7 +1731,7 @@ export default function App() {
     // 2. Background Sync
     (async () => {
       try {
-        await executeTransactionalInvestmentGoal(budgetId, 'addGoal', {
+        await executeTransactionalInvestmentGoal(budgetId, 'saveGoal', {
           goalData: newGoal,
           goalId: newGoal.id,
         });

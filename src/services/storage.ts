@@ -4669,11 +4669,6 @@ export class StorageService {
 
     this.markAsDeleted(goalId, canonicalId, 'goals');
     deleteGoalFromFirestore(goalId);
-
-    try {
-      PortfolioStorageService.deleteGoal(goalId, canonicalId);
-    } catch {}
-
     if (canonicalId) {
       this.syncUserMutationToServer(canonicalId);
     }
