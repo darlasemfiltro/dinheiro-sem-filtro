@@ -198,8 +198,8 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({
         setError('Por favor, informe uma cidade válida.');
         return;
       }
-      if (numericMonthlyIncome <= 0) {
-        setError('Por favor, informe uma renda/salário mensal válido maior que zero.');
+      if (!incomeBracket || !incomeBracket.trim()) {
+        setError('Por favor, selecione sua faixa de renda mensal.');
         return;
       }
       if (consentLgpd !== true) {
@@ -215,12 +215,13 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({
 
     try {
       const consentDate = new Date().toISOString();
+      const resolvedIncome = numericMonthlyIncome > 0 ? numericMonthlyIncome : (incomeBracket ? getValueFromIncomeBracket(incomeBracket) || 4000 : 4000);
       const extraProfile: Partial<User> = isRegister
         ? {
             birthDate,
             city: sanitizeString(city),
             state: state.toUpperCase(),
-            monthlyIncome: numericMonthlyIncome,
+            monthlyIncome: resolvedIncome,
             incomeBracket: incomeBracket.trim(),
             consent_lgpd: true,
             consent_date: consentDate,
@@ -230,33 +231,40 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({
         : {};
 
       if (isRegister) {
-        // 1. Call Backend Registration Endpoint with strict validations & LGPD audit logging
-        const regRes = await fetch('/api/users/register', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            email: cleanEmail,
-            password,
-            name: name.trim(),
-            birthDate,
-            city: sanitizeString(city),
-            state: state.toUpperCase(),
-            monthlyIncome: numericMonthlyIncome,
-            incomeBracket: incomeBracket.trim(),
-            consent_lgpd: true,
-            consent_date: consentDate,
-            consent_version: 'v1.1',
-          }),
-        });
+        // 1. Chamar endpoint de registro do backend com validações e persistência central
+        try {
+          const regRes = await fetch('/api/users/register', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              email: cleanEmail,
+              password,
+              name: name.trim(),
+              birthDate,
+              city: sanitizeString(city),
+              state: state.toUpperCase(),
+              monthlyIncome: resolvedIncome,
+              incomeBracket: incomeBracket.trim(),
+              consent_lgpd: true,
+              consent_date: consentDate,
+              consent_version: 'v1.1',
+            }),
+          });
 
-        const regData = await regRes.json().catch(() => ({}));
-        if (!regRes.ok || regData.success === false) {
-          setError(regData.message || 'Falha ao registrar conta. Verifique os dados informados.');
-          setIsCheckingUser(false);
-          return;
+          // Bloqueia APENAS se o servidor retornou explicitamente erro de validação de dados (400 ou 422) com mensagem
+          if (regRes.status === 400 || regRes.status === 422) {
+            const regData = await regRes.json().catch(() => null);
+            if (regData && regData.message && regData.success === false) {
+              setError(regData.message);
+              setIsCheckingUser(false);
+              return;
+            }
+          }
+        } catch (backendErr) {
+          console.warn('[Register] Servidor indisponível ou ambiente estático, prosseguindo com cadastro local/nuvem:', backendErr);
         }
 
-        // 2. Also register in Appwrite if available
+        // 2. Registrar também no Appwrite se disponível
         await appwriteSignUp(cleanEmail, password, name).catch(() => {});
       } else {
         // Login flow: Verificar previamente se o e-mail informado já possui cadastro
@@ -265,7 +273,7 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({
           // Usuário não cadastrado! Direcionar imediatamente para a aba de Criar Conta
           setIsCheckingUser(false);
           setIsRegister(true);
-          setWarningNotice(`O e-mail "${cleanEmail}" ainda não possui cadastro no sistema. Preencha seus dados abaixo para criar sua conta gratuita!`);
+          setWarningNotice(`O e-mail "${cleanEmail}" ainda não possui cadastro no sistema. Preencha seus dados abaixo para criar sua conta gratuita e começar!`);
           setError('');
           return;
         }

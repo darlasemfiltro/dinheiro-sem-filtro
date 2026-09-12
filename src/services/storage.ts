@@ -1936,7 +1936,11 @@ export class StorageService {
           } catch (e) {}
           return { exists: true, user: data.user };
         } else if (data && !data.success) {
-          // Explicitly not found on server
+          // Fallback to local user if not present on server yet
+          const localUser = this.findUserByEmail(cleanEmail);
+          if (localUser) {
+            return { exists: true, user: localUser };
+          }
           return { exists: false, user: null };
         }
       }

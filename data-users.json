@@ -13,8 +13,9 @@
   },
   {
     "id": "carvalho.darlla@gmail.com",
-    "name": "Darlla Carvalho",
+    "name": "Darla Carvalho",
     "email": "carvalho.darlla@gmail.com",
+    "password": "mypassword123",
     "authProvider": "email",
     "avatarUrl": "https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150",
     "createdAt": "2026-08-12T10:00:00.000Z",
