@@ -1905,16 +1905,49 @@ export class StorageService {
     const usersStr = localStorage.getItem(STORAGE_KEYS.USERS) || '[]';
     try {
       const users: User[] = JSON.parse(usersStr);
-      return users.find((u) => (u.email || '').trim().toLowerCase() === cleanEmail) || null;
-    } catch (e) {
-      return null;
+      const found = users.find((u) => (u.email || '').trim().toLowerCase() === cleanEmail);
+      if (found) return found;
+    } catch (e) {}
+
+    // Check currently cached user in local storage
+    try {
+      const currentStored = JSON.parse(localStorage.getItem(STORAGE_KEYS.CURRENT_USER) || 'null');
+      if (currentStored && (currentStored.email || '').trim().toLowerCase() === cleanEmail) {
+        return currentStored;
+      }
+    } catch (e) {}
+
+    // Check memory store
+    if (_inMemoryStore.currentUser && (_inMemoryStore.currentUser.email || '').trim().toLowerCase() === cleanEmail) {
+      return _inMemoryStore.currentUser;
     }
+
+    return null;
   }
 
   static async isUserRegisteredAsync(email: string): Promise<{ exists: boolean; user: User | null }> {
     this.initialize();
     const cleanEmail = (email || '').trim().toLowerCase();
     if (!cleanEmail) return { exists: false, user: null };
+
+    // 0. Contas de Darla (administração master permanente)
+    if (isDarlaAccount(cleanEmail)) {
+      const existing = this.findUserByEmail(cleanEmail);
+      if (existing) {
+        return { exists: true, user: existing };
+      }
+      const masterUser: User = {
+        id: cleanEmail,
+        name: 'Darla Carvalho',
+        email: cleanEmail,
+        authProvider: 'email',
+        isPro: true,
+        plan: 'lifetime',
+        subscriptionStatus: 'active',
+        createdAt: '2026-08-12T10:00:00.000Z',
+      };
+      return { exists: true, user: masterUser };
+    }
 
     // 1. Query Central Server for User Record (Authoritative source across devices)
     try {

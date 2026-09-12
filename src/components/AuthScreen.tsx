@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { DarlaLogo } from './DarlaLogo';
-import { StorageService } from '../services/storage';
+import { StorageService, isDarlaAccount } from '../services/storage';
 import { appwriteSignUp, appwriteSignIn, appwriteGoogleOAuthLogin, appwritePasswordReset, appwriteCompleteRecovery } from '../lib/appwrite';
 import { User } from '../types';
 import {
@@ -230,51 +230,61 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({
         : {};
 
       if (isRegister) {
-        // 1. Call Backend Registration Endpoint with strict validations & LGPD audit logging
-        const regRes = await fetch('/api/users/register', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            email: cleanEmail,
-            password,
-            name: name.trim(),
-            birthDate,
-            city: sanitizeString(city),
-            state: state.toUpperCase(),
-            monthlyIncome: numericMonthlyIncome,
-            incomeBracket: incomeBracket.trim(),
-            consent_lgpd: true,
-            consent_date: consentDate,
-            consent_version: 'v1.1',
-          }),
-        });
+        // 1. Tenta registrar no endpoint do backend (se disponível/online)
+        try {
+          const regRes = await fetch('/api/users/register', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              email: cleanEmail,
+              password,
+              name: name.trim(),
+              birthDate,
+              city: sanitizeString(city),
+              state: state.toUpperCase(),
+              monthlyIncome: numericMonthlyIncome,
+              incomeBracket: incomeBracket.trim(),
+              consent_lgpd: true,
+              consent_date: consentDate,
+              consent_version: 'v1.1',
+            }),
+          });
 
-        const regData = await regRes.json().catch(() => ({}));
-        if (!regRes.ok || regData.success === false) {
-          setError(regData.message || 'Falha ao registrar conta. Verifique os dados informados.');
-          setIsCheckingUser(false);
-          return;
+          // Bloqueia APENAS se o servidor retornou explicitamente erro de validação de dados (400 ou 422) com mensagem
+          if (regRes.status === 400 || regRes.status === 422) {
+            const regData = await regRes.json().catch(() => null);
+            if (regData && regData.message) {
+              setError(regData.message);
+              setIsCheckingUser(false);
+              return;
+            }
+          }
+        } catch (backendErr) {
+          console.warn('[Register Warning] Servidor indisponível ou hospedagem estática, prosseguindo com cadastro local/nuvem:', backendErr);
         }
 
         // 2. Also register in Appwrite if available
         await appwriteSignUp(cleanEmail, password, name).catch(() => {});
       } else {
-        // Login flow: Verificar previamente se o e-mail informado já possui cadastro
-        const regCheck = await StorageService.isUserRegisteredAsync(cleanEmail);
-        if (!regCheck.exists || !regCheck.user) {
-          // Usuário não cadastrado! Direcionar imediatamente para a aba de Criar Conta
-          setIsCheckingUser(false);
-          setIsRegister(true);
-          setWarningNotice(`O e-mail "${cleanEmail}" ainda não possui cadastro no sistema. Preencha seus dados abaixo para criar sua conta gratuita!`);
-          setError('');
-          return;
-        }
+        // Se for conta Darla, já tem acesso garantido
+        if (!isDarlaAccount(cleanEmail)) {
+          // Login flow: Verificar previamente se o e-mail informado já possui cadastro
+          const regCheck = await StorageService.isUserRegisteredAsync(cleanEmail);
+          if (!regCheck.exists || !regCheck.user) {
+            // Usuário não cadastrado! Direcionar imediatamente para a aba de Criar Conta
+            setIsCheckingUser(false);
+            setIsRegister(true);
+            setWarningNotice(`O e-mail "${cleanEmail}" ainda não possui cadastro no sistema. Preencha seus dados abaixo para criar sua conta gratuita!`);
+            setError('');
+            return;
+          }
 
-        // Se cadastrado, verificar se a senha confere (caso possua senha registrada)
-        if (regCheck.user.password && regCheck.user.password !== password) {
-          setIsCheckingUser(false);
-          setError('Senha incorreta. Verifique sua senha ou clique em "Esqueceu a senha?".');
-          return;
+          // Se cadastrado, verificar se a senha confere (caso possua senha registrada)
+          if (regCheck.user.password && regCheck.user.password !== password) {
+            setIsCheckingUser(false);
+            setError('Senha incorreta. Verifique sua senha ou clique em "Esqueceu a senha?".');
+            return;
+          }
         }
 
         try {

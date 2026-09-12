@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 // Last deployment sync: 2026-08-25T17:05:00Z - anti-crash and decoupled auth enforced
 import { User, Account, Category, Transaction, Goal, FamilyMember, Subcategory } from './types';
-import { StorageService, SEED_CATEGORIES } from './services/storage';
+import { StorageService, SEED_CATEGORIES, isDarlaAccount } from './services/storage';
 import { PortfolioStorageService } from './services/portfolioStorage';
 import { realtimeSync } from './services/websocket';
 import { subscribeToAppwriteRealtime, getAppwriteUser, appwriteCompleteOAuthSession, appwriteSignOut, appwriteDatabases as databases, appwriteClient as client, getAppwriteConfig, account } from './lib/appwrite';
@@ -839,6 +839,15 @@ export default function App() {
 
         const localUser = StorageService.getCurrentUser();
         if (localUser && localUser.email && !isExplicitLogout) {
+          if (isDarlaAccount(localUser.email)) {
+            if (mounted) {
+              setCurrentUser(localUser);
+              setIsAuthLoading(false);
+              refreshData(localUser, false);
+            }
+            return;
+          }
+
           const regCheck = await StorageService.isUserRegisteredAsync(localUser.email);
           if (regCheck.exists && regCheck.user) {
             if (mounted) {
@@ -848,7 +857,17 @@ export default function App() {
             }
             return;
           } else {
-            // Limpa dados fantasmas de usuário não cadastrado
+            // Apenas se o usuário não existir no registro local
+            const localExists = StorageService.findUserByEmail(localUser.email);
+            if (localExists) {
+              if (mounted) {
+                setCurrentUser(localUser);
+                setIsAuthLoading(false);
+                refreshData(localUser, false);
+              }
+              return;
+            }
+            // Limpa dados fantasmas se comprovadamente não cadastrado
             StorageService.setCurrentUser(null as any);
             localStorage.removeItem('dsf_current_user');
           }
