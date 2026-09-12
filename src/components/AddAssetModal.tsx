@@ -940,10 +940,11 @@ export const AddAssetModal: React.FC<AddAssetModalProps> = ({
       notes: notes.trim() || undefined,
     };
 
-    if (onSaveSuccess) {
+    if (onSaveTransaction) {
+      onSaveTransaction(payload as any);
+    } else if (onSaveSuccess) {
       onSaveSuccess(payload);
     }
-    onSaveTransaction(payload as any);
 
     if (keepOpen) {
       resetForm();

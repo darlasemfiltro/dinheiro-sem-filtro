@@ -1020,17 +1020,81 @@ export const PortfolioView: React.FC<PortfolioViewProps> = ({
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
 
-  // Add / Edit Asset / Transaction via AddAssetModal
+  // Add / Edit Asset / Transaction via AddAssetModal or Quick Form
+  const saveTransactionUnified = async (txItem: InvestmentTransaction, isEdit: boolean) => {
+    // 1. Snapshot previous state for rollback if needed
+    const previousTxs = [...transactions];
+
+    // 2. OPTIMISTIC UI: Update local state immediately with fingerprint deduplication
+    const txPrice = Math.round(Number(txItem.unitPrice || 0) * 100) / 100;
+    const txFp = `${txItem.assetTicker}_${txItem.type}_${txItem.date}_${txItem.quantity}_${txPrice}`;
+
+    setTransactions(prev => {
+      const list = Array.isArray(prev) ? prev : [];
+      const exists = list.some(t => {
+        if (!t) return false;
+        if (t.id === txItem.id) return true;
+        const tPrice = Math.round(Number(t.unitPrice || (t as any).price || 0) * 100) / 100;
+        const tFp = `${(t.assetTicker || (t as any).ticker || '').toUpperCase().trim()}_${String(t.type || 'buy').toLowerCase().trim()}_${String(t.date || '').trim()}_${Number(t.quantity) || 0}_${tPrice}`;
+        return tFp === txFp;
+      });
+
+      if (exists) {
+        return list.map(t => {
+          if (t.id === txItem.id) return txItem;
+          const tPrice = Math.round(Number(t.unitPrice || (t as any).price || 0) * 100) / 100;
+          const tFp = `${(t.assetTicker || (t as any).ticker || '').toUpperCase().trim()}_${String(t.type || 'buy').toLowerCase().trim()}_${String(t.date || '').trim()}_${Number(t.quantity) || 0}_${tPrice}`;
+          return tFp === txFp ? txItem : t;
+        });
+      }
+      return [txItem, ...list];
+    });
+
+    // 3. Instant modal close & visual event triggers (0ms delay)
+    setEditingTx(null);
+    setIsAddModalOpen(false);
+    setIsTxModalOpen(false);
+    window.dispatchEvent(new Event('portfolio_updated'));
+    window.dispatchEvent(new Event('remote_data_updated'));
+    window.dispatchEvent(new CustomEvent('financial_data_mutated'));
+
+    // 4. Background Sync without duplicate saving
+    (async () => {
+      try {
+        if (onSaveInvestmentTransaction) {
+          await onSaveInvestmentTransaction(txItem);
+        } else {
+          if (isEdit) {
+            PortfolioStorageService.updateTransaction(txItem, userId);
+          } else {
+            PortfolioStorageService.addTransaction(txItem, userId);
+          }
+          const action = isEdit ? 'updateInvestmentTransaction' : 'addInvestmentTransaction';
+          await executeTransactionalInvestmentTransaction(userId, action, {
+            transactionData: txItem,
+            transactionId: txItem.id,
+          });
+        }
+      } catch (err: any) {
+        console.warn('Erro na sincronização de investimento em background (salvo localmente):', err);
+      }
+    })();
+  };
+
   const handleSaveAssetTransaction = (tx: Omit<InvestmentTransaction, 'id' | 'createdAt'> | InvestmentTransaction) => {
     if (checkReadOnly()) return;
+    const isEdit = Boolean('id' in tx && tx.id);
     const tempId = ('id' in tx && tx.id) ? tx.id : `tx_inv_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
+    const rawType = String(tx.type || 'buy').toLowerCase().trim();
+    const type = rawType === 'compra' || rawType === 'buy' ? 'buy' : 'sell';
+
     const txItem: InvestmentTransaction = {
       ...tx,
       id: tempId,
       userId,
       assetTicker: ((tx as any).assetTicker || (tx as any).ticker || '').toUpperCase().trim(),
       assetCategory: (tx as any).assetCategory || (tx as any).category || 'acoes',
-      type: tx.type || 'buy',
+      type: type as any,
       quantity: Number(tx.quantity) || 0,
       unitPrice: Number(tx.unitPrice) || Number((tx as any).price) || 0,
       totalAmount: Number(tx.totalAmount) || Number((tx as any).totalValue) || (Number(tx.quantity) * Number(tx.unitPrice || (tx as any).price)) || 0,
@@ -1041,48 +1105,7 @@ export const PortfolioView: React.FC<PortfolioViewProps> = ({
       updatedAt: new Date().toISOString(),
     };
 
-    // 1. Snapshot previous state for rollback
-    const previousTxs = [...transactions];
-
-    // 2. OPTIMISTIC UI: Update local state immediately with functional closure capture
-    let updatedList: InvestmentTransaction[] = [];
-    setTransactions(prev => {
-      const exists = (prev || []).some(t => t.id === txItem.id);
-      updatedList = exists ? (prev || []).map(t => (t.id === txItem.id ? txItem : t)) : [txItem, ...(prev || [])];
-      console.log('[DEBUG] Nova lista de investimentos:', updatedList);
-      return updatedList;
-    });
-
-    if ('id' in tx && tx.id) {
-      PortfolioStorageService.updateTransaction(txItem, userId);
-    } else {
-      PortfolioStorageService.addTransaction(txItem, userId);
-    }
-
-    // 3. Instant modal close & visual event triggers (0ms delay)
-    setEditingTx(null);
-    setIsAddModalOpen(false);
-    setIsTxModalOpen(false);
-    window.dispatchEvent(new Event('portfolio_updated'));
-    window.dispatchEvent(new Event('remote_data_updated'));
-    window.dispatchEvent(new CustomEvent('financial_data_mutated'));
-
-    // 4. Background Sync without freezing UI (non-blocking, no rollback)
-    (async () => {
-      try {
-        if (onSaveInvestmentTransaction) {
-          await onSaveInvestmentTransaction(txItem);
-        } else {
-          const action = ('id' in tx && tx.id) ? 'updateInvestmentTransaction' : 'addInvestmentTransaction';
-          await executeTransactionalInvestmentTransaction(userId, action, {
-            transactionData: txItem,
-            transactionId: txItem.id,
-          });
-        }
-      } catch (err: any) {
-        console.warn('Erro na sincronização de investimento em background (salvo localmente):', err);
-      }
-    })();
+    saveTransactionUnified(txItem, isEdit);
   };
 
   // Calculations
@@ -2255,16 +2278,22 @@ export const PortfolioView: React.FC<PortfolioViewProps> = ({
     const qty = parsePtBrNumber(txForm.quantity);
     const price = parsePtBrNumber(txForm.unitPrice);
     const total = qty * price;
+    const isEdit = Boolean(editingTx);
 
-    const formData = {
-      id: editingTx ? editingTx.id : 'inv_' + Date.now(),
+    const targetId = editingTx ? editingTx.id : `tx_inv_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
+    const rawType = String(txForm.type || 'buy').toLowerCase().trim();
+    const type = rawType === 'compra' || rawType === 'buy' ? 'buy' : 'sell';
+
+    const formData: InvestmentTransaction = {
+      id: targetId,
+      userId,
       date: txForm.date || new Date().toISOString().split('T')[0],
       ticker: txForm.assetTicker.toUpperCase().trim(),
       assetTicker: txForm.assetTicker.toUpperCase().trim(),
       assetName: txForm.assetTicker.toUpperCase().trim(),
-      category: txForm.assetCategory || 'Ações',
-      assetCategory: txForm.assetCategory || 'Ações',
-      type: txForm.type || 'buy',
+      category: txForm.assetCategory || 'acoes',
+      assetCategory: txForm.assetCategory || 'acoes',
+      type: type as any,
       price: price,
       unitPrice: price,
       quantity: qty,
@@ -2275,48 +2304,9 @@ export const PortfolioView: React.FC<PortfolioViewProps> = ({
       notes: txForm.notes || '',
       createdAt: editingTx?.createdAt || new Date().toISOString(),
       updatedAt: new Date().toISOString()
-    };
+    } as any;
 
-    // 1. Snapshot previous state for rollback
-    const previousTxs = [...transactions];
-
-    // 2. OPTIMISTIC UI: Update local state immediately (0ms delay) with functional closure capture
-    let updatedList: InvestmentTransaction[] = [];
-    setTransactions(prev => {
-      const exists = prev.some(t => t.id === formData.id);
-      updatedList = exists ? prev.map(t => (t.id === formData.id ? (formData as any) : t)) : [(formData as any), ...prev];
-      return updatedList;
-    });
-
-    if (editingTx) {
-      PortfolioStorageService.updateTransaction(formData as any, userId);
-    } else {
-      PortfolioStorageService.addTransaction(formData as any, userId);
-    }
-
-    // 3. Instant modal close & visual event triggers (0ms delay)
-    setIsTxModalOpen(false);
-    setEditingTx(null);
-    window.dispatchEvent(new Event('portfolio_updated'));
-    window.dispatchEvent(new Event('remote_data_updated'));
-    window.dispatchEvent(new CustomEvent('financial_data_mutated'));
-
-    // 4. Background Sync without freezing UI (non-blocking, no rollback)
-    (async () => {
-      try {
-        if (onSaveInvestmentTransaction) {
-          await onSaveInvestmentTransaction(formData);
-        } else {
-          const action = editingTx ? 'updateInvestmentTransaction' : 'addInvestmentTransaction';
-          await executeTransactionalInvestmentTransaction(userId, action, {
-            transactionData: formData,
-            transactionId: formData.id,
-          });
-        }
-      } catch (err: any) {
-        console.warn('Erro na sincronização de investimento em background (salvo localmente):', err);
-      }
-    })();
+    saveTransactionUnified(formData, isEdit);
   };
 
   const handleDeleteTx = (id: string) => {
@@ -2477,37 +2467,62 @@ export const PortfolioView: React.FC<PortfolioViewProps> = ({
     }
   };
 
-  // Filter Transactions
-  const filteredTransactions = transactions.filter((tx) => {
-    if (!tx || !tx.id) return false;
-    const typeStr = String(tx.type || '').toLowerCase().trim();
-    // Filter out dividends mistakenly present in transactions
-    if (typeStr === 'dividendo' || typeStr === 'jcp' || typeStr === 'rendimento' || ((tx as any).valuePerShare !== undefined && tx.unitPrice === undefined)) {
-      return false;
+  // Filter Transactions with strict deduplication
+  const filteredTransactions = useMemo(() => {
+    const list = (transactions || []).filter((tx) => {
+      if (!tx || !tx.id) return false;
+      const typeStr = String(tx.type || '').toLowerCase().trim();
+      // Filter out dividends mistakenly present in transactions
+      if (typeStr === 'dividendo' || typeStr === 'jcp' || typeStr === 'rendimento' || ((tx as any).valuePerShare !== undefined && tx.unitPrice === undefined)) {
+        return false;
+      }
+      const ticker = String(tx.assetTicker || (tx as any).ticker || (tx as any).assetName || (tx as any).asset || '').trim();
+      if (!ticker && (Number(tx.quantity) || 0) <= 0 && (Number(tx.unitPrice) || 0) <= 0) {
+        return false;
+      }
+
+      const search = (txSearchTerm || '').trim().toLowerCase();
+      const broker = String(tx.broker || (tx as any).institution || '').toLowerCase();
+      const notes = String(tx.notes || '').toLowerCase();
+
+      const matchesSearch =
+        !search ||
+        ticker.toLowerCase().includes(search) ||
+        broker.includes(search) ||
+        notes.includes(search);
+
+      const cat = String(tx.assetCategory || (tx as any).category || '').toLowerCase();
+      const matchesCat =
+        txCategoryFilter === 'all' ||
+        cat === txCategoryFilter.toLowerCase() ||
+        (filterCategory !== 'completo' && cat === filterCategory.toLowerCase());
+
+      return matchesSearch && matchesCat;
+    });
+
+    // Deduplicate in display: exactly 1 entry per transaction ID and business fingerprint
+    const uniqueDisplay: InvestmentTransaction[] = [];
+    const seenIds = new Set<string>();
+    const seenFps = new Set<string>();
+
+    for (const tx of list) {
+      if (seenIds.has(tx.id)) continue;
+      const tTicker = String(tx.assetTicker || (tx as any).ticker || '').toUpperCase().trim();
+      const rawType = String(tx.type || 'buy').toLowerCase().trim();
+      const tType = rawType === 'compra' || rawType === 'buy' ? 'buy' : 'sell';
+      const tDate = String(tx.date || '').trim();
+      const tQty = Number(tx.quantity) || 0;
+      const tPrice = Math.round((Number(tx.unitPrice ?? (tx as any).price ?? 0) || 0) * 100) / 100;
+      const fp = `${tTicker}_${tType}_${tDate}_${tQty}_${tPrice}`;
+
+      if (seenFps.has(fp)) continue;
+      seenIds.add(tx.id);
+      seenFps.add(fp);
+      uniqueDisplay.push(tx);
     }
-    const ticker = String(tx.assetTicker || (tx as any).ticker || (tx as any).assetName || (tx as any).asset || '').trim();
-    if (!ticker && (Number(tx.quantity) || 0) <= 0 && (Number(tx.unitPrice) || 0) <= 0) {
-      return false;
-    }
 
-    const search = (txSearchTerm || '').trim().toLowerCase();
-    const broker = String(tx.broker || (tx as any).institution || '').toLowerCase();
-    const notes = String(tx.notes || '').toLowerCase();
-
-    const matchesSearch =
-      !search ||
-      ticker.toLowerCase().includes(search) ||
-      broker.includes(search) ||
-      notes.includes(search);
-
-    const cat = String(tx.assetCategory || (tx as any).category || '').toLowerCase();
-    const matchesCat =
-      txCategoryFilter === 'all' ||
-      cat === txCategoryFilter.toLowerCase() ||
-      (filterCategory !== 'completo' && cat === filterCategory.toLowerCase());
-
-    return matchesSearch && matchesCat;
-  });
+    return uniqueDisplay;
+  }, [transactions, txSearchTerm, txCategoryFilter, filterCategory]);
 
   return (
     <div className="space-y-6 pb-12 animate-in fade-in duration-200">

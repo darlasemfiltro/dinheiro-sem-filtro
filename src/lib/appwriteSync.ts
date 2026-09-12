@@ -859,7 +859,43 @@ export function mergeRemoteInvestmentTransactionsWithOptimistic(remoteTxs: any[]
     });
 
   list.sort((a, b) => new Date(b.date || b.createdAt || 0).getTime() - new Date(a.date || a.createdAt || 0).getTime());
-  return list;
+
+  // Deduplicate by business fingerprint (same ticker, same type, same date, same quantity, same unitPrice)
+  const deduplicatedList: any[] = [];
+  const fingerprintMap = new Map<string, any>();
+  const seenIds = new Set<string>();
+
+  for (const item of list) {
+    if (!item || !item.id) continue;
+    if (seenIds.has(item.id)) continue;
+
+    const ticker = String(item.assetTicker || '').trim().toUpperCase();
+    const type = String(item.type || 'buy').toLowerCase().trim();
+    const date = String(item.date || '').trim();
+    const qty = Number(item.quantity) || 0;
+    const price = Math.round((Number(item.unitPrice) || 0) * 100) / 100;
+    const fingerprint = `${ticker}_${type}_${date}_${qty}_${price}`;
+
+    if (!fingerprintMap.has(fingerprint)) {
+      seenIds.add(item.id);
+      fingerprintMap.set(fingerprint, item);
+      deduplicatedList.push(item);
+    } else {
+      // If an identical transaction exists under another temporary ID, keep the newer or most complete one
+      const existing = fingerprintMap.get(fingerprint);
+      const existingTime = new Date(existing.updatedAt || existing.createdAt || 0).getTime();
+      const itemTime = new Date(item.updatedAt || item.createdAt || 0).getTime();
+      if (itemTime > existingTime) {
+        const idx = deduplicatedList.indexOf(existing);
+        if (idx >= 0) {
+          deduplicatedList[idx] = item;
+          fingerprintMap.set(fingerprint, item);
+        }
+      }
+    }
+  }
+
+  return deduplicatedList;
 }
 
 export function recordCategoryDeletion(id: string): void {

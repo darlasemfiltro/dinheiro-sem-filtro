@@ -1646,17 +1646,46 @@ export default function App() {
     // 1. Snapshot previous state for rollback in case of network failure
     const previousList = [...investmentTransactions];
 
-    // 2. OPTIMISTIC UI: Update state immediately (0ms delay)
+    // 2. OPTIMISTIC UI: Update state immediately (0ms delay) with fingerprint deduplication
+    const txPrice = Math.round((Number(txItem.unitPrice) || 0) * 100) / 100;
+    const txFp = `${txItem.assetTicker}_${txItem.type}_${txItem.date}_${txItem.quantity}_${txPrice}`;
+
     setInvestmentTransactions(prev => {
-      const exists = prev.some(t => t.id === txItem.id);
-      const next = exists ? prev.map(t => (t.id === txItem.id ? txItem : t)) : [txItem, ...prev];
+      const list = Array.isArray(prev) ? prev : [];
+      const exists = list.some(t => {
+        if (!t) return false;
+        if (t.id === txItem.id) return true;
+        const tPrice = Math.round((Number(t.unitPrice || t.price || 0) * 100)) / 100;
+        const tFp = `${(t.assetTicker || t.ticker || '').toUpperCase().trim()}_${String(t.type || 'buy').toLowerCase().trim()}_${String(t.date || '').trim()}_${Number(t.quantity) || 0}_${tPrice}`;
+        return tFp === txFp;
+      });
+
+      const next = exists
+        ? list.map(t => {
+            if (t.id === txItem.id) return txItem;
+            const tPrice = Math.round((Number(t.unitPrice || t.price || 0) * 100)) / 100;
+            const tFp = `${(t.assetTicker || t.ticker || '').toUpperCase().trim()}_${String(t.type || 'buy').toLowerCase().trim()}_${String(t.date || '').trim()}_${Number(t.quantity) || 0}_${tPrice}`;
+            return tFp === txFp ? txItem : t;
+          })
+        : [txItem, ...list];
+
       (PortfolioStorageService as any).saveToAllAliasKeys('darla_portfolio_transactions', portfolioUserId, next);
       return next;
     });
 
     // Check if updating existing or adding new
     const existingTxs = PortfolioStorageService.getTransactions(portfolioUserId);
-    const isExisting = investmentTransactions.some(t => t.id === tempId) || (!newTx._isNew && existingTxs.some(t => t.id === tempId));
+    const isExisting = investmentTransactions.some(t => {
+      if (t.id === tempId) return true;
+      const tPrice = Math.round((Number(t.unitPrice || (t as any).price || 0) * 100)) / 100;
+      const tFp = `${(t.assetTicker || (t as any).ticker || '').toUpperCase().trim()}_${String(t.type || 'buy').toLowerCase().trim()}_${String(t.date || '').trim()}_${Number(t.quantity) || 0}_${tPrice}`;
+      return tFp === txFp;
+    }) || (!newTx._isNew && existingTxs.some(t => {
+      if (t.id === tempId) return true;
+      const tPrice = Math.round((Number(t.unitPrice || (t as any).price || 0) * 100)) / 100;
+      const tFp = `${(t.assetTicker || (t as any).ticker || '').toUpperCase().trim()}_${String(t.type || 'buy').toLowerCase().trim()}_${String(t.date || '').trim()}_${Number(t.quantity) || 0}_${tPrice}`;
+      return tFp === txFp;
+    }));
 
     if (isExisting) {
       PortfolioStorageService.updateTransaction(txItem, portfolioUserId);

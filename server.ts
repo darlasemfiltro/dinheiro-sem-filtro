@@ -2668,15 +2668,54 @@ async function startServer() {
           updatedAt: new Date().toISOString(),
         };
 
-        const txIndex = existing.transactions.findIndex((t: any) => t.id === normalizedTx.id);
+        const normTicker = normalizedTx.assetTicker;
+        const normType = String(normalizedTx.type || 'buy').toLowerCase() === 'venda' || String(normalizedTx.type || '').toLowerCase() === 'sell' ? 'sell' : 'buy';
+        const normDate = String(normalizedTx.date || '').trim();
+        const normQty = Number(normalizedTx.quantity) || 0;
+        const normPrice = Math.round(Number(normalizedTx.unitPrice || 0) * 100) / 100;
+        const normFp = `${normTicker}_${normType}_${normDate}_${normQty}_${normPrice}`;
+
+        const txIndex = existing.transactions.findIndex((t: any) => {
+          if (!t) return false;
+          if (t.id === normalizedTx.id) return true;
+          const tTicker = String(t.assetTicker || t.ticker || '').toUpperCase().trim();
+          const tType = String(t.type || 'buy').toLowerCase() === 'venda' || String(t.type || '').toLowerCase() === 'sell' ? 'sell' : 'buy';
+          const tDate = String(t.date || '').trim();
+          const tQty = Number(t.quantity) || 0;
+          const tPrice = Math.round(Number(t.unitPrice || t.price || 0) * 100) / 100;
+          const tFp = `${tTicker}_${tType}_${tDate}_${tQty}_${tPrice}`;
+          return tFp === normFp;
+        });
+
         if (txIndex >= 0) {
           existing.transactions[txIndex] = {
             ...existing.transactions[txIndex],
             ...normalizedTx,
+            id: existing.transactions[txIndex].id, // retain primary id
           };
         } else {
           existing.transactions.unshift(normalizedTx);
         }
+
+        // Deduplicate existing.transactions array to clean any preexisting duplicates
+        const uniqueTxs: any[] = [];
+        const seenIds = new Set<string>();
+        const seenFps = new Set<string>();
+        for (const t of existing.transactions) {
+          if (!t || !t.id) continue;
+          if (seenIds.has(t.id)) continue;
+          const tTicker = String(t.assetTicker || t.ticker || '').toUpperCase().trim();
+          const tType = String(t.type || 'buy').toLowerCase() === 'venda' || String(t.type || '').toLowerCase() === 'sell' ? 'sell' : 'buy';
+          const tDate = String(t.date || '').trim();
+          const tQty = Number(t.quantity) || 0;
+          const tPrice = Math.round(Number(t.unitPrice || t.price || 0) * 100) / 100;
+          const tFp = `${tTicker}_${tType}_${tDate}_${tQty}_${tPrice}`;
+          if (seenFps.has(tFp)) continue;
+          seenIds.add(t.id);
+          seenFps.add(tFp);
+          uniqueTxs.push(t);
+        }
+        existing.transactions = uniqueTxs;
 
         // Remove from deletedIds if present
         existing.deletedIds = existing.deletedIds.filter((dId: string) => dId !== normalizedTx.id);

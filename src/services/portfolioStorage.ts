@@ -1713,7 +1713,7 @@ export class PortfolioStorageService {
 
       const txs: any[] = JSON.parse(raw);
       const deletedIds = this.getDeletedPortfolioIds(userId);
-      return txs
+      const mapped = txs
         .filter((t) => {
           if (!t || !t.id) return false;
           if (deletedIds.has(t.id) || deletedIds.has(String(t.id).toUpperCase())) return false;
@@ -1757,6 +1757,33 @@ export class PortfolioStorageService {
             updatedAt: t.updatedAt || new Date().toISOString(),
           } as InvestmentTransaction;
         });
+
+      // Deduplicate by id and business fingerprint
+      const uniqueList: InvestmentTransaction[] = [];
+      const seenIds = new Set<string>();
+      const seenFingerprints = new Set<string>();
+
+      for (const item of mapped) {
+        if (seenIds.has(item.id)) continue;
+        const priceRounded = Math.round(Number(item.unitPrice || 0) * 100) / 100;
+        const fp = `${item.assetTicker}_${item.type}_${item.date}_${item.quantity}_${priceRounded}`;
+        if (seenFingerprints.has(fp)) continue;
+
+        seenIds.add(item.id);
+        seenFingerprints.add(fp);
+        uniqueList.push(item);
+      }
+
+      // If duplicates were scrubbed, persist clean list to prevent resurrection
+      if (uniqueList.length < mapped.length) {
+        try {
+          this.saveToAllAliasKeys(STORAGE_KEYS.TRANSACTIONS, userId, uniqueList);
+          localStorage.setItem('dsf_investments_cache', JSON.stringify(uniqueList));
+          localStorage.setItem(`dsf_investments_cache_${userId}`, JSON.stringify(uniqueList));
+        } catch {}
+      }
+
+      return uniqueList;
     } catch {
       return [];
     }
@@ -1848,35 +1875,68 @@ export class PortfolioStorageService {
     }
   }
 
-  static addTransaction(tx: Omit<InvestmentTransaction, 'id' | 'createdAt'>, userId = 'default'): InvestmentTransaction {
+  static addTransaction(tx: Omit<InvestmentTransaction, 'id' | 'createdAt'> | any, userId = 'default'): InvestmentTransaction {
     const txs = this.getTransactions(userId);
     
-    // Check if identical transaction already exists to prevent duplication
-    const cleanTicker = (tx.assetTicker || '').trim().toUpperCase();
-    const cleanType = (tx.type || '').trim().toLowerCase();
+    const passedId = String(tx.id || '').trim();
+    const cleanTicker = String(tx.assetTicker || tx.ticker || tx.assetName || '').trim().toUpperCase();
+    const rawType = String(tx.type || 'buy').toLowerCase().trim();
+    const cleanType = rawType === 'compra' || rawType === 'buy' ? 'buy' : 'sell';
     const cleanQty = Number(tx.quantity) || 0;
-    const cleanPrice = Number(tx.unitPrice || 0) || 0;
-    const cleanDate = (tx.date || '').trim();
+    const cleanPrice = Math.round((Number(tx.unitPrice ?? tx.price ?? 0) || 0) * 100) / 100;
+    const cleanDate = String(tx.date || (tx.createdAt ? String(tx.createdAt).split('T')[0] : '') || '').trim();
 
     const existingIndex = txs.findIndex(t => {
       if (!t) return false;
-      const tTicker = (t.assetTicker || '').trim().toUpperCase();
-      const tType = (t.type || '').trim().toLowerCase();
+      if (passedId && String(t.id).trim() === passedId) return true;
+      const tTicker = String(t.assetTicker || (t as any).ticker || (t as any).assetName || '').trim().toUpperCase();
+      const tRawType = String(t.type || 'buy').toLowerCase().trim();
+      const tType = tRawType === 'compra' || tRawType === 'buy' ? 'buy' : 'sell';
       const tQty = Number(t.quantity) || 0;
-      const tPrice = Number(t.unitPrice || 0) || 0;
-      const tDate = (t.date || '').trim();
+      const tPrice = Math.round((Number(t.unitPrice ?? (t as any).price ?? 0) || 0) * 100) / 100;
+      const tDate = String(t.date || (t.createdAt ? String(t.createdAt).split('T')[0] : '') || '').trim();
       return tTicker === cleanTicker && tType === cleanType && tQty === cleanQty && tPrice === cleanPrice && tDate === cleanDate;
     });
 
     if (existingIndex >= 0) {
-      return txs[existingIndex];
+      const existing = txs[existingIndex];
+      const updatedTx: InvestmentTransaction = {
+        ...existing,
+        ...tx,
+        id: existing.id,
+        userId,
+        assetTicker: cleanTicker || existing.assetTicker,
+        assetCategory: tx.assetCategory || tx.category || existing.assetCategory,
+        type: cleanType as any,
+        quantity: cleanQty,
+        unitPrice: cleanPrice,
+        totalAmount: cleanQty * cleanPrice,
+        broker: tx.broker || tx.institution || existing.broker || 'RICO INVESTIMENTOS',
+        date: cleanDate || existing.date,
+        updatedAt: new Date().toISOString(),
+        _pendingSync: true,
+      };
+      txs[existingIndex] = updatedTx;
+      this.saveToAllAliasKeys(STORAGE_KEYS.TRANSACTIONS, userId, txs);
+      this.syncAssetForTicker(cleanTicker || updatedTx.assetTicker, updatedTx.assetCategory, userId);
+      this.notifyUpdate();
+      this.syncPortfolioWithRemote(userId);
+      return updatedTx;
     }
 
     const newTx: InvestmentTransaction = {
       ...tx,
-      id: `tx_inv_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
+      id: passedId || `tx_inv_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
       userId,
-      createdAt: new Date().toISOString(),
+      assetTicker: cleanTicker,
+      assetCategory: tx.assetCategory || tx.category || 'acoes',
+      type: cleanType as any,
+      quantity: cleanQty,
+      unitPrice: cleanPrice,
+      totalAmount: cleanQty * cleanPrice,
+      broker: tx.broker || tx.institution || 'RICO INVESTIMENTOS',
+      date: cleanDate || new Date().toISOString().split('T')[0],
+      createdAt: tx.createdAt || new Date().toISOString(),
       updatedAt: new Date().toISOString(),
       _pendingSync: true,
     };
@@ -1884,7 +1944,7 @@ export class PortfolioStorageService {
     this.saveToAllAliasKeys(STORAGE_KEYS.TRANSACTIONS, userId, txs);
 
     // Automatically sync position in Patrimônio
-    this.syncAssetForTicker(tx.assetTicker, tx.assetCategory, userId);
+    this.syncAssetForTicker(cleanTicker, newTx.assetCategory, userId);
     this.notifyUpdate();
       
     this.syncPortfolioWithRemote(userId);
@@ -2362,6 +2422,8 @@ export class PortfolioStorageService {
       this.notifyUpdate();
       
       this.syncPortfolioWithRemote(userId);
+    } else {
+      this.addTransaction(tx, userId);
     }
   }
 
