@@ -1532,15 +1532,13 @@ export default function App() {
       }
     }
 
-    const success = await persistAllData(accounts, nextTransactions);
-    if (success) {
-      if (!keepOpen) {
-        setIsTxModalOpen(false);
-        setEditingTx(null);
-      }
-      refreshData(currentUser, false);
+    await persistAllData(accounts, nextTransactions);
+    if (!keepOpen) {
+      setIsTxModalOpen(false);
+      setEditingTx(null);
     }
-    return success;
+    refreshData(currentUser, false);
+    return true;
   };
 
   const handleSaveMultipleTransactions = async (txList: Omit<Transaction, 'id' | 'createdAt'>[], keepOpen: boolean = false): Promise<boolean> => {
@@ -1871,16 +1869,8 @@ export default function App() {
 
   // Account Handlers
   const persistAllData = async (updatedAccounts?: any[], updatedTransactions?: any[], updatedInvestmentTransactions?: any[]) => {
-    if ((window as any).__IS_SAVING_INVESTMENT__) {
-      console.warn('[AUTOSAVE IGNORADO] Salvamento concorrente de investimento em andamento.');
-      return false;
-    }
     if ((window as any).__PAUSE_ALL_SYNCS__) {
       console.warn('[DEDO-DURO] Sincronização bloqueada: Reset em andamento.');
-      return false;
-    }
-    if (!isInitialLoadComplete.current) {
-      console.warn('[Autosave Blocked] Initial load not complete yet.');
       return false;
     }
     if ((window as any).__KILL_AUTOSAVE__ || (window as any).__IS_RESETTING__) {
@@ -2271,14 +2261,18 @@ export default function App() {
     
     // 1. Instant local optimistic update & deletion guard
     recordGoalDeletion(id);
-    StorageService.deleteGoal(id);
+    StorageService.deleteGoal(id, budgetId);
     const freshGoals = StorageService.getGoals(budgetId).filter((g) => g.id !== id);
     setFinancialGoals(freshGoals);
 
-    // 2. Atomic server transaction & Appwrite direct propagation
-    await executeTransactionalGoal(budgetId, 'deleteGoal', {
-      goalId: id,
-    });
+    // 2. Atomic server transaction & Appwrite direct propagation (non-blocking)
+    try {
+      await executeTransactionalGoal(budgetId, 'deleteGoal', {
+        goalId: id,
+      });
+    } catch (e) {
+      console.warn('Erro ao excluir objetivo/sonho na nuvem (excluído localmente):', e);
+    }
 
     refreshData(currentUser, false);
   };
