@@ -47,18 +47,44 @@ const GOOGLE_CLIENT_ID = '516240046749-c9tu4lu53n4o3vuh0mdf389mp1kd2ur5.apps.goo
 
 interface AuthScreenProps {
   onLoginSuccess: (user: User) => void;
+  initialMode?: 'auth' | 'register';
+  initialEmail?: string;
+  initialName?: string;
+  initialNotice?: string;
 }
 
-export const AuthScreen: React.FC<AuthScreenProps> = ({ onLoginSuccess }) => {
+export const AuthScreen: React.FC<AuthScreenProps> = ({
+  onLoginSuccess,
+  initialMode = 'auth',
+  initialEmail = '',
+  initialName = '',
+  initialNotice = '',
+}) => {
   const [mode, setMode] = useState<'auth' | 'forgot'>('auth');
-  const [isRegister, setIsRegister] = useState(false);
-  const [email, setEmail] = useState('');
+  const [isRegister, setIsRegister] = useState(initialMode === 'register');
+  const [email, setEmail] = useState(initialEmail);
   const [password, setPassword] = useState('');
-  const [name, setName] = useState('');
+  const [name, setName] = useState(initialName);
   const [error, setError] = useState('');
   const [successMsg, setSuccessMsg] = useState('');
-  const [warningNotice, setWarningNotice] = useState('');
+  const [warningNotice, setWarningNotice] = useState(initialNotice);
   const [isCheckingUser, setIsCheckingUser] = useState(false);
+
+  // Sync props if initial configuration changes (e.g. after Google OAuth return with unregistered email)
+  useEffect(() => {
+    if (initialMode === 'register') {
+      setIsRegister(true);
+    }
+    if (initialEmail) {
+      setEmail(initialEmail);
+    }
+    if (initialName) {
+      setName(initialName);
+    }
+    if (initialNotice) {
+      setWarningNotice(initialNotice);
+    }
+  }, [initialMode, initialEmail, initialName, initialNotice]);
 
   // New Demographic & LGPD Compliance States
   const [birthDate, setBirthDate] = useState('');
@@ -233,11 +259,26 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({ onLoginSuccess }) => {
         // 2. Also register in Appwrite if available
         await appwriteSignUp(cleanEmail, password, name).catch(() => {});
       } else {
-        // Login flow
+        // Login flow: Verificar previamente se o e-mail informado já possui cadastro
+        const regCheck = await StorageService.isUserRegisteredAsync(cleanEmail);
+        if (!regCheck.exists || !regCheck.user) {
+          // Usuário não cadastrado! Direcionar imediatamente para a aba de Criar Conta
+          setIsCheckingUser(false);
+          setIsRegister(true);
+          setWarningNotice(`O e-mail "${cleanEmail}" ainda não possui cadastro no sistema. Preencha seus dados abaixo para criar sua conta gratuita!`);
+          setError('');
+          return;
+        }
+
+        // Se cadastrado, verificar se a senha confere (caso possua senha registrada)
+        if (regCheck.user.password && regCheck.user.password !== password) {
+          setIsCheckingUser(false);
+          setError('Senha incorreta. Verifique sua senha ou clique em "Esqueceu a senha?".');
+          return;
+        }
+
         try {
-          await appwriteSignIn(cleanEmail, password).catch(async () => {
-            await appwriteSignUp(cleanEmail, password, cleanEmail.split('@')[0]).catch(() => {});
-          });
+          await appwriteSignIn(cleanEmail, password).catch(() => {});
         } catch (e) {}
       }
 
@@ -288,10 +329,23 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({ onLoginSuccess }) => {
       return;
     }
 
+    const cleanReset = resetEmail.trim().toLowerCase();
     setIsSendingEmail(true);
+
     try {
+      // Verificar se o e-mail está cadastrado
+      const regCheck = await StorageService.isUserRegisteredAsync(cleanReset);
+      if (!regCheck.exists || !regCheck.user) {
+        setIsSendingEmail(false);
+        setMode('auth');
+        setIsRegister(true);
+        setEmail(cleanReset);
+        setWarningNotice(`O e-mail "${cleanReset}" não foi encontrado em nosso sistema. Preencha seus dados abaixo para criar sua conta gratuita!`);
+        return;
+      }
+
       const redirectUrl = window.location.origin;
-      await appwritePasswordReset(resetEmail.trim());
+      await appwritePasswordReset(cleanReset);
       setSuccessMsg('Link de recuperação enviado com sucesso! Verifique a Caixa de Entrada e o Spam.');
       setTimeout(() => {
         setMode('auth');

@@ -70,6 +70,12 @@ export default function App() {
   const isPrivacyActive = usePrivacyMode();
   const [isAuthLoading, setIsAuthLoading] = useState(true);
   const [currentUser, setCurrentUser] = useState<User | null>(null);
+  const [authInitialConfig, setAuthInitialConfig] = useState<{
+    mode: 'auth' | 'register';
+    email?: string;
+    name?: string;
+    notice?: string;
+  }>({ mode: 'auth' });
   const currentEffectiveBudgetId = currentUser ? StorageService.getEffectiveBudgetId(currentUser) : 'default';
   const lastBudgetSwitch = (currentUser as any)?.lastBudgetSwitch || 0;
   const [activeTab, setActiveTab] = useState<string>(() => {
@@ -785,21 +791,43 @@ export default function App() {
         }
 
         if (session && session.email) {
-          const userObj: User = {
-            id: session.$id || session.id || 'usr_' + Date.now(),
-            name: session.name || session.email.split('@')[0],
-            email: session.email,
-            authProvider: 'google',
-            createdAt: session.$createdAt || new Date().toISOString(),
-          };
-          StorageService.setCurrentUser(userObj);
-          localStorage.removeItem('darla_explicit_logout');
-          localStorage.removeItem('darla_oauth_pending');
+          const cleanEmail = session.email.trim().toLowerCase();
+
+          // Verificar se o e-mail retornado pelo OAuth já está cadastrado no sistema
+          const regCheck = await StorageService.isUserRegisteredAsync(cleanEmail);
 
           // Clean up URL parameters after successful OAuth callback
           if (window.location.search || window.location.hash) {
             window.history.replaceState({}, document.title, window.location.pathname);
           }
+          localStorage.removeItem('darla_oauth_pending');
+
+          if (!regCheck.exists || !regCheck.user) {
+            // E-mail NÃO cadastrado! Direcionar imediatamente para a aba de Criar Conta
+            console.log(`[OAuth Check] E-mail ${cleanEmail} não cadastrado. Redirecionando para Criar Conta.`);
+            if (mounted) {
+              setAuthInitialConfig({
+                mode: 'register',
+                email: cleanEmail,
+                name: session.name || cleanEmail.split('@')[0],
+                notice: `O e-mail "${cleanEmail}" autenticado com o Google ainda não possui cadastro no sistema. Complete seus dados abaixo para criar sua conta gratuita!`,
+              });
+              setCurrentUser(null);
+              setIsAuthLoading(false);
+            }
+            return;
+          }
+
+          const userObj: User = {
+            ...regCheck.user,
+            id: regCheck.user.id || session.$id || session.id || 'usr_' + Date.now(),
+            name: regCheck.user.name || session.name || session.email.split('@')[0],
+            email: cleanEmail,
+            authProvider: 'google',
+            createdAt: regCheck.user.createdAt || session.$createdAt || new Date().toISOString(),
+          };
+          StorageService.setCurrentUser(userObj);
+          localStorage.removeItem('darla_explicit_logout');
 
           if (mounted) {
             setCurrentUser(userObj);
@@ -811,12 +839,19 @@ export default function App() {
 
         const localUser = StorageService.getCurrentUser();
         if (localUser && localUser.email && !isExplicitLogout) {
-          if (mounted) {
-            setCurrentUser(localUser);
-            setIsAuthLoading(false);
-            refreshData(localUser, false);
+          const regCheck = await StorageService.isUserRegisteredAsync(localUser.email);
+          if (regCheck.exists && regCheck.user) {
+            if (mounted) {
+              setCurrentUser(localUser);
+              setIsAuthLoading(false);
+              refreshData(localUser, false);
+            }
+            return;
+          } else {
+            // Limpa dados fantasmas de usuário não cadastrado
+            StorageService.setCurrentUser(null as any);
+            localStorage.removeItem('dsf_current_user');
           }
-          return;
         }
 
         if (mounted) {
@@ -1370,7 +1405,15 @@ export default function App() {
   }
 
   if (!currentUser) {
-    return <AuthScreen onLoginSuccess={handleLoginSuccess} />;
+    return (
+      <AuthScreen
+        onLoginSuccess={handleLoginSuccess}
+        initialMode={authInitialConfig.mode}
+        initialEmail={authInitialConfig.email}
+        initialName={authInitialConfig.name}
+        initialNotice={authInitialConfig.notice}
+      />
+    );
   }
 
   const effectiveBudgetId = StorageService.getEffectiveBudgetId(currentUser);

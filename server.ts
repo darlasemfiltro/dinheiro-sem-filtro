@@ -1737,26 +1737,36 @@ async function startServer() {
 
         return res.json({ success: true, user, isNew: false });
       } else {
-        user = {
-          id: deterministicId,
-          name: name || cleanEmail.split('@')[0],
-          email: cleanEmail,
-          password,
-          authProvider: authProvider || 'email',
-          avatarUrl: avatarUrl || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150',
-          createdAt: new Date().toISOString(),
-          isPro: isDarla ? true : false,
-          plan: isDarla ? 'lifetime' : 'free',
-          subscriptionStatus: isDarla ? 'active' : 'trial',
-          lastSessionId: sessionId,
-          lastSessionCreatedAt: sessionId ? new Date().toISOString() : undefined,
-        };
-        allUsers.push(user);
-        saveServerUsers(allUsers);
+        // Se for a conta da Darla/administradora, permitir inicialização automática
+        if (isDarla) {
+          user = {
+            id: deterministicId,
+            name: name || cleanEmail.split('@')[0],
+            email: cleanEmail,
+            password,
+            authProvider: authProvider || 'email',
+            avatarUrl: avatarUrl || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150',
+            createdAt: new Date().toISOString(),
+            isPro: true,
+            plan: 'lifetime',
+            subscriptionStatus: 'active',
+            lastSessionId: sessionId,
+            lastSessionCreatedAt: sessionId ? new Date().toISOString() : undefined,
+          };
+          allUsers.push(user);
+          saveServerUsers(allUsers);
 
-        broadcastRealtime('USER_UPDATED', { email: cleanEmail, userId: user.id, user });
+          broadcastRealtime('USER_UPDATED', { email: cleanEmail, userId: user.id, user });
 
-        return res.json({ success: true, user, isNew: true });
+          return res.json({ success: true, user, isNew: true });
+        }
+
+        // Se for um e-mail que não estiver cadastrado, retornar erro 404 informando que precisa criar conta
+        return res.status(404).json({
+          success: false,
+          notRegistered: true,
+          message: 'E-mail não cadastrado. Por favor, crie uma conta primeiro.',
+        });
       }
     } catch (err) {
       console.error('[API Users Login Error]', err);
