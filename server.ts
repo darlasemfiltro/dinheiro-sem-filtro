@@ -1342,21 +1342,6 @@ async function startServer() {
       if (user) {
         return res.json({ success: true, user });
       }
-
-      if (isDarlaEmailOrId(cleanEmail) || (canonicalId && isDarlaEmailOrId(canonicalId))) {
-        const darlaUser = {
-          id: cleanEmail || 'darla.semfiltro@gmail.com',
-          name: 'Darla Carvalho',
-          email: cleanEmail || 'darla.semfiltro@gmail.com',
-          authProvider: 'email',
-          isPro: true,
-          plan: 'lifetime',
-          subscriptionStatus: 'active',
-          sharedBudgetCode: 'DARLA-8704',
-          createdAt: '2026-08-12T10:00:00.000Z',
-        };
-        return res.json({ success: true, user: darlaUser });
-      }
       return res.json({ success: false, user: null, message: 'Usuário não encontrado ou excluído do sistema.' });
     } catch (err) {
       console.error('[API Users Lookup Error]', err);
