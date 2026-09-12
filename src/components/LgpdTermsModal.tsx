@@ -147,7 +147,7 @@ export const LgpdTermsModal: React.FC<LgpdTermsModalProps> = ({
                   </div>
                   <div className="p-2.5 bg-gray-50 border border-gray-200 rounded-xl">
                     <strong className="text-[#121212] block">Portabilidade:</strong>
-                    Exporte relatórios completos em PDF e planilhas.
+                    Exporte relatórios completos em PDF.
                   </div>
                   <div className="p-2.5 bg-gray-50 border border-gray-200 rounded-xl">
                     <strong className="text-[#121212] block">Revogação do Consentimento:</strong>
