@@ -639,7 +639,6 @@ export const PortfolioView: React.FC<PortfolioViewProps> = ({
   const [goalForm, setGoalForm] = useState({
     title: '',
     targetAmount: '',
-    currentAmount: '',
     startDate: '',
     targetDate: '',
     category: 'Patrimônio Total',
@@ -1996,7 +1995,6 @@ export const PortfolioView: React.FC<PortfolioViewProps> = ({
     setGoalForm({
       title: '',
       targetAmount: '',
-      currentAmount: '',
       startDate: todayIso,
       targetDate: '',
       category: 'Patrimônio Total',
@@ -2011,7 +2009,6 @@ export const PortfolioView: React.FC<PortfolioViewProps> = ({
     setGoalForm({
       title: goal.title,
       targetAmount: String(goal.targetAmount),
-      currentAmount: String(goal.currentAmount),
       startDate: goal.startDate,
       targetDate: goal.targetDate,
       category: goal.category,
@@ -2037,17 +2034,12 @@ export const PortfolioView: React.FC<PortfolioViewProps> = ({
       : String(goalForm.targetAmount);
     const parsedTargetAmount = parseFloat(rawTarget) || 0;
 
-    const rawCurrent = typeof goalForm.currentAmount === 'string'
-      ? goalForm.currentAmount.replace(/\s/g, '').replace(/\./g, '').replace(',', '.')
-      : String(goalForm.currentAmount || '0');
-    const parsedCurrentAmount = parseFloat(rawCurrent) || 0;
-
     const goalData: PortfolioGoal = {
       id: editingGoal ? editingGoal.id : `goal_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
       userId,
       title: goalForm.title.trim(),
       targetAmount: parsedTargetAmount,
-      currentAmount: parsedCurrentAmount,
+      currentAmount: 0, // Calculated dynamically based on asset category
       startDate: goalForm.startDate || new Date().toISOString().split('T')[0],
       targetDate: goalForm.targetDate || '',
       category: goalForm.category || 'Patrimônio Total',
@@ -6145,30 +6137,17 @@ export const PortfolioView: React.FC<PortfolioViewProps> = ({
                 />
               </div>
 
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="block text-gray-300 font-bold mb-1">Valor Objetivo (R$)</label>
-                  <input
-                    type="number"
-                    step="0.01"
-                    value={goalForm.targetAmount}
-                    onChange={(e) => setGoalForm({ ...goalForm, targetAmount: e.target.value })}
-                    placeholder="15000"
-                    required
-                    className="w-full bg-[#18181B] border border-white/20 rounded-xl px-3 py-2 text-white focus:outline-none focus:border-[#D4AF37]"
-                  />
-                </div>
-                <div>
-                  <label className="block text-gray-300 font-bold mb-1">Valor Atual (R$)</label>
-                  <input
-                    type="number"
-                    step="0.01"
-                    value={goalForm.currentAmount}
-                    onChange={(e) => setGoalForm({ ...goalForm, currentAmount: e.target.value })}
-                    placeholder="5557.25"
-                    className="w-full bg-[#18181B] border border-white/20 rounded-xl px-3 py-2 text-white focus:outline-none focus:border-[#D4AF37]"
-                  />
-                </div>
+              <div>
+                <label className="block text-gray-300 font-bold mb-1">Valor Objetivo (R$)</label>
+                <input
+                  type="number"
+                  step="0.01"
+                  value={goalForm.targetAmount}
+                  onChange={(e) => setGoalForm({ ...goalForm, targetAmount: e.target.value })}
+                  placeholder="15000"
+                  required
+                  className="w-full bg-[#18181B] border border-white/20 rounded-xl px-3 py-2 text-white focus:outline-none focus:border-[#D4AF37]"
+                />
               </div>
 
               <div className="grid grid-cols-2 gap-3">
