@@ -1997,6 +1997,7 @@ export class StorageService {
       city: extraProfile?.city || existingUser?.city,
       state: extraProfile?.state || existingUser?.state,
       monthlyIncome: extraProfile?.monthlyIncome !== undefined ? extraProfile.monthlyIncome : existingUser?.monthlyIncome,
+      incomeBracket: extraProfile?.incomeBracket !== undefined ? extraProfile.incomeBracket : existingUser?.incomeBracket,
       consent_lgpd: extraProfile?.consent_lgpd !== undefined ? extraProfile.consent_lgpd : existingUser?.consent_lgpd,
       consent_date: extraProfile?.consent_date || existingUser?.consent_date,
       consent_version: extraProfile?.consent_version || existingUser?.consent_version,
@@ -2107,6 +2108,7 @@ export class StorageService {
       if (extraProfile?.city) existing.city = extraProfile.city;
       if (extraProfile?.state) existing.state = extraProfile.state;
       if (extraProfile?.monthlyIncome !== undefined) existing.monthlyIncome = extraProfile.monthlyIncome;
+      if (extraProfile?.incomeBracket !== undefined) existing.incomeBracket = extraProfile.incomeBracket;
       if (extraProfile?.consent_lgpd !== undefined) existing.consent_lgpd = extraProfile.consent_lgpd;
       if (extraProfile?.consent_date) existing.consent_date = extraProfile.consent_date;
       if (extraProfile?.consent_version) existing.consent_version = extraProfile.consent_version;
@@ -2159,6 +2161,7 @@ export class StorageService {
       city: extraProfile?.city,
       state: extraProfile?.state,
       monthlyIncome: extraProfile?.monthlyIncome,
+      incomeBracket: extraProfile?.incomeBracket,
       consent_lgpd: extraProfile?.consent_lgpd,
       consent_date: extraProfile?.consent_date,
       consent_version: extraProfile?.consent_version,

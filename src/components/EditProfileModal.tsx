@@ -4,6 +4,7 @@ import { User } from '../types';
 import { StorageService } from '../services/storage';
 import { AvatarCropModal } from './AvatarCropModal';
 import { LgpdTermsModal } from './LgpdTermsModal';
+import { getIncomeBracketFromValue } from '../utils/brazilLocations';
 
 interface EditProfileModalProps {
   isOpen: boolean;
@@ -187,12 +188,16 @@ export const EditProfileModal: React.FC<EditProfileModalProps> = ({
                   </div>
                 )}
 
-                {user.monthlyIncome !== undefined && user.monthlyIncome > 0 && (
+                {(Boolean(user.incomeBracket) || (user.monthlyIncome !== undefined && user.monthlyIncome > 0)) && (
                   <div className="p-2.5 bg-white rounded-xl border border-gray-200 flex items-center justify-between sm:col-span-2">
                     <div>
-                      <span className="text-[10px] text-gray-500 font-bold uppercase block">Renda Mensal Declarada</span>
+                      <span className="text-[10px] text-gray-500 font-bold uppercase block">Faixa de Renda Mensal</span>
                       <span className="font-extrabold text-[#008736] text-sm">
-                        {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(user.monthlyIncome)}
+                        {user.incomeBracket ||
+                          (user.monthlyIncome
+                            ? getIncomeBracketFromValue(user.monthlyIncome) ||
+                              new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(user.monthlyIncome)
+                            : '')}
                       </span>
                       <span className="text-[10px] text-gray-400 block">Dado confidencial protegido pela LGPD</span>
                     </div>

@@ -111,10 +111,11 @@ export interface User {
   lastSessionCreatedAt?: string;
 
   // LGPD & Demographics
-  birthDate?: string; // Data de nascimento (YYYY-MM-DD)
+  birthDate?: string; // Data de nascimento (YYYY-MM-DD ou DD/MM/AAAA)
   city?: string; // Cidade
   state?: string; // Estado / UF
   monthlyIncome?: number; // Renda / Salário Mensal em R$
+  incomeBracket?: string; // Faixa de renda mensal selecionada
   consent_lgpd?: boolean; // Consentimento explícito da LGPD
   consent_date?: string; // Timestamp UTC do aceite
   consent_version?: string; // Versão dos termos aceitos (ex: "v1.1")

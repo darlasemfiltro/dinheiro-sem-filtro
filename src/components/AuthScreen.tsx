@@ -35,6 +35,9 @@ import {
   formatCurrencyFromDigits,
   parseCurrencyToNumber,
   sanitizeString,
+  INCOME_BRACKETS,
+  getValueFromIncomeBracket,
+  getIncomeBracketFromValue,
 } from '../utils/brazilLocations';
 import { SearchableSelect, SearchableSelectOption } from './SearchableSelect';
 import { LgpdTermsModal } from './LgpdTermsModal';
@@ -61,7 +64,7 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({ onLoginSuccess }) => {
   const [birthDate, setBirthDate] = useState('');
   const [state, setState] = useState('');
   const [city, setCity] = useState('');
-  const [monthlyIncome, setMonthlyIncome] = useState('');
+  const [incomeBracket, setIncomeBracket] = useState('');
   const [consentLgpd, setConsentLgpd] = useState(false); // Strictly unchecked by default (active opt-in)
   const [isLgpdModalOpen, setIsLgpdModalOpen] = useState(false);
   const [lgpdModalTab, setLgpdModalTab] = useState<'terms' | 'privacy'>('privacy');
@@ -82,8 +85,8 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({ onLoginSuccess }) => {
   const isAgeCalculable = birthDate.length === 10 && calculatedAge > 0;
   const isAgeValid = Boolean(birthDate) && birthDate.length === 10 && calculatedAge >= 18;
   const isLocationValid = Boolean(state) && sanitizeString(city).length >= 2;
-  const numericMonthlyIncome = parseCurrencyToNumber(monthlyIncome);
-  const isIncomeValid = numericMonthlyIncome > 0;
+  const numericMonthlyIncome = getValueFromIncomeBracket(incomeBracket);
+  const isIncomeValid = Boolean(incomeBracket.trim());
   const isNameValid = name.trim().length >= 2;
   const isEmailValid = email.trim().includes('@') && email.trim().length >= 5;
   const isPasswordValid = password.length >= 6;
@@ -102,6 +105,13 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({ onLoginSuccess }) => {
     value: c,
     label: c,
     sublabel: state,
+  }));
+
+  // Income Bracket Options for SearchableSelect
+  const incomeOptions: SearchableSelectOption[] = INCOME_BRACKETS.map((b) => ({
+    value: b.label,
+    label: b.label,
+    sublabel: b.sublabel,
   }));
 
   // Form validity strictly enforcing LGPD consent and demographic fields
@@ -185,6 +195,7 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({ onLoginSuccess }) => {
             city: sanitizeString(city),
             state: state.toUpperCase(),
             monthlyIncome: numericMonthlyIncome,
+            incomeBracket: incomeBracket.trim(),
             consent_lgpd: true,
             consent_date: consentDate,
             consent_version: 'v1.1',
@@ -205,6 +216,7 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({ onLoginSuccess }) => {
             city: sanitizeString(city),
             state: state.toUpperCase(),
             monthlyIncome: numericMonthlyIncome,
+            incomeBracket: incomeBracket.trim(),
             consent_lgpd: true,
             consent_date: consentDate,
             consent_version: 'v1.1',
@@ -626,26 +638,25 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({ onLoginSuccess }) => {
                     </p>
                   </div>
 
-                  {/* 3. Renda / Salário Mensal (com máscara monetária R$) */}
+                  {/* 3. Faixa de Renda Mensal (Seleção no Padrão do App com Pesquisa) */}
                   <div className="space-y-1">
                     <label className="text-xs sm:text-sm font-bold text-[#121212]">
-                      Renda / Salário Mensal <span className="text-[#D4AF37]">*</span>
+                      Faixa de Renda Mensal <span className="text-[#D4AF37]">*</span>
                     </label>
-                    <div className="relative">
-                      <DollarSign className="w-4 h-4 text-[#D4AF37] absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none" />
-                      <input
-                        type="text"
-                        inputMode="numeric"
-                        value={monthlyIncome}
-                        onChange={(e) => setMonthlyIncome(formatCurrencyFromDigits(e.target.value))}
-                        placeholder="R$ 0,00"
-                        className="w-full min-h-[48px] pl-10 pr-4 py-3 bg-gray-50 border border-gray-200 rounded-xl text-xs sm:text-sm text-[#121212] font-extrabold placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-[#D4AF37] focus:bg-white transition tracking-wide"
-                        required
-                        id="signup-income"
+                    <div>
+                      <SearchableSelect
+                        options={incomeOptions}
+                        value={incomeBracket}
+                        onChange={(val) => setIncomeBracket(val)}
+                        placeholder="Selecione sua Faixa de Renda"
+                        searchPlaceholder="Pesquisar faixa de renda..."
+                        emptyText="Nenhuma faixa de renda encontrada"
+                        icon={<DollarSign className="w-4 h-4 text-[#D4AF37]" />}
+                        id="signup-income-bracket"
                       />
                     </div>
                     <p className="text-[10px] text-gray-500 font-medium">
-                      Informação confidencial protegida pela LGPD para calibração personalizada de suas metas.
+                      Informação confidencial protegida pela LGPD para calibração personalizada de metas orçamentárias.
                     </p>
                   </div>
 

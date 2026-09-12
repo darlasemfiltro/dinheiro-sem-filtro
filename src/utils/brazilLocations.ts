@@ -80,13 +80,33 @@ export function sanitizeString(input: string): string {
  */
 export function formatBirthDateInput(value: string): string {
   const digits = value.replace(/\D/g, '').slice(0, 8);
+  if (digits.length === 0) return '';
+
+  let day = digits.slice(0, 2);
+  let month = digits.slice(2, 4);
+  let year = digits.slice(4, 8);
+
+  // Validate day if 2 digits entered
+  if (day.length === 2) {
+    const d = parseInt(day, 10);
+    if (d > 31) day = '31';
+    else if (d === 0) day = '01';
+  }
+
+  // Validate month if 2 digits entered
+  if (month.length === 2) {
+    const m = parseInt(month, 10);
+    if (m > 12) month = '12';
+    else if (m === 0) month = '01';
+  }
+
   if (digits.length <= 2) {
-    return digits;
+    return day;
   }
   if (digits.length <= 4) {
-    return `${digits.slice(0, 2)}/${digits.slice(2)}`;
+    return `${day}/${month}`;
   }
-  return `${digits.slice(0, 2)}/${digits.slice(2, 4)}/${digits.slice(4, 8)}`;
+  return `${day}/${month}/${year}`;
 }
 
 /**
@@ -237,4 +257,78 @@ export function getRegionalBenchmark(state?: string): number {
   if (['AM', 'PA', 'RO', 'AC', 'AP', 'RR', 'TO'].includes(uf)) return 68;
   return 67; // Média Nacional do Brasil
 }
+
+export interface IncomeBracket {
+  id: string;
+  label: string;
+  sublabel: string;
+  representativeValue: number;
+}
+
+export const INCOME_BRACKETS: IncomeBracket[] = [
+  {
+    id: 'ate-1500',
+    label: 'Até R$ 1.500',
+    sublabel: 'Até 1 salário mínimo',
+    representativeValue: 1500,
+  },
+  {
+    id: '1501-3000',
+    label: 'R$ 1.501 a R$ 3.000',
+    sublabel: '1 a 2 salários mínimos',
+    representativeValue: 2500,
+  },
+  {
+    id: '3001-5000',
+    label: 'R$ 3.001 a R$ 5.000',
+    sublabel: '2 a 3,5 salários mínimos',
+    representativeValue: 4000,
+  },
+  {
+    id: '5001-10000',
+    label: 'R$ 5.001 a R$ 10.000',
+    sublabel: '3,5 a 7 salários mínimos',
+    representativeValue: 7500,
+  },
+  {
+    id: '10001-20000',
+    label: 'R$ 10.001 a R$ 20.000',
+    sublabel: '7 a 14 salários mínimos',
+    representativeValue: 15000,
+  },
+  {
+    id: 'acima-20000',
+    label: 'Acima de R$ 20.000',
+    sublabel: 'Mais de 14 salários mínimos',
+    representativeValue: 25000,
+  },
+];
+
+export function getIncomeBracketFromValue(val?: number): string {
+  if (!val || val <= 0) return '';
+  if (val <= 1500) return 'Até R$ 1.500';
+  if (val <= 3000) return 'R$ 1.501 a R$ 3.000';
+  if (val <= 5000) return 'R$ 3.001 a R$ 5.000';
+  if (val <= 10000) return 'R$ 5.001 a R$ 10.000';
+  if (val <= 20000) return 'R$ 10.001 a R$ 20.000';
+  return 'Acima de R$ 20.000';
+}
+
+export function getValueFromIncomeBracket(bracket?: string): number {
+  if (!bracket) return 0;
+  const found = INCOME_BRACKETS.find(
+    (b) => b.label === bracket || b.id === bracket
+  );
+  if (found) return found.representativeValue;
+
+  const b = bracket.trim();
+  if (b.includes('1.500') && b.toLowerCase().includes('até')) return 1500;
+  if (b.includes('3.000')) return 2500;
+  if (b.includes('5.000')) return 4000;
+  if (b.includes('10.000')) return 7500;
+  if (b.includes('20.000') && !b.toLowerCase().includes('acima')) return 15000;
+  if (b.includes('20.000') || b.toLowerCase().includes('acima')) return 25000;
+  return 4000;
+}
+
 

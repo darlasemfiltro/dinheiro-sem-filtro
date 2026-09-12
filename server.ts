@@ -36,6 +36,7 @@ interface ServerUser {
   city?: string;
   state?: string;
   monthlyIncome?: number;
+  incomeBracket?: string;
   consent_lgpd?: boolean;
   consent_date?: string;
   consent_version?: string;
@@ -1387,6 +1388,8 @@ async function startServer() {
         estado,
         monthlyIncome,
         renda_mensal,
+        incomeBracket,
+        faixa_renda,
         consent_lgpd,
         consent_date,
         consent_version,
@@ -1506,9 +1509,11 @@ async function startServer() {
         });
       }
 
-      // 4. Renda / Salário Mensal (número positivo > 0)
+      // 4. Faixa de Renda / Salário Mensal
       const rawIncome = monthlyIncome !== undefined ? monthlyIncome : renda_mensal;
+      const cleanIncomeBracket = String(incomeBracket || faixa_renda || '').trim();
       let numericIncome = 0;
+
       if (typeof rawIncome === 'number') {
         numericIncome = rawIncome;
       } else if (typeof rawIncome === 'string') {
@@ -1516,11 +1521,22 @@ async function startServer() {
         numericIncome = parseFloat(clean);
       }
 
+      // Se renda numérica direta não informada, derivar valor representativo da faixa de renda selecionada
+      if ((isNaN(numericIncome) || numericIncome <= 0) && cleanIncomeBracket) {
+        if (cleanIncomeBracket.includes('1.500') && cleanIncomeBracket.toLowerCase().includes('até')) numericIncome = 1500;
+        else if (cleanIncomeBracket.includes('3.000')) numericIncome = 2500;
+        else if (cleanIncomeBracket.includes('5.000')) numericIncome = 4000;
+        else if (cleanIncomeBracket.includes('10.000')) numericIncome = 7500;
+        else if (cleanIncomeBracket.includes('20.000') && !cleanIncomeBracket.toLowerCase().includes('acima')) numericIncome = 15000;
+        else if (cleanIncomeBracket.includes('20.000') || cleanIncomeBracket.toLowerCase().includes('acima')) numericIncome = 25000;
+        else numericIncome = 4000;
+      }
+
       if (isNaN(numericIncome) || numericIncome <= 0) {
         return res.status(422).json({
           success: false,
           code: 'INCOME_REQUIRED',
-          message: 'Por favor, informe uma renda/salário mensal válido maior que zero.',
+          message: 'Por favor, selecione a sua faixa de renda mensal.',
         });
       }
 
@@ -1556,6 +1572,7 @@ async function startServer() {
         city: cleanCity,
         state: cleanState,
         monthlyIncome: Math.round(numericIncome * 100) / 100,
+        incomeBracket: cleanIncomeBracket || undefined,
         consent_lgpd: true,
         consent_date: consent_date || new Date().toISOString(),
         consent_version: consent_version || 'v1.1',
@@ -1627,6 +1644,7 @@ async function startServer() {
           city: userData.city || existing.city,
           state: userData.state || existing.state,
           monthlyIncome: userData.monthlyIncome !== undefined ? userData.monthlyIncome : existing.monthlyIncome,
+          incomeBracket: userData.incomeBracket !== undefined ? userData.incomeBracket : existing.incomeBracket,
           consent_lgpd: userData.consent_lgpd !== undefined ? userData.consent_lgpd : existing.consent_lgpd,
           consent_date: userData.consent_date || existing.consent_date,
           consent_version: userData.consent_version || existing.consent_version,
@@ -1663,6 +1681,7 @@ async function startServer() {
           city: userData.city,
           state: userData.state,
           monthlyIncome: userData.monthlyIncome,
+          incomeBracket: userData.incomeBracket,
           consent_lgpd: userData.consent_lgpd,
           consent_date: userData.consent_date,
           consent_version: userData.consent_version,
