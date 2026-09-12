@@ -1541,12 +1541,16 @@ export const TransactionsView: React.FC<TransactionsViewProps> = ({
       {/* Delete Confirmation Modal */}
       {deletingTxId && (
         <div
-          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-xs animate-in fade-in duration-200"
+          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-xs animate-in fade-in duration-200 pointer-events-auto"
           onClick={(e) => {
             if (e.target === e.currentTarget) setDeletingTxId(null);
           }}
         >
-          <div className="bg-[#18181B] text-white border-2 border-[#D4AF37] w-full max-w-sm rounded-2xl p-6 shadow-2xl flex flex-col items-center text-center gap-5">
+          <div 
+            className="bg-[#18181B] text-white border-2 border-[#D4AF37] w-full max-w-sm rounded-2xl p-6 shadow-2xl flex flex-col items-center text-center gap-5 pointer-events-auto"
+            onClick={(e) => e.stopPropagation()}
+            onTouchStart={(e) => e.stopPropagation()}
+          >
             <div className="w-12 h-12 rounded-full bg-red-500/20 text-red-400 border border-red-500/30 flex items-center justify-center shrink-0">
               <Trash2 className="w-6 h-6" />
             </div>
@@ -1558,18 +1562,35 @@ export const TransactionsView: React.FC<TransactionsViewProps> = ({
             <div className="flex items-center justify-center gap-3 w-full pt-1">
               <button
                 type="button"
-                onClick={() => setDeletingTxId(null)}
-                className="flex-1 py-2.5 px-4 rounded-xl border border-white/20 text-xs font-bold text-gray-300 hover:bg-white/10 transition cursor-pointer"
+                onClick={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  setDeletingTxId(null);
+                }}
+                onTouchEnd={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  setDeletingTxId(null);
+                }}
+                className="flex-1 py-3 px-4 rounded-xl border border-white/20 text-xs font-bold text-gray-300 hover:bg-white/10 transition cursor-pointer select-none active:scale-95"
               >
                 Não
               </button>
               <button
                 type="button"
-                onClick={() => {
+                onClick={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
                   onDeleteTransaction(deletingTxId);
                   setDeletingTxId(null);
                 }}
-                className="flex-1 py-2.5 px-4 rounded-xl bg-red-600 hover:bg-red-700 text-white font-extrabold text-xs transition cursor-pointer shadow-md"
+                onTouchEnd={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  onDeleteTransaction(deletingTxId);
+                  setDeletingTxId(null);
+                }}
+                className="flex-1 py-3 px-4 rounded-xl bg-red-600 hover:bg-red-700 text-white font-extrabold text-xs transition cursor-pointer shadow-md select-none active:scale-95"
               >
                 Sim
               </button>
