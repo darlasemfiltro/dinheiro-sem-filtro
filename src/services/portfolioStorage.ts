@@ -1162,6 +1162,7 @@ export class PortfolioStorageService {
       const dividends = this.getDividends(canonicalId);
       const targetAllocations = this.getTargetAllocations(canonicalId);
       const goals = this.getGoals(canonicalId);
+      const deletedIds = Array.from(this.getDeletedPortfolioIds(canonicalId));
 
       // Push to Cloud Appwrite in background
       syncPortfolioWithAppwrite(canonicalId, {
@@ -1170,6 +1171,7 @@ export class PortfolioStorageService {
         dividends,
         targetAllocations,
         goals,
+        deletedIds,
       }).catch(() => {});
 
       // Optionally sync to Firestore concurrently
@@ -1199,6 +1201,7 @@ export class PortfolioStorageService {
           dividends,
           targetAllocations,
           goals,
+          deletedIds,
         }),
       });
 
@@ -1355,11 +1358,16 @@ export class PortfolioStorageService {
         return true;
       });
 
-      const goals = [
+      const rawGoals = [
         ...(serverData?.goals || []),
         ...(appwriteData?.goals || []),
         ...(firestoreData?.goals || [])
       ];
+      const goals = rawGoals.filter((g: any) => {
+        if (!g || !g.id) return false;
+        if (deletedIds.has(g.id) || deletedIds.has(g.id.toUpperCase())) return false;
+        return true;
+      });
       const targetAllocations = (Array.isArray(serverData?.targetAllocations) && serverData.targetAllocations.length > 0)
         ? serverData.targetAllocations
         : ((Array.isArray(appwriteData?.targetAllocations) && appwriteData.targetAllocations.length > 0)
