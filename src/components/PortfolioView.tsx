@@ -3173,10 +3173,10 @@ export const PortfolioView: React.FC<PortfolioViewProps> = ({
                       {perf.rentPositive ? <TrendingUp className="w-4 h-4" /> : <TrendingDown className="w-4 h-4" />}
                     </div>
                   </div>
-                  <p className="text-3xl font-black text-white font-serif">{perf.rentPct.toFixed(2)}%</p>
+                  <p className="text-3xl font-black text-white font-serif">{Number(perf?.rentPct || 0).toFixed(2)}%</p>
                   <div className={`flex items-center gap-1 text-[11px] font-bold ${perf.rentPositive ? 'text-[#00E676]' : 'text-red-400'}`}>
                     {perf.rentPositive ? <ArrowUpRight className="w-3.5 h-3.5" /> : <ArrowDownRight className="w-3.5 h-3.5" />}
-                    <span>{perf.rentPositive ? '+' : ''}{perf.rentPct.toFixed(2)}% {perf.periodText}</span>
+                    <span>{perf.rentPositive ? '+' : ''}{Number(perf?.rentPct || 0).toFixed(2)}% {perf.periodText}</span>
                   </div>
                 </div>
 
@@ -3191,7 +3191,7 @@ export const PortfolioView: React.FC<PortfolioViewProps> = ({
                   <p className="text-3xl font-black text-white font-serif">{formatValue(totalEquity)}</p>
                   <div className={`flex items-center gap-1 text-[11px] font-bold ${perf.patPositive ? 'text-[#00E676]' : 'text-red-400'}`}>
                     {perf.patPositive ? <ArrowUpRight className="w-3.5 h-3.5" /> : <ArrowDownRight className="w-3.5 h-3.5" />}
-                    <span>{perf.patPositive ? '+' : ''}{perf.patPct.toFixed(2)}% {perf.periodText}</span>
+                    <span>{perf.patPositive ? '+' : ''}{Number(perf?.patPct || 0).toFixed(2)}% {perf.periodText}</span>
                   </div>
                 </div>
 
@@ -3206,7 +3206,7 @@ export const PortfolioView: React.FC<PortfolioViewProps> = ({
                   <p className="text-3xl font-black text-white font-serif">{formatValue(receivedDividends)}</p>
                   <div className={`flex items-center gap-1 text-[11px] font-bold ${perf.provPositive ? 'text-[#00E676]' : 'text-red-400'}`}>
                     {perf.provPositive ? <ArrowUpRight className="w-3.5 h-3.5" /> : <ArrowDownRight className="w-3.5 h-3.5" />}
-                    <span>{perf.provPositive ? '+' : ''}{perf.provPct.toFixed(2)}% {perf.periodText}</span>
+                    <span>{perf.provPositive ? '+' : ''}{Number(perf?.provPct || 0).toFixed(2)}% {perf.periodText}</span>
                   </div>
                 </div>
               </div>
@@ -3244,26 +3244,26 @@ export const PortfolioView: React.FC<PortfolioViewProps> = ({
 
                       <span
                         className={`text-[10px] font-black px-2 py-0.5 rounded border ${
-                          item.totalRentPct >= 0
+                          (item.totalRentPct || 0) >= 0
                             ? 'bg-[#00C853]/15 text-[#00E676] border-[#00C853]/30'
                             : 'bg-[#FF5252]/15 text-[#FF5252] border-[#FF5252]/30'
                         }`}
                       >
-                        Rentab. Total: {item.totalRentPct >= 0 ? '+' : ''}{item.totalRentPct.toFixed(2)}%
+                        Rentab. Total: {(item.totalRentPct || 0) >= 0 ? '+' : ''}{Number(item.totalRentPct || 0).toFixed(2)}%
                       </span>
 
                       <span
                         className={`text-[10px] font-bold px-2 py-0.5 rounded border ${
-                          item.todayPct >= 0
+                          (item.todayPct || 0) >= 0
                             ? 'bg-[#00C853]/15 text-[#00E676] border-[#00C853]/30'
                             : 'bg-[#FF5252]/15 text-[#FF5252] border-[#FF5252]/30'
                         }`}
                       >
-                        Hoje: {item.todayVal >= 0 ? '+' : ''}R$ {item.todayVal.toFixed(2)} ({item.todayPct >= 0 ? '+' : ''}{item.todayPct.toFixed(2)}%)
+                        Hoje: {(item.todayVal || 0) >= 0 ? '+' : ''}R$ {Number(item.todayVal || 0).toFixed(2)} ({(item.todayPct || 0) >= 0 ? '+' : ''}{Number(item.todayPct || 0).toFixed(2)}%)
                       </span>
 
                       <span className="text-[10px] font-black text-gray-300 bg-white/10 px-2 py-0.5 rounded border border-white/10">
-                        {item.pct.toFixed(1)}% alocação
+                        {Number(item.pct || 0).toFixed(1)}% alocação
                       </span>
                     </div>
                   </div>
