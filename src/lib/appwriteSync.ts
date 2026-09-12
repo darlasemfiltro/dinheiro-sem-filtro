@@ -717,14 +717,47 @@ export function mergeRemoteInvestmentTransactionsWithOptimistic(remoteTxs: any[]
   const deletedSet = getRecentDeletedInvestmentTxIds();
   const map = new Map<string, any>();
 
+  // 1. First, include all local stored investment transactions from localStorage cache so nothing local gets lost!
+  try {
+    if (typeof localStorage !== 'undefined') {
+      const keys = Object.keys(localStorage);
+      keys.forEach(k => {
+        if (k.includes('darla_portfolio_transactions') || k.includes('dsf_investments_cache')) {
+          const raw = localStorage.getItem(k);
+          if (raw) {
+            const parsed = JSON.parse(raw);
+            if (Array.isArray(parsed)) {
+              parsed.forEach((t: any) => {
+                if (t && t.id && !deletedSet.has(t.id)) {
+                  map.set(t.id, t);
+                }
+              });
+            }
+          }
+        }
+      });
+    }
+  } catch {}
+
+  // 2. Add remote items if not deleted
   if (Array.isArray(remoteTxs)) {
     remoteTxs.forEach((rt: any) => {
       if (rt && rt.id && !deletedSet.has(rt.id)) {
-        map.set(rt.id, rt);
+        const existing = map.get(rt.id);
+        if (!existing) {
+          map.set(rt.id, rt);
+        } else {
+          const remoteTime = rt.updatedAt ? new Date(rt.updatedAt).getTime() : 0;
+          const localTime = existing.updatedAt ? new Date(existing.updatedAt).getTime() : 0;
+          if (remoteTime >= localTime) {
+            map.set(rt.id, { ...existing, ...rt });
+          }
+        }
       }
     });
   }
 
+  // 3. Overlay pending mutations
   const now = Date.now();
   pendingInvestmentTxMutations.forEach((pending, txId) => {
     if (deletedSet.has(txId)) {
@@ -732,18 +765,17 @@ export function mergeRemoteInvestmentTransactionsWithOptimistic(remoteTxs: any[]
       return;
     }
 
-    if (now - pending.timestamp > 45000) {
+    if (now - pending.timestamp > 120000) { // 2 minutes retention for pending mutations
       pendingInvestmentTxMutations.delete(txId);
       return;
     }
 
     if (pending.action === 'addInvestmentTransaction' || pending.action === 'updateInvestmentTransaction') {
-      const existing = map.get(txId);
-      if (!existing) {
-        if (pending.txData) map.set(txId, pending.txData);
-      } else {
-        const remoteTime = existing.updatedAt ? new Date(existing.updatedAt).getTime() : 0;
-        if (pending.timestamp >= remoteTime) {
+      if (pending.txData) {
+        const existing = map.get(txId);
+        if (!existing) {
+          map.set(txId, pending.txData);
+        } else {
           map.set(txId, { ...existing, ...pending.txData });
         }
       }
@@ -752,7 +784,9 @@ export function mergeRemoteInvestmentTransactionsWithOptimistic(remoteTxs: any[]
     }
   });
 
-  return Array.from(map.values());
+  const list = Array.from(map.values());
+  list.sort((a, b) => new Date(b.date || b.createdAt || 0).getTime() - new Date(a.date || a.createdAt || 0).getTime());
+  return list;
 }
 
 export function recordCategoryDeletion(id: string): void {
