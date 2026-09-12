@@ -1693,14 +1693,14 @@ export const PortfolioView: React.FC<PortfolioViewProps> = ({
   }, [rentPeriod, rentAppliedStartDate, rentAppliedEndDate, transactions, assets, quotes, totalEquity, totalInvested]);
 
   const rentabilitySummary = useMemo(() => {
-    if (rentabilityPercentageChartData.length === 0) {
+    if (!rentabilityPercentageChartData || rentabilityPercentageChartData.length === 0) {
       return { patrimonio: 0, cdi: 0, ibov: 0, ipca: 0, cdiPctOf: 0, ibovDiff: 0, realGain: 0 };
     }
-    const lastPoint = rentabilityPercentageChartData[rentabilityPercentageChartData.length - 1];
-    const patrimonio = lastPoint.patrimonio;
-    const cdi = lastPoint.cdi;
-    const ibov = lastPoint.ibov;
-    const ipca = lastPoint.ipca;
+    const lastPoint = rentabilityPercentageChartData[rentabilityPercentageChartData.length - 1] || {};
+    const patrimonio = Number(lastPoint.patrimonio || 0);
+    const cdi = Number(lastPoint.cdi || 0);
+    const ibov = Number(lastPoint.ibov || 0);
+    const ipca = Number(lastPoint.ipca || 0);
 
     const cdiPctOf = cdi > 0 ? (patrimonio / cdi) * 100 : 0;
     const ibovDiff = patrimonio - ibov;
@@ -6633,8 +6633,8 @@ export const PortfolioView: React.FC<PortfolioViewProps> = ({
                     <tbody className="divide-y divide-white/5">
                       {assetTxs.map((t) => {
                         const isBuy = t.type === 'buy' || (t.type as any) === 'BUY';
-                        const uPrice = t.unitPrice || (t as any).price || 0;
-                        const tVal = t.totalAmount || (t as any).totalValue || (uPrice * t.quantity);
+                        const uPrice = Number(t.unitPrice || (t as any).price || 0) || 0;
+                        const tVal = Number(t.totalAmount || (t as any).totalValue || (uPrice * (Number(t.quantity) || 0))) || 0;
                         return (
                           <tr key={t.id} className="hover:bg-white/5 transition font-bold">
                             <td className="py-2.5 px-3">
