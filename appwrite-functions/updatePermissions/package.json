@@ -1,0 +1,10 @@
+{
+  "name": "update-permissions",
+  "version": "1.0.0",
+  "description": "Appwrite function to update budget permissions",
+  "main": "src/main.js",
+  "type": "module",
+  "dependencies": {
+    "node-appwrite": "^11.1.1"
+  }
+}
