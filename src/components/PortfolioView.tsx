@@ -109,6 +109,8 @@ import {
   CATEGORY_LABELS,
   CATEGORY_COLORS,
   calculateLivePortfolio,
+  getCategoryCurrentValue,
+  normalizeCategoryKey,
 } from '../services/portfolioStorage';
 import { formatNumberToPtBr, parsePtBrNumber, formatDateBR } from '../utils/finance';
 import jsPDF from 'jspdf';
@@ -450,8 +452,8 @@ export const PortfolioView: React.FC<PortfolioViewProps> = ({
 
   const livePortfolio = useMemo(() => {
     const txs = investmentTransactions !== undefined ? investmentTransactions : transactions;
-    return calculateLivePortfolio(txs, goals);
-  }, [investmentTransactions, transactions, goals]);
+    return calculateLivePortfolio(txs, goals, quotes);
+  }, [investmentTransactions, transactions, goals, quotes]);
 
   const assets = livePortfolio.positions;
   const totalEquity = livePortfolio.totalPortfolioValue;
@@ -678,6 +680,11 @@ export const PortfolioView: React.FC<PortfolioViewProps> = ({
   const [isGoalCategoryOpen, setIsGoalCategoryOpen] = useState(false);
   const [goalCategorySearch, setGoalCategorySearch] = useState('');
   const goalCategoryContainerRef = useRef<HTMLDivElement>(null);
+
+  // Dynamic Current Amount for selected Goal Category
+  const selectedGoalCategoryCurrentValue = useMemo(() => {
+    return getCategoryCurrentValue(goalForm.category || 'Patrimônio Total', assets, totalEquity, quotes);
+  }, [goalForm.category, assets, totalEquity, quotes]);
 
   // Transaction Edit Modal State
   const [isTxModalOpen, setIsTxModalOpen] = useState(false);
@@ -2087,7 +2094,7 @@ export const PortfolioView: React.FC<PortfolioViewProps> = ({
       userId,
       title: goalForm.title.trim(),
       targetAmount: parsedTargetAmount,
-      currentAmount: 0, // Calculated dynamically based on asset category
+      currentAmount: selectedGoalCategoryCurrentValue, // Dinamicamente calculado conforme a Categoria do Ativo da Meta
       startDate: goalForm.startDate || new Date().toISOString().split('T')[0],
       targetDate: goalForm.targetDate || '',
       category: goalForm.category || 'Patrimônio Total',
@@ -3313,17 +3320,22 @@ export const PortfolioView: React.FC<PortfolioViewProps> = ({
             </div>
 
             <div className="space-y-3">
-              {goals.map((g) => {
-                const pct = Math.min(100, Math.round((totalEquity / g.targetAmount) * 100));
+              {calculatedGoals.map((g: any) => {
+                const currentAmt = g.currentAmount || 0;
+                const targetAmt = g.targetAmount || 1;
+                const pct = g.progressPercent ?? Math.min(100, Math.round((currentAmt / targetAmt) * 100));
                 return (
                   <div key={g.id} className="p-4 bg-[#121212] border border-white/10 rounded-2xl space-y-3">
                     <div className="flex items-center justify-between">
                       <div className="flex items-center gap-2">
                         <ChevronDown className="w-4 h-4 text-gray-400" />
                         <span className="text-sm font-black text-white">{g.title}</span>
+                        <span className="text-[10px] font-bold text-[#D4AF37] px-2 py-0.5 bg-[#D4AF37]/10 rounded border border-[#D4AF37]/30">
+                          {g.category || 'Patrimônio Total'}
+                        </span>
                       </div>
                       <span className="text-xs font-bold text-gray-300">
-                        Valor atual {formatValue(totalEquity)}
+                        Valor atual {formatValue(currentAmt)}
                       </span>
                     </div>
 
@@ -6313,31 +6325,59 @@ export const PortfolioView: React.FC<PortfolioViewProps> = ({
                         'BDR',
                         'ETF',
                         'Renda Fixa',
+                        'Fundos de Investimentos',
+                        'REITs',
                         'Outros'
                       ]
                         .filter((cat) => cat.toLowerCase().includes((goalCategorySearch || '').toLowerCase()))
-                        .map((cat) => (
-                          <button
-                            key={cat}
-                            type="button"
-                            onClick={() => {
-                              setGoalForm({ ...goalForm, category: cat });
-                              setGoalCategorySearch('');
-                              setIsGoalCategoryOpen(false);
-                            }}
-                            className={`w-full text-left px-4 py-3 text-xs sm:text-sm font-medium transition flex items-center justify-between cursor-pointer ${
-                              goalForm.category === cat
-                                ? 'bg-[#D4AF37]/20 text-[#D4AF37] font-bold'
-                                : 'text-gray-200 hover:bg-white/5 hover:text-white'
-                            }`}
-                          >
-                            <span>{cat}</span>
-                            {goalForm.category === cat && <span className="text-[#D4AF37] font-bold">✓</span>}
-                          </button>
-                        ))}
+                        .map((cat) => {
+                          const catValue = getCategoryCurrentValue(cat, assets, totalEquity, quotes);
+                          return (
+                            <button
+                              key={cat}
+                              type="button"
+                              onClick={() => {
+                                setGoalForm({ ...goalForm, category: cat });
+                                setGoalCategorySearch('');
+                                setIsGoalCategoryOpen(false);
+                              }}
+                              className={`w-full text-left px-4 py-2.5 text-xs sm:text-sm font-medium transition flex items-center justify-between cursor-pointer ${
+                                goalForm.category === cat
+                                  ? 'bg-[#D4AF37]/20 text-[#D4AF37] font-bold'
+                                  : 'text-gray-200 hover:bg-white/5 hover:text-white'
+                              }`}
+                            >
+                              <div className="flex items-center gap-2 truncate">
+                                <span>{cat}</span>
+                                {goalForm.category === cat && <span className="text-[#D4AF37] font-bold text-xs">✓</span>}
+                              </div>
+                              <span className="text-[11px] font-mono font-bold text-gray-400 shrink-0 ml-2">
+                                {formatValue(catValue)}
+                              </span>
+                            </button>
+                          );
+                        })}
                     </div>
                   </div>
                 )}
+
+                {/* Display Atual dinâmico de acordo com a Categoria selecionada */}
+                <div className="mt-2 p-3 bg-white/5 border border-white/10 rounded-xl flex items-center justify-between">
+                  <div>
+                    <span className="text-[11px] text-gray-400 font-medium block">Valor atual acumulado na categoria:</span>
+                    <span className="text-xs font-bold text-[#D4AF37]">{goalForm.category || 'Patrimônio Total'}</span>
+                  </div>
+                  <div className="text-right">
+                    <span className="text-sm font-black text-[#D4AF37] font-mono">
+                      {formatValue(selectedGoalCategoryCurrentValue)}
+                    </span>
+                    {Number(goalForm.targetAmount) > 0 && (
+                      <span className="block text-[10px] font-bold text-gray-400">
+                        {Math.min(100, Math.max(0, Math.round((selectedGoalCategoryCurrentValue / Number(goalForm.targetAmount)) * 100)))}% do objetivo
+                      </span>
+                    )}
+                  </div>
+                </div>
               </div>
 
               <div className="pt-2 flex items-center justify-end gap-2">

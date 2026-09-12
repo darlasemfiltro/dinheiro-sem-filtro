@@ -1020,7 +1020,76 @@ export const DEFAULT_TARGET_ALLOCATIONS: TargetAllocation[] = [
   { id: 'cripto_altcoins', categoryKey: 'cripto_altcoins', label: 'CRIPTOMOEDAS - ALTCOINS', targetPct: 5 },
 ];
 
-export function calculateLivePortfolio(transactions: any[], goals: any[] = []) {
+export function normalizeCategoryKey(rawCategory: string = ''): string {
+  const norm = String(rawCategory || '')
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/[^a-z0-9]/g, '');
+
+  if (!norm || norm === 'patrimoniototal' || norm === 'total' || norm === 'patrimonio' || norm === 'todas' || norm === 'todos') {
+    return 'patrimonio_total';
+  }
+  if (norm === 'acoes' || norm === 'acao' || norm === 'stocksbr') return 'acoes';
+  if (norm === 'fiis' || norm === 'fii' || norm.includes('fundosimobiliari') || norm.includes('fundoimobiliari')) return 'fiis';
+  if (norm.includes('tesouro')) return 'tesouro';
+  if (norm.includes('cripto') || norm.includes('crypto') || norm === 'btc' || norm === 'eth' || norm === 'altcoins') return 'cripto';
+  if (norm === 'stocks' || norm === 'stock') return 'stocks';
+  if (norm.includes('exterior') || norm === 'etfexterior' || norm === 'etfsus' || norm === 'etfusd') return 'etf_exterior';
+  if (norm.includes('fiagro')) return 'fiagro';
+  if (norm.includes('bdr') || norm === 'bdrs') return 'bdr';
+  if (norm === 'etf' || norm === 'etfs') return 'etfs';
+  if (norm.includes('rendafixa') || norm === 'cdb' || norm === 'lci' || norm === 'lca' || norm === 'cri' || norm === 'cra') return 'renda_fixa';
+  if (norm.includes('fundo') || norm === 'fundos') return 'fundos';
+  if (norm.includes('reit') || norm === 'reits') return 'reits';
+  if (norm === 'fip') return 'fip';
+  if (norm === 'fia') return 'fia';
+  if (norm.includes('infra') || norm === 'fiinfra') return 'fi_infra';
+  if (norm === 'fidc') return 'fidc';
+  if (norm.includes('outro')) return 'outros';
+
+  return norm;
+}
+
+export function getCategoryCurrentValue(
+  categoryName: string,
+  positions: any[] = [],
+  totalPortfolioValue: number = 0,
+  quotes: any[] = []
+): number {
+  const targetKey = normalizeCategoryKey(categoryName);
+  if (targetKey === 'patrimonio_total') {
+    if (totalPortfolioValue > 0) return Number(totalPortfolioValue.toFixed(2));
+    const calculatedTotal = (positions || []).reduce((acc, p) => {
+      const val = Number(p.totalValue) || (Number(p.quantity || 0) * Number(p.currentPrice || p.price || 0));
+      return acc + (isNaN(val) ? 0 : val);
+    }, 0);
+    return Number(calculatedTotal.toFixed(2));
+  }
+
+  const matching = (positions || []).filter((p) => {
+    if (!p) return false;
+    const pKey = normalizeCategoryKey(p.category || p.assetCategory || '');
+    return pKey === targetKey;
+  });
+
+  const usdRate = (Array.isArray(quotes) && quotes.find((q: any) => q.symbol === 'USD/BRL')?.price) || 5.15;
+
+  const sum = matching.reduce((acc, p) => {
+    if (!p) return acc;
+    if (p.totalValue !== undefined && p.totalValue !== null && !isNaN(Number(p.totalValue))) {
+      return acc + Number(p.totalValue);
+    }
+    const qty = Number(p.quantity) || 0;
+    const price = Number(p.currentPrice || p.price || p.unitPrice) || 0;
+    const mult = (p.currency === 'USD' || targetKey === 'stocks' || targetKey === 'etf_exterior' || targetKey === 'reits') ? usdRate : 1;
+    return acc + (qty * price * mult);
+  }, 0);
+
+  return Number(sum.toFixed(2));
+}
+
+export function calculateLivePortfolio(transactions: any[], goals: any[] = [], quotes: any[] = []) {
   const safeTransactions = Array.isArray(transactions) ? transactions : [];
   const safeGoals = Array.isArray(goals) ? goals : [];
 
@@ -1114,17 +1183,15 @@ export function calculateLivePortfolio(transactions: any[], goals: any[] = []) {
     percent: totalPortfolioValue > 0 ? (val / totalPortfolioValue) * 100 : 0
   }));
 
-  // Metas Reais
+  // Metas Reais calculadas de acordo com a Categoria do Ativo da Meta
   const calculatedGoals = safeGoals.map(g => {
-    const hasExplicitCurrent = g?.currentAmount !== undefined && g?.currentAmount !== null && !isNaN(Number(g.currentAmount));
-    const current = hasExplicitCurrent
-      ? Number(g.currentAmount)
-      : (g?.category === 'Patrimônio Total' ? totalPortfolioValue : (catTotals[g?.category] || 0));
+    const goalCategory = g?.category || 'Patrimônio Total';
+    const current = getCategoryCurrentValue(goalCategory, activePositions, totalPortfolioValue, quotes);
     const target = Number(g?.targetAmount) || 1;
     return {
       ...g,
       currentAmount: current,
-      progressPercent: Math.min(100, Math.max(0, Math.round((current / target) * 100)))
+      progressPercent: target > 0 ? Math.min(100, Math.max(0, Math.round((current / target) * 100))) : 0
     };
   });
 
