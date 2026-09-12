@@ -186,27 +186,27 @@ export async function syncAppDataToCloud(userId?: string | any, appData?: any, u
       const mergedPayloadData = {
         ...jsonDoBanco,
         ...payloadData,
-        investmentTransactions: (Array.isArray(payloadData.investmentTransactions) && payloadData.investmentTransactions.length > 0)
+        investmentTransactions: Array.isArray(payloadData.investmentTransactions)
           ? payloadData.investmentTransactions
-          : (jsonDoBanco.investmentTransactions || jsonDoBanco.investments || payloadData.investmentTransactions || []),
-        investments: (Array.isArray(payloadData.investments) && payloadData.investments.length > 0)
+          : (jsonDoBanco.investmentTransactions || jsonDoBanco.investments || []),
+        investments: Array.isArray(payloadData.investments)
           ? payloadData.investments
-          : (jsonDoBanco.investments || jsonDoBanco.investmentTransactions || payloadData.investments || []),
-        transactions: (Array.isArray(payloadData.transactions) && payloadData.transactions.length > 0)
+          : (jsonDoBanco.investments || jsonDoBanco.investmentTransactions || []),
+        transactions: Array.isArray(payloadData.transactions)
           ? payloadData.transactions
-          : (jsonDoBanco.transactions || payloadData.transactions || []),
-        accounts: (Array.isArray(payloadData.accounts) && payloadData.accounts.length > 0)
+          : (jsonDoBanco.transactions || []),
+        accounts: Array.isArray(payloadData.accounts)
           ? payloadData.accounts
-          : (jsonDoBanco.accounts || payloadData.accounts || []),
-        goals: (Array.isArray(payloadData.goals) && payloadData.goals.length > 0)
+          : (jsonDoBanco.accounts || []),
+        goals: Array.isArray(payloadData.goals)
           ? payloadData.goals
-          : (jsonDoBanco.goals || payloadData.goals || []),
-        investmentGoals: (Array.isArray(payloadData.investmentGoals) && payloadData.investmentGoals.length > 0)
+          : (jsonDoBanco.goals || []),
+        investmentGoals: Array.isArray(payloadData.investmentGoals)
           ? payloadData.investmentGoals
-          : (jsonDoBanco.investmentGoals || jsonDoBanco.investorGoals || payloadData.investmentGoals || []),
-        investorGoals: (Array.isArray(payloadData.investmentGoals) && payloadData.investmentGoals.length > 0)
+          : (jsonDoBanco.investmentGoals || jsonDoBanco.investorGoals || []),
+        investorGoals: Array.isArray(payloadData.investmentGoals)
           ? payloadData.investmentGoals
-          : (jsonDoBanco.investmentGoals || jsonDoBanco.investorGoals || payloadData.investorGoals || []),
+          : (jsonDoBanco.investmentGoals || jsonDoBanco.investorGoals || []),
         pedidos_acesso: jsonDoBanco.pedidos_acesso || payloadData.pedidos_acesso || [],
         allowed_users: jsonDoBanco.allowed_users || payloadData.allowed_users || [],
         shared_members: jsonDoBanco.shared_members || payloadData.shared_members || [],
