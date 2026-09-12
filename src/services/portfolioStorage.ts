@@ -1110,7 +1110,10 @@ export function calculateLivePortfolio(transactions: any[], goals: any[] = []) {
 
   // Metas Reais
   const calculatedGoals = safeGoals.map(g => {
-    const current = g?.category === 'Patrimônio Total' ? totalPortfolioValue : (catTotals[g?.category] || 0);
+    const hasExplicitCurrent = g?.currentAmount !== undefined && g?.currentAmount !== null && !isNaN(Number(g.currentAmount));
+    const current = hasExplicitCurrent
+      ? Number(g.currentAmount)
+      : (g?.category === 'Patrimônio Total' ? totalPortfolioValue : (catTotals[g?.category] || 0));
     const target = Number(g?.targetAmount) || 1;
     return {
       ...g,
