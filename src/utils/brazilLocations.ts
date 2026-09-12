@@ -144,3 +144,35 @@ export function parseCurrencyToNumber(currencyStr: string): number {
   if (!cleanDigits) return 0;
   return parseInt(cleanDigits, 10) / 100;
 }
+
+/**
+ * Returns user demographic age bracket string (e.g. "25-34 anos").
+ */
+export function getAgeGroup(age?: number): string {
+  if (!age || age <= 0) return '25-34 anos';
+  if (age < 25) return '18-24 anos';
+  if (age < 35) return '25-34 anos';
+  if (age < 45) return '35-44 anos';
+  if (age < 60) return '45-59 anos';
+  return '60+ anos';
+}
+
+/**
+ * Returns anonymized aggregate benchmark of household income commitment
+ * by Brazilian Macro-Region according to national consumer and debt studies.
+ */
+export function getRegionalBenchmark(state?: string): number {
+  const uf = (state || '').toUpperCase().trim();
+  // Sudeste (SP, RJ, MG, ES): ~67%
+  if (['SP', 'RJ', 'MG', 'ES'].includes(uf)) return 67;
+  // Sul (PR, SC, RS): ~64%
+  if (['PR', 'SC', 'RS'].includes(uf)) return 64;
+  // Centro-Oeste (DF, GO, MT, MS): ~66%
+  if (['DF', 'GO', 'MT', 'MS'].includes(uf)) return 66;
+  // Nordeste (BA, PE, CE, MA, PB, RN, AL, SE, PI): ~70%
+  if (['BA', 'PE', 'CE', 'MA', 'PB', 'RN', 'AL', 'SE', 'PI'].includes(uf)) return 70;
+  // Norte (AM, PA, RO, AC, AP, RR, TO): ~68%
+  if (['AM', 'PA', 'RO', 'AC', 'AP', 'RR', 'TO'].includes(uf)) return 68;
+  return 67; // Média Nacional do Brasil
+}
+

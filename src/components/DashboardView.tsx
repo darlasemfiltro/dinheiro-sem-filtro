@@ -9,6 +9,8 @@ import { Query } from 'appwrite';
 import { MonthlyComparisonDashboard } from './MonthlyComparisonDashboard';
 import { MonthlyAiTipsCard } from './MonthlyAiTipsCard';
 import { FiftyThirtyTwentyWidget } from './FiftyThirtyTwentyWidget';
+import { FinancialSpeedometer } from './FinancialSpeedometer';
+import { calculateAge, getAgeGroup, getRegionalBenchmark } from '../utils/brazilLocations';
 import {
   TrendingUp,
   TrendingDown,
@@ -564,6 +566,39 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
           </div>
         </div>
       </div>
+
+      {/* Velocímetro Financeiro (Gauge de Comprometimento da Renda x Média Regional Anônima) */}
+      {(() => {
+        const userMonthlyIncome = user?.monthlyIncome && user.monthlyIncome > 0
+          ? user.monthlyIncome
+          : (summary.totalIncome > 0 ? summary.totalIncome : 0);
+        
+        const totalExpenses = summary.totalExpenses || 0;
+        
+        // Calculate user's income commitment percentage
+        const percentualUsuario = userMonthlyIncome > 0
+          ? Math.round((totalExpenses / userMonthlyIncome) * 100)
+          : (summary.totalIncome > 0 ? Math.round((totalExpenses / summary.totalIncome) * 100) : 54);
+        
+        const userState = user?.state || 'MG';
+        const userCity = user?.city || 'Belo Horizonte';
+        const localidade = `${userCity}, ${userState}`;
+        
+        const userAge = user?.birthDate ? calculateAge(user.birthDate) : 28;
+        const faixaEtaria = getAgeGroup(userAge);
+        const mediaRegional = getRegionalBenchmark(userState);
+
+        return (
+          <FinancialSpeedometer
+            percentualUsuario={percentualUsuario}
+            mediaRegional={mediaRegional}
+            localidade={localidade}
+            faixaEtaria={faixaEtaria}
+            rendaMensal={userMonthlyIncome > 0 ? userMonthlyIncome : undefined}
+            despesasTotais={totalExpenses > 0 ? totalExpenses : undefined}
+          />
+        );
+      })()}
 
       {/* Meta de Orçamento Familiar: Estratégia 50/30/20 (Percentual Desejado x Atual + Filtro de Período + Detalhamento por Membro) */}
       <FiftyThirtyTwentyWidget
