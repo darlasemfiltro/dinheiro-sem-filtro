@@ -31,6 +31,16 @@ interface ServerUser {
   sharedBudgetCode?: string;
   lastSessionId?: string;
   lastSessionCreatedAt?: string;
+  // Demographics and LGPD compliance fields
+  birthDate?: string;
+  city?: string;
+  state?: string;
+  monthlyIncome?: number;
+  consent_lgpd?: boolean;
+  consent_date?: string;
+  consent_version?: string;
+  ip_address?: string;
+  user_agent?: string;
 }
 
 function isDarlaEmailOrId(idOrEmail: string): boolean {
@@ -1362,6 +1372,188 @@ async function startServer() {
     }
   });
 
+  // POST /api/users/register (Dedicated endpoint with strict LGPD & demographics validation)
+  app.post('/api/users/register', (req, res) => {
+    try {
+      const {
+        email,
+        password,
+        name,
+        birthDate,
+        data_nascimento,
+        city,
+        cidade,
+        state,
+        estado,
+        monthlyIncome,
+        renda_mensal,
+        consent_lgpd,
+        consent_date,
+        consent_version,
+      } = req.body || {};
+
+      if (!email || typeof email !== 'string' || !email.includes('@')) {
+        return res.status(400).json({ success: false, code: 'EMAIL_REQUIRED', message: 'E-mail válido é obrigatório.' });
+      }
+
+      if (!password || typeof password !== 'string' || password.length < 6) {
+        return res.status(400).json({ success: false, code: 'PASSWORD_TOO_SHORT', message: 'A senha deve conter no mínimo 6 caracteres.' });
+      }
+
+      // 1. Strict LGPD Consent Validation (Must be strictly boolean true)
+      if (consent_lgpd !== true) {
+        return res.status(400).json({
+          success: false,
+          code: 'LGPD_CONSENT_REQUIRED',
+          message: 'O consentimento explícito aos Termos de Uso e à Política de Privacidade (LGPD) é estritamente obrigatório para criar a conta.',
+        });
+      }
+
+      // 2. Data de Nascimento / Idade (Mínimo 18 anos)
+      const rawBirthDate = birthDate || data_nascimento;
+      if (!rawBirthDate || typeof rawBirthDate !== 'string') {
+        return res.status(422).json({
+          success: false,
+          code: 'BIRTHDATE_REQUIRED',
+          message: 'A data de nascimento é obrigatória.',
+        });
+      }
+
+      const birthParts = String(rawBirthDate).split('-');
+      if (birthParts.length !== 3) {
+        return res.status(422).json({
+          success: false,
+          code: 'INVALID_BIRTHDATE',
+          message: 'Data de nascimento em formato inválido. Utilize o formato AAAA-MM-DD.',
+        });
+      }
+
+      const birthYear = parseInt(birthParts[0], 10);
+      const birthMonth = parseInt(birthParts[1], 10) - 1;
+      const birthDay = parseInt(birthParts[2], 10);
+      const birthObj = new Date(birthYear, birthMonth, birthDay);
+      const now = new Date();
+
+      let age = now.getFullYear() - birthObj.getFullYear();
+      const mDiff = now.getMonth() - birthObj.getMonth();
+      if (mDiff < 0 || (mDiff === 0 && now.getDate() < birthObj.getDate())) {
+        age--;
+      }
+
+      if (isNaN(age) || age < 18) {
+        return res.status(422).json({
+          success: false,
+          code: 'UNDERAGE',
+          message: 'É obrigatório ter pelo menos 18 anos completos para criar uma conta no Dinheiro Sem Filtro.',
+        });
+      }
+
+      // 3. Sanitização e validação de Cidade e Estado
+      const rawCity = city || cidade;
+      const rawState = state || estado;
+      const cleanCity = String(rawCity || '')
+        .replace(/<[^>]*>?/gm, '')
+        .replace(/[^\w\s\u00C0-\u017F.,'-]/gi, '')
+        .replace(/\s+/g, ' ')
+        .trim();
+      const cleanState = String(rawState || '')
+        .replace(/[^A-Za-z]/g, '')
+        .toUpperCase()
+        .slice(0, 2);
+
+      if (!cleanCity || cleanCity.length < 2) {
+        return res.status(422).json({
+          success: false,
+          code: 'CITY_REQUIRED',
+          message: 'Por favor, informe uma cidade válida.',
+        });
+      }
+
+      if (!cleanState || cleanState.length < 2) {
+        return res.status(422).json({
+          success: false,
+          code: 'STATE_REQUIRED',
+          message: 'Por favor, selecione o seu Estado (UF).',
+        });
+      }
+
+      // 4. Renda / Salário Mensal (número positivo > 0)
+      const rawIncome = monthlyIncome !== undefined ? monthlyIncome : renda_mensal;
+      let numericIncome = 0;
+      if (typeof rawIncome === 'number') {
+        numericIncome = rawIncome;
+      } else if (typeof rawIncome === 'string') {
+        const clean = rawIncome.replace(/[^0-9.,]/g, '').replace(/\./g, '').replace(',', '.');
+        numericIncome = parseFloat(clean);
+      }
+
+      if (isNaN(numericIncome) || numericIncome <= 0) {
+        return res.status(422).json({
+          success: false,
+          code: 'INCOME_REQUIRED',
+          message: 'Por favor, informe uma renda/salário mensal válido maior que zero.',
+        });
+      }
+
+      // 5. Metadados de auditoria LGPD (IP e User-Agent)
+      const forwarded = req.headers['x-forwarded-for'];
+      const ipAddress = (typeof forwarded === 'string' ? forwarded.split(',')[0].trim() : '') ||
+        req.socket?.remoteAddress ||
+        (req as any).ip ||
+        '127.0.0.1';
+      const userAgent = req.headers['user-agent'] || 'Web Browser';
+
+      const cleanEmail = email.trim().toLowerCase();
+      const cleanName = String(name || '').replace(/<[^>]*>?/gm, '').trim() || cleanEmail.split('@')[0];
+      const deterministicId = `user_${cleanEmail.replace(/[^a-z0-9]/gi, '_')}`;
+      const isDarla = isDarlaEmailOrId(cleanEmail);
+
+      const allUsers = loadServerUsers();
+      const existingIdx = allUsers.findIndex((u) => (u.email || '').trim().toLowerCase() === cleanEmail);
+
+      const userRecord: ServerUser = {
+        id: existingIdx >= 0 ? (allUsers[existingIdx].id || deterministicId) : deterministicId,
+        name: cleanName,
+        email: cleanEmail,
+        password: password,
+        authProvider: 'email',
+        avatarUrl: existingIdx >= 0 && allUsers[existingIdx].avatarUrl ? allUsers[existingIdx].avatarUrl : 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150',
+        createdAt: existingIdx >= 0 && allUsers[existingIdx].createdAt ? allUsers[existingIdx].createdAt : new Date().toISOString(),
+        isPro: isDarla ? true : (existingIdx >= 0 ? (allUsers[existingIdx].isPro || false) : false),
+        plan: isDarla ? 'lifetime' : (existingIdx >= 0 ? (allUsers[existingIdx].plan || 'free') : 'free'),
+        subscriptionStatus: isDarla ? 'active' : (existingIdx >= 0 ? (allUsers[existingIdx].subscriptionStatus || 'trial') : 'trial'),
+        // Persistência Demográfica & Auditoria de Consentimento LGPD
+        birthDate: rawBirthDate,
+        city: cleanCity,
+        state: cleanState,
+        monthlyIncome: Math.round(numericIncome * 100) / 100,
+        consent_lgpd: true,
+        consent_date: consent_date || new Date().toISOString(),
+        consent_version: consent_version || 'v1.1',
+        ip_address: ipAddress,
+        user_agent: userAgent,
+      };
+
+      if (existingIdx >= 0) {
+        allUsers[existingIdx] = { ...allUsers[existingIdx], ...userRecord };
+      } else {
+        allUsers.push(userRecord);
+      }
+
+      saveServerUsers(allUsers);
+      broadcastRealtime('USER_UPDATED', { email: cleanEmail, userId: userRecord.id, user: userRecord });
+
+      return res.status(201).json({
+        success: true,
+        message: 'Cadastro e consentimento LGPD realizados com sucesso.',
+        user: userRecord,
+      });
+    } catch (err: any) {
+      console.error('[API Users Register Error]', err);
+      return res.status(500).json({ success: false, message: 'Erro interno ao realizar cadastro.' });
+    }
+  });
+
   // POST /api/users/sync
   app.post('/api/users/sync', (req, res) => {
     try {
@@ -1376,6 +1568,14 @@ async function startServer() {
       const deterministicId = `user_${cleanEmail.replace(/[^a-z0-9]/gi, '_')}`;
 
       const isDarla = isDarlaEmailOrId(cleanEmail);
+
+      // Extract client IP and user-agent if consent metadata is being sent
+      const forwarded = req.headers['x-forwarded-for'];
+      const clientIp = (typeof forwarded === 'string' ? forwarded.split(',')[0].trim() : '') ||
+        req.socket?.remoteAddress ||
+        (req as any).ip ||
+        '127.0.0.1';
+      const clientUa = req.headers['user-agent'] || 'Web Browser';
 
       if (idx >= 0) {
         const existing = allUsers[idx];
@@ -1393,6 +1593,16 @@ async function startServer() {
           subscriptionStatus: isDarla ? 'active' : (existing.subscriptionStatus || userData.subscriptionStatus || 'trial'),
           lastSessionId: newSessionId,
           lastSessionCreatedAt: (newSessionId && newSessionId !== prevSessionId) ? new Date().toISOString() : (existing.lastSessionCreatedAt || new Date().toISOString()),
+          // Preserve / Update Demographics & LGPD
+          birthDate: userData.birthDate || existing.birthDate,
+          city: userData.city || existing.city,
+          state: userData.state || existing.state,
+          monthlyIncome: userData.monthlyIncome !== undefined ? userData.monthlyIncome : existing.monthlyIncome,
+          consent_lgpd: userData.consent_lgpd !== undefined ? userData.consent_lgpd : existing.consent_lgpd,
+          consent_date: userData.consent_date || existing.consent_date,
+          consent_version: userData.consent_version || existing.consent_version,
+          ip_address: existing.ip_address || userData.ip_address || clientIp,
+          user_agent: existing.user_agent || userData.user_agent || clientUa,
         };
         if (userData.password) updatedUser.password = userData.password;
         if (userData.name) updatedUser.name = userData.name;
@@ -1419,6 +1629,16 @@ async function startServer() {
           subscriptionStatus: isDarla ? 'active' : (userData.subscriptionStatus || 'trial'),
           lastSessionId: initialSessionId,
           lastSessionCreatedAt: initialSessionId ? new Date().toISOString() : undefined,
+          // Demographics & LGPD
+          birthDate: userData.birthDate,
+          city: userData.city,
+          state: userData.state,
+          monthlyIncome: userData.monthlyIncome,
+          consent_lgpd: userData.consent_lgpd,
+          consent_date: userData.consent_date,
+          consent_version: userData.consent_version,
+          ip_address: userData.ip_address || clientIp,
+          user_agent: userData.user_agent || clientUa,
         };
         allUsers.push(newUser);
         saveServerUsers(allUsers);

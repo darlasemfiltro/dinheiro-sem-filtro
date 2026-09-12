@@ -18,7 +18,21 @@ import {
   Check,
   AlertCircle,
   UserPlus,
+  Calendar,
+  MapPin,
+  DollarSign,
+  FileText,
 } from 'lucide-react';
+import {
+  BRAZIL_STATES,
+  POPULAR_CITIES_BY_UF,
+  calculateAge,
+  getMaxDateFor18YearsOld,
+  formatCurrencyFromDigits,
+  parseCurrencyToNumber,
+  sanitizeString,
+} from '../utils/brazilLocations';
+import { LgpdTermsModal } from './LgpdTermsModal';
 
 
 const GOOGLE_CLIENT_ID = '516240046749-c9tu4lu53n4o3vuh0mdf389mp1kd2ur5.apps.googleusercontent.com';
@@ -38,6 +52,15 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({ onLoginSuccess }) => {
   const [warningNotice, setWarningNotice] = useState('');
   const [isCheckingUser, setIsCheckingUser] = useState(false);
 
+  // New Demographic & LGPD Compliance States
+  const [birthDate, setBirthDate] = useState('');
+  const [state, setState] = useState('');
+  const [city, setCity] = useState('');
+  const [monthlyIncome, setMonthlyIncome] = useState('');
+  const [consentLgpd, setConsentLgpd] = useState(false); // Strictly unchecked by default (active opt-in)
+  const [isLgpdModalOpen, setIsLgpdModalOpen] = useState(false);
+  const [lgpdModalTab, setLgpdModalTab] = useState<'terms' | 'privacy'>('privacy');
+
   // Google Login Loading State
   const [isLoadingGoogle, setIsLoadingGoogle] = useState(false);
 
@@ -48,6 +71,21 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({ onLoginSuccess }) => {
   const [confirmPassword, setConfirmPassword] = useState('');
   const [recoveryUserId, setRecoveryUserId] = useState<string | null>(null);
   const [recoverySecret, setRecoverySecret] = useState<string | null>(null);
+
+  // Real-time Age calculation
+  const calculatedAge = birthDate ? calculateAge(birthDate) : 0;
+  const isAgeValid = Boolean(birthDate) && calculatedAge >= 18;
+  const isLocationValid = Boolean(state) && sanitizeString(city).length >= 2;
+  const numericMonthlyIncome = parseCurrencyToNumber(monthlyIncome);
+  const isIncomeValid = numericMonthlyIncome > 0;
+  const isNameValid = name.trim().length >= 2;
+  const isEmailValid = email.trim().includes('@') && email.trim().length >= 5;
+  const isPasswordValid = password.length >= 6;
+
+  // Form validity strictly enforcing LGPD consent and demographic fields
+  const isFormValid = isRegister
+    ? (consentLgpd && isAgeValid && isLocationValid && isIncomeValid && isNameValid && isEmailValid && isPasswordValid)
+    : (email.trim().length > 0 && password.length > 0);
 
   // Intercept Appwrite Native Recovery URL params on load: ?userId=...&secret=...
   useEffect(() => {
@@ -66,6 +104,7 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({ onLoginSuccess }) => {
   // Submit standard auth
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+
     if (!email) {
       setError('Por favor, informe seu e-mail.');
       return;
@@ -74,9 +113,41 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({ onLoginSuccess }) => {
       setError('Por favor, informe sua senha.');
       return;
     }
-    if (isRegister && !name) {
-      setError('Por favor, informe seu nome completo.');
-      return;
+
+    if (isRegister) {
+      if (!name || name.trim().length < 2) {
+        setError('Por favor, informe seu nome completo.');
+        return;
+      }
+      if (password.length < 6) {
+        setError('A senha deve conter no mínimo 6 caracteres.');
+        return;
+      }
+      if (!birthDate) {
+        setError('Por favor, informe sua data de nascimento.');
+        return;
+      }
+      if (calculatedAge < 18) {
+        setError('É obrigatório ter pelo menos 18 anos completos para criar uma conta.');
+        return;
+      }
+      if (!state) {
+        setError('Por favor, selecione seu Estado (UF).');
+        return;
+      }
+      const cleanCity = sanitizeString(city);
+      if (!cleanCity || cleanCity.length < 2) {
+        setError('Por favor, informe uma cidade válida.');
+        return;
+      }
+      if (numericMonthlyIncome <= 0) {
+        setError('Por favor, informe uma renda/salário mensal válido maior que zero.');
+        return;
+      }
+      if (consentLgpd !== true) {
+        setError('Você deve ler e aceitar os Termos de Uso e a Política de Privacidade (LGPD) para prosseguir.');
+        return;
+      }
     }
 
     setError('');
@@ -85,28 +156,72 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({ onLoginSuccess }) => {
     setIsCheckingUser(true);
 
     try {
-      try {
-        if (!isRegister) {
-          await appwriteSignIn(cleanEmail, password).catch(async () => {
-            await appwriteSignUp(cleanEmail, password, name || cleanEmail.split('@')[0]).catch(() => {});
-          });
-        } else {
-          await appwriteSignUp(cleanEmail, password, name).catch(() => {});
-        }
-      } catch (e) {}
+      const consentDate = new Date().toISOString();
+      const extraProfile: Partial<User> = isRegister
+        ? {
+            birthDate,
+            city: sanitizeString(city),
+            state: state.toUpperCase(),
+            monthlyIncome: numericMonthlyIncome,
+            consent_lgpd: true,
+            consent_date: consentDate,
+            consent_version: 'v1.1',
+            user_agent: navigator.userAgent,
+          }
+        : {};
 
+      if (isRegister) {
+        // 1. Call Backend Registration Endpoint with strict validations & LGPD audit logging
+        const regRes = await fetch('/api/users/register', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            email: cleanEmail,
+            password,
+            name: name.trim(),
+            birthDate,
+            city: sanitizeString(city),
+            state: state.toUpperCase(),
+            monthlyIncome: numericMonthlyIncome,
+            consent_lgpd: true,
+            consent_date: consentDate,
+            consent_version: 'v1.1',
+          }),
+        });
+
+        const regData = await regRes.json().catch(() => ({}));
+        if (!regRes.ok || regData.success === false) {
+          setError(regData.message || 'Falha ao registrar conta. Verifique os dados informados.');
+          setIsCheckingUser(false);
+          return;
+        }
+
+        // 2. Also register in Appwrite if available
+        await appwriteSignUp(cleanEmail, password, name).catch(() => {});
+      } else {
+        // Login flow
+        try {
+          await appwriteSignIn(cleanEmail, password).catch(async () => {
+            await appwriteSignUp(cleanEmail, password, cleanEmail.split('@')[0]).catch(() => {});
+          });
+        } catch (e) {}
+      }
+
+      // 3. Ensure Local & Cloud User Sync
       const user = await StorageService.ensureUserAndDataSyncedAsync(
         cleanEmail,
         password,
         isRegister ? name : undefined,
         undefined,
-        'email'
+        'email',
+        isRegister ? extraProfile : undefined
       );
+
       localStorage.removeItem('darla_explicit_logout');
       onLoginSuccess(user);
     } catch (err: any) {
       console.error('[AuthSubmit Error]', err);
-      setError('Erro ao acessar a conta. Verifique suas credenciais e tente novamente.');
+      setError('Erro ao processar conta. Verifique suas credenciais e tente novamente.');
     } finally {
       setIsCheckingUser(false);
     }
@@ -382,30 +497,234 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({ onLoginSuccess }) => {
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
                     placeholder="••••••••"
-                    className="w-full pl-10 pr-4 py-2.5 sm:py-3 bg-gray-50 border border-gray-200 rounded-xl text-xs sm:text-sm text-[#121212] placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-[#D4AF37] focus:bg-white transition"
+                    className="w-full pl-10 pr-4 min-h-[48px] py-3 bg-gray-50 border border-gray-200 rounded-xl text-xs sm:text-sm text-[#121212] placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-[#D4AF37] focus:bg-white transition"
                     required
                   />
                 </div>
+                {isRegister && (
+                  <p className="text-[10px] text-gray-500 font-medium">Mínimo de 6 caracteres.</p>
+                )}
               </div>
 
-              <button
-                type="submit"
-                disabled={isCheckingUser}
-                className="w-full py-3 sm:py-3.5 px-4 bg-[#00C853] hover:bg-[#00E676] disabled:opacity-60 text-[#121212] font-black text-xs sm:text-sm rounded-xl shadow-md hover:shadow-lg transition flex items-center justify-center gap-2 group cursor-pointer min-h-[44px] border border-[#00A843]"
-                id="auth-submit-btn"
-              >
-                {isCheckingUser ? (
-                  <>
-                    <Loader2 className="w-4 h-4 animate-spin text-[#121212]" />
-                    <span>Verificando cadastro...</span>
-                  </>
-                ) : (
-                  <>
-                    <span>{isRegister ? 'Criar minha conta' : 'Acessar meu Financeiro'}</span>
-                    <ArrowRight className="w-4 h-4 group-hover:translate-x-1 transition stroke-[3]" />
-                  </>
+              {/* EXPANDED SIGN UP FIELDS (LGPD & DEMOGRAPHICS) */}
+              {isRegister && (
+                <>
+                  {/* 1. Data de Nascimento (Mínimo 18 anos) */}
+                  <div className="space-y-1">
+                    <div className="flex items-center justify-between">
+                      <label className="text-xs sm:text-sm font-bold text-[#121212]">
+                        Data de Nascimento <span className="text-[#D4AF37]">*</span>
+                      </label>
+                      {birthDate && (
+                        <span
+                          className={`text-[10px] font-extrabold px-2 py-0.5 rounded-md ${
+                            isAgeValid
+                              ? 'bg-emerald-100 text-[#008736] border border-emerald-300'
+                              : 'bg-red-100 text-red-700 border border-red-300'
+                          }`}
+                        >
+                          {isAgeValid ? `${calculatedAge} anos (18+)` : `${calculatedAge} anos (Menor de 18)`}
+                        </span>
+                      )}
+                    </div>
+                    <div className="relative">
+                      <Calendar className="w-4 h-4 text-[#D4AF37] absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none" />
+                      <input
+                        type="date"
+                        value={birthDate}
+                        max={getMaxDateFor18YearsOld()}
+                        onChange={(e) => setBirthDate(e.target.value)}
+                        className={`w-full min-h-[48px] pl-10 pr-4 py-3 bg-gray-50 border rounded-xl text-xs sm:text-sm text-[#121212] focus:outline-none focus:ring-2 focus:bg-white transition ${
+                          birthDate && !isAgeValid
+                            ? 'border-red-400 focus:ring-red-400 bg-red-50/40'
+                            : 'border-gray-200 focus:ring-[#D4AF37]'
+                        }`}
+                        required
+                        id="signup-birthdate"
+                      />
+                    </div>
+                    {birthDate && !isAgeValid ? (
+                      <p className="text-[11px] font-bold text-red-600 flex items-center gap-1.5 mt-1">
+                        <AlertCircle className="w-3.5 h-3.5 shrink-0" />
+                        <span>É obrigatório ter no mínimo 18 anos completos para criar uma conta.</span>
+                      </p>
+                    ) : (
+                      <p className="text-[10px] text-gray-500 font-medium">
+                        Obrigatório para conformidade legal e validação de maioridade (18+).
+                      </p>
+                    )}
+                  </div>
+
+                  {/* 2. Cidade e Estado (UF) */}
+                  <div className="space-y-1">
+                    <label className="text-xs sm:text-sm font-bold text-[#121212]">
+                      Localização (Estado e Cidade) <span className="text-[#D4AF37]">*</span>
+                    </label>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                      {/* Estado (UF) Selector */}
+                      <div className="relative">
+                        <select
+                          value={state}
+                          onChange={(e) => setState(e.target.value)}
+                          className="w-full min-h-[48px] px-3.5 py-3 bg-gray-50 border border-gray-200 rounded-xl text-xs sm:text-sm text-[#121212] focus:outline-none focus:ring-2 focus:ring-[#D4AF37] focus:bg-white transition cursor-pointer appearance-none font-medium"
+                          required
+                          id="signup-state"
+                        >
+                          <option value="">Selecione o Estado (UF)</option>
+                          {BRAZIL_STATES.map((s) => (
+                            <option key={s.uf} value={s.uf}>
+                              {s.uf} - {s.name}
+                            </option>
+                          ))}
+                        </select>
+                        <div className="pointer-events-none absolute right-3.5 top-1/2 -translate-y-1/2 text-gray-500 text-[10px] font-bold">
+                          ▼
+                        </div>
+                      </div>
+
+                      {/* Cidade com Autocomplete do Estado */}
+                      <div className="relative">
+                        <MapPin className="w-4 h-4 text-[#D4AF37] absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none" />
+                        <input
+                          type="text"
+                          list="city-autocomplete-list"
+                          value={city}
+                          onChange={(e) => setCity(e.target.value)}
+                          placeholder="Sua cidade"
+                          className="w-full min-h-[48px] pl-10 pr-3.5 py-3 bg-gray-50 border border-gray-200 rounded-xl text-xs sm:text-sm text-[#121212] placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-[#D4AF37] focus:bg-white transition"
+                          required
+                          id="signup-city"
+                        />
+                        <datalist id="city-autocomplete-list">
+                          {state && POPULAR_CITIES_BY_UF[state]?.map((c) => (
+                            <option key={c} value={c} />
+                          ))}
+                        </datalist>
+                      </div>
+                    </div>
+                    <p className="text-[10px] text-gray-500 font-medium">
+                      Para estatísticas orçamentárias regionais anônimas.
+                    </p>
+                  </div>
+
+                  {/* 3. Renda / Salário Mensal (com máscara monetária R$) */}
+                  <div className="space-y-1">
+                    <label className="text-xs sm:text-sm font-bold text-[#121212]">
+                      Renda / Salário Mensal <span className="text-[#D4AF37]">*</span>
+                    </label>
+                    <div className="relative">
+                      <DollarSign className="w-4 h-4 text-[#D4AF37] absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none" />
+                      <input
+                        type="text"
+                        inputMode="numeric"
+                        value={monthlyIncome}
+                        onChange={(e) => setMonthlyIncome(formatCurrencyFromDigits(e.target.value))}
+                        placeholder="R$ 0,00"
+                        className="w-full min-h-[48px] pl-10 pr-4 py-3 bg-gray-50 border border-gray-200 rounded-xl text-xs sm:text-sm text-[#121212] font-extrabold placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-[#D4AF37] focus:bg-white transition tracking-wide"
+                        required
+                        id="signup-income"
+                      />
+                    </div>
+                    <p className="text-[10px] text-gray-500 font-medium">
+                      Informação confidencial protegida pela LGPD para calibração personalizada de suas metas.
+                    </p>
+                  </div>
+
+                  {/* 4. COMPONENTE DE CONSENTIMENTO LGPD (OBRIGATÓRIO) */}
+                  <div
+                    className={`p-3.5 rounded-2xl border transition-all ${
+                      consentLgpd
+                        ? 'bg-emerald-50/80 border-emerald-300'
+                        : 'bg-gray-50 border-gray-200 hover:border-gray-300'
+                    }`}
+                    id="lgpd-consent-container"
+                  >
+                    <div className="flex items-start gap-3">
+                      <input
+                        type="checkbox"
+                        id="lgpd-consent-checkbox"
+                        checked={consentLgpd}
+                        onChange={(e) => setConsentLgpd(e.target.checked)}
+                        className="w-5 h-5 min-w-[20px] min-h-[20px] mt-0.5 rounded border-gray-300 text-[#00C853] focus:ring-[#00C853] cursor-pointer accent-[#00C853]"
+                      />
+                      <label
+                        htmlFor="lgpd-consent-checkbox"
+                        className="text-[11px] sm:text-xs text-gray-700 leading-relaxed cursor-pointer select-none"
+                      >
+                        Li e aceito os{' '}
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.preventDefault();
+                            e.stopPropagation();
+                            setLgpdModalTab('terms');
+                            setIsLgpdModalOpen(true);
+                          }}
+                          className="font-black text-[#008736] hover:text-[#005c24] underline underline-offset-2 cursor-pointer inline"
+                          id="lgpd-terms-link"
+                        >
+                          Termos de Uso
+                        </button>{' '}
+                        e a{' '}
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.preventDefault();
+                            e.stopPropagation();
+                            setLgpdModalTab('privacy');
+                            setIsLgpdModalOpen(true);
+                          }}
+                          className="font-black text-[#008736] hover:text-[#005c24] underline underline-offset-2 cursor-pointer inline"
+                          id="lgpd-privacy-link"
+                        >
+                          Política de Privacidade
+                        </button>
+                        . Autorizo o tratamento de meus dados demográficos e financeiros para personalização do app e geração de estatísticas orçamentárias anônimas, nos termos da LGPD.
+                      </label>
+                    </div>
+                  </div>
+                </>
+              )}
+
+              {/* Botão de Submissão */}
+              <div className="space-y-2 pt-1">
+                <button
+                  type="submit"
+                  disabled={!isFormValid || isCheckingUser}
+                  className={`w-full py-3.5 sm:py-4 px-4 min-h-[48px] rounded-xl font-black text-xs sm:text-sm transition-all flex items-center justify-center gap-2 group ${
+                    !isFormValid || isCheckingUser
+                      ? 'bg-gray-200 text-gray-400 border border-gray-300 opacity-50 cursor-not-allowed shadow-none'
+                      : 'bg-[#00C853] hover:bg-[#00E676] text-[#121212] shadow-md hover:shadow-lg border border-[#00A843] cursor-pointer'
+                  }`}
+                  id="auth-submit-btn"
+                >
+                  {isCheckingUser ? (
+                    <>
+                      <Loader2 className="w-4 h-4 animate-spin text-current" />
+                      <span>Processando cadastro...</span>
+                    </>
+                  ) : (
+                    <>
+                      <span>{isRegister ? 'Criar Conta' : 'Acessar meu Financeiro'}</span>
+                      <ArrowRight className="w-4 h-4 group-hover:translate-x-1 transition stroke-[3]" />
+                    </>
+                  )}
+                </button>
+
+                {isRegister && !isFormValid && (
+                  <p className="text-[11px] text-center text-gray-500 font-medium">
+                    {!consentLgpd
+                      ? 'Marque o aceite da LGPD acima para habilitar o botão Criar Conta.'
+                      : !isAgeValid
+                      ? 'A idade mínima obrigatória é de 18 anos.'
+                      : !isLocationValid
+                      ? 'Preencha Estado e Cidade para continuar.'
+                      : !isIncomeValid
+                      ? 'Informe a renda mensal para calibração de metas.'
+                      : 'Preencha todos os campos obrigatórios para ativar o cadastro.'}
+                  </p>
                 )}
-              </button>
+              </div>
 
 
             </form>
@@ -535,6 +854,16 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({ onLoginSuccess }) => {
         </div>
       </div>
 
+      {/* LGPD Terms & Privacy Policy Modal */}
+      <LgpdTermsModal
+        isOpen={isLgpdModalOpen}
+        initialTab={lgpdModalTab}
+        onClose={() => setIsLgpdModalOpen(false)}
+        onAcceptAndClose={() => {
+          setConsentLgpd(true);
+          setIsLgpdModalOpen(false);
+        }}
+      />
     </div>
   );
 };

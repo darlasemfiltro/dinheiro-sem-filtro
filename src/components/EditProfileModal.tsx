@@ -1,8 +1,9 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { X, User as UserIcon, Check, Shield, CheckCircle2, LogOut, Camera, Trash2, Sliders } from 'lucide-react';
+import { X, User as UserIcon, Check, Shield, CheckCircle2, LogOut, Camera, Trash2, Sliders, MapPin, Calendar, DollarSign, ShieldCheck, FileText } from 'lucide-react';
 import { User } from '../types';
 import { StorageService } from '../services/storage';
 import { AvatarCropModal } from './AvatarCropModal';
+import { LgpdTermsModal } from './LgpdTermsModal';
 
 interface EditProfileModalProps {
   isOpen: boolean;
@@ -29,6 +30,10 @@ export const EditProfileModal: React.FC<EditProfileModalProps> = ({
   // Image Cropping / Adjustment Modal State
   const [isCropModalOpen, setIsCropModalOpen] = useState(false);
   const [pendingImageSrc, setPendingImageSrc] = useState('');
+
+  // LGPD Terms & Privacy Modal State
+  const [isLgpdModalOpen, setIsLgpdModalOpen] = useState(false);
+  const [lgpdModalTab, setLgpdModalTab] = useState<'terms' | 'privacy'>('privacy');
 
   const prevIsOpenRef = useRef(false);
 
@@ -153,6 +158,75 @@ export const EditProfileModal: React.FC<EditProfileModalProps> = ({
                 <div className="p-2.5 bg-white rounded-xl border border-gray-200">
                   <span className="text-[10px] text-gray-500 font-bold uppercase block">E-mail Cadastrado</span>
                   <span className="font-extrabold text-[#121212] truncate block">{user.email}</span>
+                </div>
+
+                {/* Demographic details if provided */}
+                {user.city && (
+                  <div className="p-2.5 bg-white rounded-xl border border-gray-200 flex items-center justify-between">
+                    <div>
+                      <span className="text-[10px] text-gray-500 font-bold uppercase block">Localização</span>
+                      <span className="font-extrabold text-[#121212]">
+                        {user.city} - {user.state || ''}
+                      </span>
+                    </div>
+                    <MapPin className="w-4 h-4 text-[#D4AF37]" />
+                  </div>
+                )}
+
+                {user.birthDate && (
+                  <div className="p-2.5 bg-white rounded-xl border border-gray-200 flex items-center justify-between">
+                    <div>
+                      <span className="text-[10px] text-gray-500 font-bold uppercase block">Data de Nascimento</span>
+                      <span className="font-extrabold text-[#121212]">
+                        {user.birthDate.split('-').reverse().join('/')}
+                      </span>
+                    </div>
+                    <Calendar className="w-4 h-4 text-[#D4AF37]" />
+                  </div>
+                )}
+
+                {user.monthlyIncome !== undefined && user.monthlyIncome > 0 && (
+                  <div className="p-2.5 bg-white rounded-xl border border-gray-200 flex items-center justify-between sm:col-span-2">
+                    <div>
+                      <span className="text-[10px] text-gray-500 font-bold uppercase block">Renda Mensal Declarada</span>
+                      <span className="font-extrabold text-[#008736] text-sm">
+                        {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(user.monthlyIncome)}
+                      </span>
+                      <span className="text-[10px] text-gray-400 block">Dado confidencial protegido pela LGPD</span>
+                    </div>
+                    <DollarSign className="w-4 h-4 text-[#008736]" />
+                  </div>
+                )}
+              </div>
+
+              {/* LGPD Compliance Section */}
+              <div className="p-3 bg-emerald-50/70 border border-emerald-200 rounded-xl flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2.5 text-xs">
+                <div className="flex items-center gap-2">
+                  <ShieldCheck className="w-4 h-4 text-[#008736] shrink-0" />
+                  <div>
+                    <span className="font-bold text-[#008736] block text-[11px] sm:text-xs">
+                      Consentimento LGPD Ativo ({user.consent_version || 'v1.1'})
+                    </span>
+                    <span className="text-[10px] text-gray-600 block">
+                      {user.consent_date
+                        ? `Aceite registrado em ${new Date(user.consent_date).toLocaleDateString('pt-BR')}`
+                        : 'Consentimento registrado nos termos da Lei 13.709/2018'}
+                    </span>
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-2 self-end sm:self-center">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setLgpdModalTab('privacy');
+                      setIsLgpdModalOpen(true);
+                    }}
+                    className="text-[11px] font-bold text-[#008736] hover:underline cursor-pointer flex items-center gap-1"
+                  >
+                    <FileText className="w-3.5 h-3.5" />
+                    <span>Ver Política & Termos</span>
+                  </button>
                 </div>
               </div>
             </div>
@@ -298,6 +372,13 @@ export const EditProfileModal: React.FC<EditProfileModalProps> = ({
           setAvatarUrl(croppedUrl);
           setError('');
         }}
+      />
+
+      {/* LGPD Terms & Privacy Policy Viewer Modal */}
+      <LgpdTermsModal
+        isOpen={isLgpdModalOpen}
+        initialTab={lgpdModalTab}
+        onClose={() => setIsLgpdModalOpen(false)}
       />
     </div>
   );

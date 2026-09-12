@@ -1958,7 +1958,8 @@ export class StorageService {
     password?: string,
     name?: string,
     avatarUrl?: string,
-    authProvider: 'email' | 'google' = 'email'
+    authProvider: 'email' | 'google' = 'email',
+    extraProfile?: Partial<User>
   ): Promise<User> {
     StorageService.isCloudSynced = false;
     this.initialize();
@@ -1992,6 +1993,15 @@ export class StorageService {
       plan: isDarla ? 'lifetime' : (existingUser?.plan ?? 'free'),
       subscriptionStatus: isDarla ? 'active' : (existingUser?.subscriptionStatus ?? 'trial'),
       budgetId: existingBudgetId,
+      birthDate: extraProfile?.birthDate || existingUser?.birthDate,
+      city: extraProfile?.city || existingUser?.city,
+      state: extraProfile?.state || existingUser?.state,
+      monthlyIncome: extraProfile?.monthlyIncome !== undefined ? extraProfile.monthlyIncome : existingUser?.monthlyIncome,
+      consent_lgpd: extraProfile?.consent_lgpd !== undefined ? extraProfile.consent_lgpd : existingUser?.consent_lgpd,
+      consent_date: extraProfile?.consent_date || existingUser?.consent_date,
+      consent_version: extraProfile?.consent_version || existingUser?.consent_version,
+      ip_address: extraProfile?.ip_address || existingUser?.ip_address,
+      user_agent: extraProfile?.user_agent || existingUser?.user_agent,
     };
 
     _inMemoryStore.currentUser = userToSave;
@@ -2076,7 +2086,12 @@ export class StorageService {
 
 
 
-  static register(email: string, password?: string, name?: string): User {
+  static register(
+    email: string,
+    password?: string,
+    name?: string,
+    extraProfile?: Partial<User>
+  ): User {
     this.initialize();
     this.deduplicateUsers();
     const cleanEmail = email.trim().toLowerCase();
@@ -2088,6 +2103,16 @@ export class StorageService {
       existing.id = deterministicId;
       if (password) existing.password = password;
       if (name && !existing.name) existing.name = name;
+      if (extraProfile?.birthDate) existing.birthDate = extraProfile.birthDate;
+      if (extraProfile?.city) existing.city = extraProfile.city;
+      if (extraProfile?.state) existing.state = extraProfile.state;
+      if (extraProfile?.monthlyIncome !== undefined) existing.monthlyIncome = extraProfile.monthlyIncome;
+      if (extraProfile?.consent_lgpd !== undefined) existing.consent_lgpd = extraProfile.consent_lgpd;
+      if (extraProfile?.consent_date) existing.consent_date = extraProfile.consent_date;
+      if (extraProfile?.consent_version) existing.consent_version = extraProfile.consent_version;
+      if (extraProfile?.ip_address) existing.ip_address = extraProfile.ip_address;
+      if (extraProfile?.user_agent) existing.user_agent = extraProfile.user_agent;
+
       if (isDarla) {
         existing.isPro = true;
         existing.plan = 'lifetime';
@@ -2130,6 +2155,15 @@ export class StorageService {
       subscriptionStatus: isDarla ? 'active' : 'trial',
       lastSessionId: sessionId,
       lastSessionCreatedAt: new Date().toISOString(),
+      birthDate: extraProfile?.birthDate,
+      city: extraProfile?.city,
+      state: extraProfile?.state,
+      monthlyIncome: extraProfile?.monthlyIncome,
+      consent_lgpd: extraProfile?.consent_lgpd,
+      consent_date: extraProfile?.consent_date,
+      consent_version: extraProfile?.consent_version,
+      ip_address: extraProfile?.ip_address,
+      user_agent: extraProfile?.user_agent,
     };
 
     const usersStr = localStorage.getItem(STORAGE_KEYS.USERS) || '[]';

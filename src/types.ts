@@ -109,6 +109,17 @@ export interface User {
   sharedBudgetCode?: string;
   lastSessionId?: string;
   lastSessionCreatedAt?: string;
+
+  // LGPD & Demographics
+  birthDate?: string; // Data de nascimento (YYYY-MM-DD)
+  city?: string; // Cidade
+  state?: string; // Estado / UF
+  monthlyIncome?: number; // Renda / Salário Mensal em R$
+  consent_lgpd?: boolean; // Consentimento explícito da LGPD
+  consent_date?: string; // Timestamp UTC do aceite
+  consent_version?: string; // Versão dos termos aceitos (ex: "v1.1")
+  ip_address?: string; // Registro de IP para auditoria
+  user_agent?: string; // Metadados do navegador para auditoria
 }
 
 export interface BudgetCollaborator {
