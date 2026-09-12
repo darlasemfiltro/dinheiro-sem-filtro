@@ -1700,24 +1700,15 @@ export default function App() {
     return true;
   };
 
-  // Investment Goal Handlers (Mirrored from Investment Transactions persistence architecture)
+  // Investment Goal Handlers (Robust optimistic UI + background sync)
   const handleSaveInvestmentGoal = async (newGoalData: any) => {
-    const cfg = getAppwriteConfig();
-    const DATABASE_ID = cfg.databaseId;
-    const COLLECTION_ID = 'user_financials';
     const budgetId = currentUser ? StorageService.getEffectiveBudgetId(currentUser) : 'default';
-    const targetDocId = getCanonicalAppwriteDocId(budgetId || currentUser?.email || currentUser?.id || 'default');
-
-    if (!targetDocId || !DATABASE_ID) {
-      alert('[ERRO] ID do documento ou DATABASE_ID não encontrado!');
-      return;
-    }
 
     const newGoal = {
       id: newGoalData.id || `inv_goal_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`,
       title: (newGoalData.title || '').trim(),
       targetAmount: Number(newGoalData.targetAmount) || 0,
-      currentAmount: Number(newGoalData.currentAmount) || 0,
+      currentAmount: 0,
       startDate: newGoalData.startDate || new Date().toISOString().split('T')[0],
       deadline: newGoalData.deadline || '',
       category: newGoalData.category || 'Patrimônio Total',
@@ -1728,61 +1719,37 @@ export default function App() {
     const previousList = [...investmentGoals];
     const updatedGoals = [newGoal, ...investmentGoals.filter(g => String(g.id) !== String(newGoal.id))];
 
-    // Optimistic UI update
+    // 1. Optimistic UI update (immediate)
     setInvestmentGoals(updatedGoals);
     PortfolioStorageService.saveGoals(updatedGoals, budgetId);
 
-    try {
-      const currentDoc = await databases.getDocument(DATABASE_ID, COLLECTION_ID, targetDocId);
-      let parsedData: any = {};
-      if (typeof currentDoc.data === 'string') {
-        parsedData = JSON.parse(currentDoc.data);
-      } else {
-        parsedData = currentDoc.data || {};
-      }
+    window.dispatchEvent(new Event('portfolio_updated'));
+    window.dispatchEvent(new Event('remote_data_updated'));
+    window.dispatchEvent(new CustomEvent('financial_data_mutated', { detail: { userId: budgetId } }));
+    window.dispatchEvent(new CustomEvent('app-toast', { detail: 'Meta salva com sucesso!' }));
 
-      parsedData.investmentGoals = updatedGoals;
-      parsedData.updatedAt = new Date().toISOString();
-
-      await databases.updateDocument(
-        DATABASE_ID,
-        COLLECTION_ID,
-        targetDocId,
-        {
-          data: JSON.stringify(parsedData)
-        }
-      );
-
+    // 2. Background Sync
+    (async () => {
       try {
         await executeTransactionalInvestmentGoal(budgetId, 'saveGoal', {
           goalData: newGoal,
           goalId: newGoal.id,
         });
-      } catch (e) {}
-
-      window.dispatchEvent(new Event('portfolio_updated'));
-      window.dispatchEvent(new Event('remote_data_updated'));
-      window.dispatchEvent(new CustomEvent('financial_data_mutated', { detail: { userId: budgetId } }));
-
-      window.dispatchEvent(new CustomEvent('app-toast', { detail: 'Meta salva com sucesso!' }));
-    } catch (err: any) {
-      alert(`[FALHA AO SALVAR META NA NUVEM]\nCódigo: ${err.code || 'N/A'}\nErro: ${err.message || JSON.stringify(err)}`);
-      setInvestmentGoals(previousList);
-      PortfolioStorageService.saveGoals(previousList, budgetId);
-    }
+        const fullState = {
+          investmentGoals: updatedGoals,
+          investmentTransactions,
+          accounts,
+          updatedAt: new Date().toISOString()
+        };
+        await saveAppData(budgetId, fullState);
+      } catch (err: any) {
+        console.warn('[Background Goal Save Notice]', err);
+      }
+    })();
   };
 
   const handleDeleteInvestmentGoal = async (goalIdOrIndex: string | number) => {
-    const cfg = getAppwriteConfig();
-    const DATABASE_ID = cfg.databaseId;
-    const COLLECTION_ID = 'user_financials';
     const budgetId = currentUser ? StorageService.getEffectiveBudgetId(currentUser) : 'default';
-    const targetDocId = getCanonicalAppwriteDocId(budgetId || currentUser?.email || currentUser?.id || 'default');
-
-    if (!targetDocId || !DATABASE_ID) {
-      alert('[ERRO] ID do documento ou DATABASE_ID não encontrado!');
-      return;
-    }
 
     const previousList = [...investmentGoals];
     const updatedGoals = investmentGoals.filter((g, idx) => {
@@ -1790,53 +1757,37 @@ export default function App() {
       return String(g.id || g.$id) !== String(goalIdOrIndex);
     });
 
-    // Optimistic UI update
+    // 1. Optimistic UI update (immediate)
     setInvestmentGoals(updatedGoals);
     PortfolioStorageService.saveGoals(updatedGoals, budgetId);
-
     if (typeof goalIdOrIndex === 'string') {
       PortfolioStorageService.deleteGoal(goalIdOrIndex, budgetId);
     }
 
-    try {
-      const currentDoc = await databases.getDocument(DATABASE_ID, COLLECTION_ID, targetDocId);
-      let parsedData: any = {};
-      if (typeof currentDoc.data === 'string') {
-        parsedData = JSON.parse(currentDoc.data);
-      } else {
-        parsedData = currentDoc.data || {};
-      }
+    window.dispatchEvent(new Event('portfolio_updated'));
+    window.dispatchEvent(new Event('remote_data_updated'));
+    window.dispatchEvent(new CustomEvent('financial_data_mutated', { detail: { userId: budgetId } }));
+    window.dispatchEvent(new CustomEvent('app-toast', { detail: 'Meta excluída com sucesso!' }));
 
-      parsedData.investmentGoals = updatedGoals;
-      parsedData.updatedAt = new Date().toISOString();
-
-      await databases.updateDocument(
-        DATABASE_ID,
-        COLLECTION_ID,
-        targetDocId,
-        {
-          data: JSON.stringify(parsedData)
-        }
-      );
-
-      if (typeof goalIdOrIndex === 'string') {
-        try {
+    // 2. Background Sync
+    (async () => {
+      try {
+        if (typeof goalIdOrIndex === 'string') {
           await executeTransactionalInvestmentGoal(budgetId, 'deleteGoal', {
             goalId: String(goalIdOrIndex),
           });
-        } catch (e) {}
+        }
+        const fullState = {
+          investmentGoals: updatedGoals,
+          investmentTransactions,
+          accounts,
+          updatedAt: new Date().toISOString()
+        };
+        await saveAppData(budgetId, fullState);
+      } catch (err: any) {
+        console.warn('[Background Goal Delete Notice]', err);
       }
-
-      window.dispatchEvent(new Event('portfolio_updated'));
-      window.dispatchEvent(new Event('remote_data_updated'));
-      window.dispatchEvent(new CustomEvent('financial_data_mutated', { detail: { userId: budgetId } }));
-
-      window.dispatchEvent(new CustomEvent('app-toast', { detail: 'Meta excluída com sucesso!' }));
-    } catch (err: any) {
-      alert(`[FALHA NA EXCLUSÃO DA META]\nCódigo: ${err.code || 'N/A'}\nErro: ${err.message || JSON.stringify(err)}`);
-      setInvestmentGoals(previousList);
-      PortfolioStorageService.saveGoals(previousList, budgetId);
-    }
+    })();
   };
 
   const saveFinancialData = async (_data: any) => {
