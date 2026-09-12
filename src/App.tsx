@@ -1426,7 +1426,6 @@ export default function App() {
     const investorPortfolio = PortfolioStorageService.getAssets(portfolioUserId);
     const invTxs = PortfolioStorageService.getTransactions(portfolioUserId);
     const divs = PortfolioStorageService.getDividends(portfolioUserId);
-    const investmentTransactions = [...invTxs, ...divs];
     const investorGoals = overrideInvestmentGoals || investmentGoals || PortfolioStorageService.getGoals(portfolioUserId);
 
     return {
@@ -1434,9 +1433,11 @@ export default function App() {
       familyBudget: familyBudget,
       accounts: currentAccounts,
       categories: currentCategories,
-      investments: investmentTransactions,
+      investments: invTxs,
       investorPortfolio: investorPortfolio,
-      investmentTransactions: investmentTransactions,
+      investmentTransactions: invTxs,
+      dividends: divs,
+      investmentDividends: divs,
       investmentGoals: investorGoals,
       investorGoals: investorGoals,
       financialGoals: currentFinancialGoals,
@@ -1653,7 +1654,11 @@ export default function App() {
       return next;
     });
 
-    if (newTx.id) {
+    // Check if updating existing or adding new
+    const existingTxs = PortfolioStorageService.getTransactions(portfolioUserId);
+    const isExisting = investmentTransactions.some(t => t.id === tempId) || (!newTx._isNew && existingTxs.some(t => t.id === tempId));
+
+    if (isExisting) {
       PortfolioStorageService.updateTransaction(txItem, portfolioUserId);
     } else {
       PortfolioStorageService.addTransaction(txItem, portfolioUserId);
@@ -1675,7 +1680,7 @@ export default function App() {
     // 3. Process cloud sync in background (non-blocking, no rollback)
     (async () => {
       try {
-        const action = newTx.id ? 'updateInvestmentTransaction' : 'addInvestmentTransaction';
+        const action = isExisting ? 'updateInvestmentTransaction' : 'addInvestmentTransaction';
         const result = await executeTransactionalInvestmentTransaction(portfolioUserId, action, {
           transactionData: txItem,
           transactionId: txItem.id,
@@ -1809,6 +1814,7 @@ export default function App() {
     } catch (e) {}
 
     if (typeof idOrIndex === 'string') {
+      recordInvestmentTxDeletion(idOrIndex);
       PortfolioStorageService.deleteTransaction(idOrIndex, budgetId);
       PortfolioStorageService.markPortfolioItemAsDeleted(idOrIndex, 'transactions', budgetId);
     }

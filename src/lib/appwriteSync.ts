@@ -812,7 +812,52 @@ export function mergeRemoteInvestmentTransactionsWithOptimistic(remoteTxs: any[]
     }
   });
 
-  const list = Array.from(map.values());
+  const list = Array.from(map.values())
+    .filter((t: any) => {
+      if (!t || !t.id) return false;
+      if (deletedSet.has(t.id) || deletedSet.has(String(t.id).toUpperCase())) return false;
+      const typeStr = String(t.type || '').toLowerCase().trim();
+      // Filter out dividends
+      if (typeStr === 'dividendo' || typeStr === 'jcp' || typeStr === 'rendimento' || (t.valuePerShare !== undefined && t.unitPrice === undefined)) {
+        return false;
+      }
+      // Filter out corrupted blank records
+      const ticker = String(t.assetTicker || t.ticker || t.assetName || t.asset || '').trim();
+      if (!ticker && (Number(t.quantity) || 0) <= 0 && (Number(t.unitPrice) || 0) <= 0) {
+        return false;
+      }
+      return true;
+    })
+    .map((t: any) => {
+      const qty = Number(t.quantity) || 0;
+      const unitPrice = Number(t.unitPrice ?? t.price ?? 0);
+      const totalAmount = Number(t.totalAmount ?? t.totalValue ?? (qty * unitPrice));
+      const ticker = String(t.assetTicker || t.ticker || t.assetName || t.asset || 'ATIVO').toUpperCase().trim();
+      const rawCat = String(t.assetCategory || t.category || 'acoes').toLowerCase().trim();
+      const type = String(t.type || 'buy').toLowerCase() === 'sell' || String(t.type || '').toLowerCase() === 'venda' ? 'sell' : 'buy';
+      const broker = String(t.broker || t.institution || 'RICO INVESTIMENTOS').trim();
+      let date = String(t.date || '').trim();
+      if (!date && t.createdAt) date = String(t.createdAt).split('T')[0];
+      if (!date) date = new Date().toISOString().split('T')[0];
+
+      return {
+        ...t,
+        id: String(t.id),
+        userId: String(t.userId || 'default'),
+        assetTicker: ticker,
+        assetCategory: rawCat || 'acoes',
+        type,
+        quantity: qty,
+        unitPrice,
+        totalAmount,
+        broker,
+        date,
+        notes: t.notes || '',
+        createdAt: t.createdAt || new Date().toISOString(),
+        updatedAt: t.updatedAt || new Date().toISOString(),
+      };
+    });
+
   list.sort((a, b) => new Date(b.date || b.createdAt || 0).getTime() - new Date(a.date || a.createdAt || 0).getTime());
   return list;
 }

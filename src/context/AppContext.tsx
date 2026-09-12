@@ -118,14 +118,15 @@ export const AppProvider: React.FC<{
       const investorPortfolio = PortfolioStorageService.getAssets(budgetId);
       const invTxs = PortfolioStorageService.getTransactions(budgetId);
       const divs = PortfolioStorageService.getDividends(budgetId);
-      const allInvestmentTxs = [...invTxs, ...divs];
 
       return {
         transactions: currentTxs,
         familyBudget: familyBudget,
         accounts: currentAccounts,
         investorPortfolio: investorPortfolio,
-        investmentTransactions: allInvestmentTxs,
+        investmentTransactions: invTxs,
+        dividends: divs,
+        investmentDividends: divs,
         goals: currentGoals,
         updatedAt: new Date().toISOString(),
       };

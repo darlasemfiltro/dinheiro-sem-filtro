@@ -1072,19 +1072,25 @@ export function calculateLivePortfolio(transactions: any[], goals: any[] = []) {
       assetMap[ticker].totalCost += total;
       assetMap[ticker].currentPrice = price > 0 ? price : assetMap[ticker].currentPrice;
     } else if (type === 'SELL' || type === 'VENDA') {
-      const avg = assetMap[ticker].averagePrice || 0;
-      assetMap[ticker].quantity -= qty;
-      assetMap[ticker].totalCost -= (avg * qty);
+      const avg = assetMap[ticker].quantity > 0 ? (assetMap[ticker].totalCost / assetMap[ticker].quantity) : 0;
+      assetMap[ticker].quantity = Math.max(0, assetMap[ticker].quantity - qty);
+      assetMap[ticker].totalCost = Math.max(0, assetMap[ticker].quantity * avg);
       assetMap[ticker].currentPrice = price > 0 ? price : assetMap[ticker].currentPrice;
     } else if (type.includes('PROVENTO') || type.includes('DIVIDEND') || type.includes('RENDIMENTO') || type.includes('JCP')) {
       totalDividends += total;
     }
 
     if (assetMap[ticker].quantity > 0) {
-      assetMap[ticker].averagePrice = assetMap[ticker].totalCost / assetMap[ticker].quantity;
-      assetMap[ticker].totalValue = assetMap[ticker].quantity * assetMap[ticker].currentPrice;
-      assetMap[ticker].returnPct = assetMap[ticker].totalCost > 0 ? ((assetMap[ticker].totalValue - assetMap[ticker].totalCost) / assetMap[ticker].totalCost) * 100 : 0;
+      const curQty = Number(assetMap[ticker].quantity) || 0;
+      const curCost = Math.max(0, Number(assetMap[ticker].totalCost) || 0);
+      const avgP = curQty > 0 ? (curCost / curQty) : 0;
+      assetMap[ticker].averagePrice = Number(avgP.toFixed(2)) || 0;
+      const cPrice = Number(assetMap[ticker].currentPrice) > 0 ? Number(assetMap[ticker].currentPrice) : avgP;
+      assetMap[ticker].totalValue = Number((curQty * cPrice).toFixed(2)) || 0;
+      assetMap[ticker].returnPct = curCost > 0 ? Number((((assetMap[ticker].totalValue - curCost) / curCost) * 100).toFixed(2)) : 0;
     } else {
+      assetMap[ticker].quantity = 0;
+      assetMap[ticker].totalCost = 0;
       assetMap[ticker].averagePrice = 0;
       assetMap[ticker].totalValue = 0;
       assetMap[ticker].returnPct = 0;
@@ -1149,8 +1155,12 @@ export class PortfolioStorageService {
       `${baseKey}_${cleanId}`,
       `${baseKey}_default`,
       baseKey,
-      'dsf_investments_cache'
     ];
+    if (baseKey === STORAGE_KEYS.TRANSACTIONS) {
+      keys.push('dsf_investments_cache');
+      keys.push(`dsf_investments_cache_${cleanId}`);
+      keys.push(`dsf_investments_cache_${canonicalId}`);
+    }
     if (cleanId.includes('@')) {
       keys.push(`${baseKey}_${cleanId.replace(/@/g, '_').replace(/[^a-z0-9._-]/g, '_')}`);
     }
@@ -1165,8 +1175,12 @@ export class PortfolioStorageService {
       `${baseKey}_${cleanId}`,
       `${baseKey}_default`,
       baseKey,
-      'dsf_investments_cache'
     ];
+    if (baseKey === STORAGE_KEYS.TRANSACTIONS) {
+      keys.push('dsf_investments_cache');
+      keys.push(`dsf_investments_cache_${cleanId}`);
+      keys.push(`dsf_investments_cache_${canonicalId}`);
+    }
     if (cleanId.includes('@')) {
       keys.push(`${baseKey}_${cleanId.replace(/@/g, '_').replace(/[^a-z0-9._-]/g, '_')}`);
     }
@@ -1683,7 +1697,7 @@ export class PortfolioStorageService {
         if (found) {
           try {
             const parsed = JSON.parse(found);
-            if (Array.isArray(parsed)) {
+            if (Array.isArray(parsed) && parsed.length > 0) {
               raw = found;
               break;
             }
@@ -1697,18 +1711,62 @@ export class PortfolioStorageService {
         return [];
       }
 
-      const txs: InvestmentTransaction[] = JSON.parse(raw);
+      const txs: any[] = JSON.parse(raw);
       const deletedIds = this.getDeletedPortfolioIds(userId);
-      return txs.filter((t) => t && t.id && !deletedIds.has(t.id) && !deletedIds.has(t.id.toUpperCase()));
+      return txs
+        .filter((t) => {
+          if (!t || !t.id) return false;
+          if (deletedIds.has(t.id) || deletedIds.has(String(t.id).toUpperCase())) return false;
+          // Filter out dividends mistakenly stored as transactions
+          const typeStr = String(t.type || '').toLowerCase().trim();
+          if (typeStr === 'dividendo' || typeStr === 'jcp' || typeStr === 'rendimento' || (t.valuePerShare !== undefined && t.unitPrice === undefined)) {
+            return false;
+          }
+          // Filter out empty ghost records with no ticker
+          const ticker = String(t.assetTicker || t.ticker || t.assetName || t.asset || '').trim();
+          if (!ticker && (Number(t.quantity) || 0) <= 0 && (Number(t.unitPrice) || 0) <= 0) {
+            return false;
+          }
+          return true;
+        })
+        .map((t) => {
+          const qty = Number(t.quantity) || 0;
+          const unitPrice = Number(t.unitPrice ?? t.price ?? 0);
+          const totalAmount = Number(t.totalAmount ?? t.totalValue ?? (qty * unitPrice));
+          const ticker = String(t.assetTicker || t.ticker || t.assetName || t.asset || 'ATIVO').toUpperCase().trim();
+          const category = (t.assetCategory || t.category || 'acoes') as AssetCategory;
+          const type = String(t.type || 'buy').toLowerCase() === 'sell' || String(t.type || '').toLowerCase() === 'venda' ? 'sell' : 'buy';
+          const broker = String(t.broker || t.institution || 'RICO INVESTIMENTOS').trim();
+          let date = String(t.date || '').trim();
+          if (!date && t.createdAt) date = String(t.createdAt).split('T')[0];
+          if (!date) date = new Date().toISOString().split('T')[0];
+
+          return {
+            id: String(t.id),
+            userId: String(t.userId || userId),
+            assetTicker: ticker,
+            assetCategory: category,
+            type,
+            quantity: qty,
+            unitPrice,
+            totalAmount,
+            broker,
+            date,
+            notes: t.notes || '',
+            createdAt: t.createdAt || new Date().toISOString(),
+            updatedAt: t.updatedAt || new Date().toISOString(),
+          } as InvestmentTransaction;
+        });
     } catch {
       return [];
     }
   }
 
   static syncAssetForTicker(ticker: string, category: AssetCategory, userId = 'default') {
+    if (!ticker) return;
     const cleanTicker = ticker.trim().toUpperCase();
     const txs = this.getTransactions(userId).filter(
-      (t) => t.assetTicker.trim().toUpperCase() === cleanTicker
+      (t) => (t.assetTicker || (t as any).ticker || '').trim().toUpperCase() === cleanTicker
     );
 
     txs.sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
@@ -1717,25 +1775,27 @@ export class PortfolioStorageService {
     let totalCost = 0;
 
     for (const tx of txs) {
+      const q = Number(tx.quantity) || 0;
+      const p = Number(tx.unitPrice) || 0;
       if (tx.type === 'buy') {
-        totalCost += tx.quantity * tx.unitPrice;
-        totalQty += tx.quantity;
+        totalCost += q * p;
+        totalQty += q;
       } else if (tx.type === 'sell') {
         const avg = totalQty > 0 ? totalCost / totalQty : 0;
-        totalQty = Math.max(0, totalQty - tx.quantity);
-        totalCost = totalQty * avg;
+        totalQty = Math.max(0, totalQty - q);
+        totalCost = Math.max(0, totalQty * avg);
       }
     }
 
-    const avgPrice = totalQty > 0 ? totalCost / totalQty : 0;
+    const avgPrice = totalQty > 0 ? (totalCost / totalQty) : 0;
     const assets = this.getAssets(userId);
-    const existingIndex = assets.findIndex((a) => a.ticker.trim().toUpperCase() === cleanTicker);
+    const existingIndex = assets.findIndex((a) => (a.ticker || '').trim().toUpperCase() === cleanTicker);
 
     if (totalQty > 0) {
       if (existingIndex >= 0) {
         assets[existingIndex].quantity = category === 'cripto' ? Number(totalQty.toFixed(8)) : Number(Number(totalQty).toFixed(2));
         assets[existingIndex].averagePrice = Number(Number(avgPrice).toFixed(2));
-        const curPrice = assets[existingIndex].currentPrice || avgPrice;
+        const curPrice = Number(assets[existingIndex].currentPrice) > 0 ? Number(assets[existingIndex].currentPrice) : avgPrice;
         assets[existingIndex].returnPct = avgPrice > 0 ? Number((((curPrice - avgPrice) / avgPrice) * 100).toFixed(2)) : 0;
         assets[existingIndex].updatedAt = new Date().toISOString();
         (assets[existingIndex] as any)._pendingSync = true;

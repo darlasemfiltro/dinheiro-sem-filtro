@@ -389,12 +389,7 @@ export const PortfolioView: React.FC<PortfolioViewProps> = ({
         const savedList = parsedData.investmentTransactions || parsedData.investments || [];
 
         if (isMounted && Array.isArray(savedList)) {
-          const merged = [...savedList];
-          localTxs.forEach(localTx => {
-            if (!merged.some(m => String(m.id) === String(localTx.id))) {
-              merged.push(localTx);
-            }
-          });
+          const merged = mergeRemoteInvestmentTransactionsWithOptimistic(savedList);
 
           if (merged.length > 0) {
             setTransactions(merged);
@@ -2368,14 +2363,7 @@ export const PortfolioView: React.FC<PortfolioViewProps> = ({
           }
         }
       } catch (err: any) {
-        console.error('Erro ao excluir investimento na nuvem em background:', err);
-        // Rollback on failure
-        setTransactions(previousTxs);
-        try {
-          localStorage.setItem('dsf_investments_cache', JSON.stringify(previousTxs));
-          localStorage.setItem(`dsf_investments_cache_${userId}`, JSON.stringify(previousTxs));
-        } catch (e) {}
-        setPortfolioAlert({ isOpen: true, message: 'Falha ao excluir na nuvem. Alteração revertida.', type: 'error' });
+        console.warn('Erro ao excluir investimento na nuvem em background (salvo localmente):', err);
       }
     })();
   };
@@ -2491,19 +2479,33 @@ export const PortfolioView: React.FC<PortfolioViewProps> = ({
 
   // Filter Transactions
   const filteredTransactions = transactions.filter((tx) => {
-    const search = (txSearchTerm || '').trim().toLowerCase();
-    if (!search && txCategoryFilter === 'all' && filterCategory === 'completo') {
-      return true;
+    if (!tx || !tx.id) return false;
+    const typeStr = String(tx.type || '').toLowerCase().trim();
+    // Filter out dividends mistakenly present in transactions
+    if (typeStr === 'dividendo' || typeStr === 'jcp' || typeStr === 'rendimento' || ((tx as any).valuePerShare !== undefined && tx.unitPrice === undefined)) {
+      return false;
     }
+    const ticker = String(tx.assetTicker || (tx as any).ticker || (tx as any).assetName || (tx as any).asset || '').trim();
+    if (!ticker && (Number(tx.quantity) || 0) <= 0 && (Number(tx.unitPrice) || 0) <= 0) {
+      return false;
+    }
+
+    const search = (txSearchTerm || '').trim().toLowerCase();
+    const broker = String(tx.broker || (tx as any).institution || '').toLowerCase();
+    const notes = String(tx.notes || '').toLowerCase();
+
     const matchesSearch =
       !search ||
-      String(tx.assetTicker || '').toLowerCase().includes(search) ||
-      String(tx.broker || '').toLowerCase().includes(search) ||
-      (tx.notes && String(tx.notes).toLowerCase().includes(search));
+      ticker.toLowerCase().includes(search) ||
+      broker.includes(search) ||
+      notes.includes(search);
+
+    const cat = String(tx.assetCategory || (tx as any).category || '').toLowerCase();
     const matchesCat =
       txCategoryFilter === 'all' ||
-      tx.assetCategory === txCategoryFilter ||
-      (filterCategory !== 'completo' && tx.assetCategory === filterCategory);
+      cat === txCategoryFilter.toLowerCase() ||
+      (filterCategory !== 'completo' && cat === filterCategory.toLowerCase());
+
     return matchesSearch && matchesCat;
   });
 
@@ -5861,48 +5863,59 @@ export const PortfolioView: React.FC<PortfolioViewProps> = ({
                 </tr>
               </thead>
               <tbody className="divide-y divide-white/5">
-                {filteredTransactions.map((tx) => (
-                  <tr key={tx.id} className="hover:bg-white/5 transition font-bold">
-                    <td className="py-3 px-2 text-gray-400">{tx.date}</td>
-                    <td className="py-3 px-2 font-black text-[#D4AF37]">{tx.assetTicker}</td>
-                    <td className="py-3 px-2 text-gray-300">{CATEGORY_LABELS[tx.assetCategory] || tx.assetCategory}</td>
-                    <td className="py-3 px-2">
-                      <span
-                        className={`px-2 py-0.5 rounded text-[10px] font-black uppercase ${
-                          tx.type === 'buy'
-                            ? 'bg-[#00C853]/20 text-[#00E676]'
-                            : 'bg-red-500/20 text-red-400'
-                        }`}
-                      >
-                        {tx.type === 'buy' ? 'Compra' : 'Venda'}
-                      </span>
-                    </td>
-                    <td className="py-3 px-2 text-white">{tx.quantity}</td>
-                    <td className="py-3 px-2 text-gray-300">{formatValue(tx.unitPrice)}</td>
-                    <td className="py-3 px-2 text-white">{formatValue(tx.totalAmount)}</td>
-                    <td className="py-3 px-2 text-gray-400">{tx.broker}</td>
-                    {!isReadOnly && (
-                      <td className="py-3 px-2 text-right">
-                        <div className="flex items-center justify-end gap-1.5">
-                          <button
-                            onClick={() => handleOpenEditTxModal(tx)}
-                            className="p-1.5 bg-[#121212] hover:bg-white/10 text-gray-300 border border-white/20 rounded-lg transition cursor-pointer"
-                            title="Editar Transação"
-                          >
-                            <Edit2 className="w-3.5 h-3.5" />
-                          </button>
-                          <button
-                            onClick={() => handleDeleteTx(tx.id)}
-                            className="p-1.5 bg-red-500/20 hover:bg-red-500/30 text-red-400 border border-red-500/40 rounded-lg transition cursor-pointer"
-                            title="Excluir Transação"
-                          >
-                            <Trash2 className="w-3.5 h-3.5" />
-                          </button>
-                        </div>
+                {filteredTransactions.map((tx) => {
+                  const ticker = String(tx.assetTicker || (tx as any).ticker || (tx as any).assetName || (tx as any).asset || 'ATIVO').toUpperCase().trim();
+                  const cat = String(tx.assetCategory || (tx as any).category || 'acoes').toLowerCase().trim();
+                  const isBuy = String(tx.type || 'buy').toLowerCase() === 'buy' || String(tx.type || '').toLowerCase() === 'compra';
+                  const qty = Number(tx.quantity) || 0;
+                  const unitPrice = Number(tx.unitPrice ?? (tx as any).price ?? 0);
+                  const totalAmount = Number(tx.totalAmount ?? (tx as any).totalValue ?? (qty * unitPrice));
+                  const broker = String(tx.broker || (tx as any).institution || 'RICO INVESTIMENTOS').trim();
+                  const dateDisplay = tx.date || (tx.createdAt ? String(tx.createdAt).split('T')[0] : '-');
+
+                  return (
+                    <tr key={tx.id} className="hover:bg-white/5 transition font-bold">
+                      <td className="py-3 px-2 text-gray-400">{dateDisplay}</td>
+                      <td className="py-3 px-2 font-black text-[#D4AF37]">{ticker}</td>
+                      <td className="py-3 px-2 text-gray-300">{CATEGORY_LABELS[cat as AssetCategory] || cat}</td>
+                      <td className="py-3 px-2">
+                        <span
+                          className={`px-2 py-0.5 rounded text-[10px] font-black uppercase ${
+                            isBuy
+                              ? 'bg-[#00C853]/20 text-[#00E676]'
+                              : 'bg-red-500/20 text-red-400'
+                          }`}
+                        >
+                          {isBuy ? 'Compra' : 'Venda'}
+                        </span>
                       </td>
-                    )}
-                  </tr>
-                ))}
+                      <td className="py-3 px-2 text-white">{qty}</td>
+                      <td className="py-3 px-2 text-gray-300">{formatValue(unitPrice)}</td>
+                      <td className="py-3 px-2 text-white">{formatValue(totalAmount)}</td>
+                      <td className="py-3 px-2 text-gray-400">{broker}</td>
+                      {!isReadOnly && (
+                        <td className="py-3 px-2 text-right">
+                          <div className="flex items-center justify-end gap-1.5">
+                            <button
+                              onClick={() => handleOpenEditTxModal(tx)}
+                              className="p-1.5 bg-[#121212] hover:bg-white/10 text-gray-300 border border-white/20 rounded-lg transition cursor-pointer"
+                              title="Editar Transação"
+                            >
+                              <Edit2 className="w-3.5 h-3.5" />
+                            </button>
+                            <button
+                              onClick={() => handleDeleteTx(tx.id)}
+                              className="p-1.5 bg-red-500/20 hover:bg-red-500/30 text-red-400 border border-red-500/40 rounded-lg transition cursor-pointer"
+                              title="Excluir Transação"
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
+                            </button>
+                          </div>
+                        </td>
+                      )}
+                    </tr>
+                  );
+                })}
 
                 {filteredTransactions.length === 0 && (
                   <tr>
@@ -6342,10 +6355,6 @@ export const PortfolioView: React.FC<PortfolioViewProps> = ({
           setEditingTx(null);
         }}
         onSaveTransaction={handleSaveAssetTransaction}
-        onSaveSuccess={(novoAtivo) => {
-          handleAddTransactionDirectly(novoAtivo);
-          setRefreshTrigger((n: number) => n + 1);
-        }}
         userId={userId}
         editingTransaction={editingTx}
       />
