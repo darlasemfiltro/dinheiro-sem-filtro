@@ -1137,7 +1137,7 @@ export async function executeTransactionalInvestmentGoal(
   }
 
   try {
-    const response = await fetch('/api/data/transactional-investment-goal', {
+    const response = await fetch('/api/data/transactional-goal', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
