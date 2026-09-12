@@ -1666,7 +1666,9 @@ export class PortfolioStorageService {
         return [];
       }
 
-      return JSON.parse(raw);
+      const txs: InvestmentTransaction[] = JSON.parse(raw);
+      const deletedIds = this.getDeletedPortfolioIds(userId);
+      return txs.filter((t) => t && t.id && !deletedIds.has(t.id) && !deletedIds.has(t.id.toUpperCase()));
     } catch {
       return [];
     }
@@ -1822,7 +1824,9 @@ export class PortfolioStorageService {
         return [];
       }
 
-      return JSON.parse(raw);
+      const divs: InvestmentDividend[] = JSON.parse(raw);
+      const deletedIds = this.getDeletedPortfolioIds(userId);
+      return divs.filter((d) => d && d.id && !deletedIds.has(d.id) && !deletedIds.has(d.id.toUpperCase()));
     } catch {
       return [];
     }
@@ -2157,7 +2161,9 @@ export class PortfolioStorageService {
         return [];
       }
 
-      return JSON.parse(raw);
+      const goals: PortfolioGoal[] = JSON.parse(raw);
+      const deletedIds = this.getDeletedPortfolioIds(userId);
+      return goals.filter((g) => g && g.id && !deletedIds.has(g.id) && !deletedIds.has(g.id.toUpperCase()));
     } catch {
       return [];
     }
