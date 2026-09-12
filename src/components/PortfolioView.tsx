@@ -299,6 +299,7 @@ interface PortfolioViewProps {
   onDeleteInvestmentTransaction?: (id: string) => Promise<any> | void;
   investmentGoals?: any[];
   onSaveInvestmentGoal?: (goal: any) => Promise<any> | void;
+  onDeleteInvestmentGoal?: (id: string) => Promise<any> | void;
   isReadOnly?: boolean;
 }
 
@@ -312,6 +313,7 @@ export const PortfolioView: React.FC<PortfolioViewProps> = ({
   onDeleteInvestmentTransaction,
   investmentGoals,
   onSaveInvestmentGoal,
+  onDeleteInvestmentGoal,
   isReadOnly = false,
 }) => {
   const checkReadOnly = () => {
@@ -2110,9 +2112,7 @@ export const PortfolioView: React.FC<PortfolioViewProps> = ({
     // 1. Tenta por Query de userId ou email dentro dos atributos do documento
     try {
       const queryList = [];
-      if (currentUser?.$id) {
-        queryList.push(Query.equal('userId', currentUser.$id));
-      } else if (userId) {
+      if (userId) {
         queryList.push(Query.equal('userId', userId));
       }
       

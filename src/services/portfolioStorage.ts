@@ -2246,6 +2246,13 @@ export class PortfolioStorageService {
     this.saveToAllAliasKeys(STORAGE_KEYS.GOALS, userId, goals);
     this.markPortfolioItemAsDeleted(id, 'goals', userId);
     deletePortfolioGoalFromFirestore(id);
+    
+    // Also delete from StorageService goals to prevent cross-sync resurrection
+    try {
+      const canonicalId = getCanonicalUserId(userId || 'default');
+      StorageService.deleteGoal(id, canonicalId);
+    } catch {}
+
     this.notifyUpdate();
       
     this.syncPortfolioWithRemote(userId);
