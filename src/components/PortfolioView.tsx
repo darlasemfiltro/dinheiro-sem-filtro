@@ -2146,90 +2146,56 @@ export const PortfolioView: React.FC<PortfolioViewProps> = ({
   };
 
   const confirmDeleteGoal = async () => {
-    if (deletingGoalId) {
-      const idToDelete = deletingGoalId;
-      alert(`[DEDO-DURO CLIQUE EM SIM DETECTADO!]\nID da Meta a excluir: ${idToDelete}`);
-      setDeletingGoalId(null);
-      
-      // Guard against race-condition resurrection
-      recordGoalDeletion(idToDelete);
+    if (!deletingGoalId) return;
+    const targetId = deletingGoalId;
 
-      const currentList = PortfolioStorageService.getGoals(userId);
-      const updatedGoals = currentList.filter((g: any) => g.id !== idToDelete);
-      
-      PortfolioStorageService.deleteGoal(idToDelete, userId);
-      PortfolioStorageService.saveGoals(updatedGoals as any, userId);
-      localStorage.setItem('dsf_investment_goals_cache', JSON.stringify(updatedGoals));
-      setGoals(updatedGoals as any);
+    // 1. Snapshot previous state for rollback
+    const previousGoals = [...goals];
 
-      alert(`[DEDO-DURO FILTRADO]\nRestantes na tela: ${updatedGoals.length}`);
+    // 2. OPTIMISTIC UI: Remove from local state immediately (0ms delay)
+    recordGoalDeletion(targetId);
+    PortfolioStorageService.deleteGoal(targetId, userId);
 
-      // Persist directly to Appwrite under investmentGoals key and clear legacy goals residue using real $id
+    const nextGoals = goals.filter(g => g.id !== targetId);
+    setGoals(nextGoals);
+    try {
+      localStorage.setItem('dsf_investment_goals_cache', JSON.stringify(nextGoals));
+      localStorage.setItem(`dsf_investment_goals_cache_${userId}`, JSON.stringify(nextGoals));
+    } catch (e) {}
+
+    // 3. Instant modal close & visual event triggers (0ms delay)
+    setDeletingGoalId(null);
+    window.dispatchEvent(new Event('portfolio_updated'));
+    window.dispatchEvent(new Event('remote_data_updated'));
+    window.dispatchEvent(new CustomEvent('financial_data_mutated', { detail: { userId } }));
+    window.dispatchEvent(new CustomEvent('app-toast', { detail: 'Meta excluída com sucesso!' }));
+
+    // 4. Background Deletion Sync without freezing UI (exactly mirroring transactions)
+    (async () => {
       try {
-        const config = getAppwriteConfig();
-        if (config && config.databaseId) {
-          const DATABASE_ID = config.databaseId;
-          const COLLECTION_ID = 'user_financials';
-          
-          const userDoc = await getActualUserDocument(DATABASE_ID, COLLECTION_ID);
-          
-          if (!userDoc) {
-            alert('[ERRO CRÍTICO] Documento do usuário não encontrado no Appwrite!');
-            return;
-          }
-
-          const realDocId = userDoc.$id;
-
-          let parsedData: any = {};
-          if (typeof userDoc.data === 'string') {
-            parsedData = JSON.parse(userDoc.data);
-          } else {
-            parsedData = userDoc.data || {};
-          }
-
-          parsedData.investmentGoals = updatedGoals;
-          if (Array.isArray(parsedData.goals)) {
-            parsedData.goals = parsedData.goals.filter((g: any) => {
-              const matchId = g?.id && String(g.id) === String(idToDelete);
-              const matchTitle = g?.title && (g.title === 'Tesye' || g.title.toLowerCase().includes('tesye'));
-              return !matchId && !matchTitle;
-            });
-          }
-          parsedData.updatedAt = new Date().toISOString();
-
-          await databases.updateDocument(
-            DATABASE_ID,
-            COLLECTION_ID,
-            realDocId,
-            {
-              data: JSON.stringify(parsedData)
-            }
-          );
-          alert('[SUCESSO NUVEM] Meta excluída do Appwrite definitivamente!');
+        if (onDeleteInvestmentGoal) {
+          await onDeleteInvestmentGoal(targetId);
         } else {
-          alert('[DEDO-DURO ERRO] Configuração do Appwrite ausente ou inválida');
+          await executeTransactionalInvestmentGoal(userId, 'deleteGoal', {
+            goalId: targetId,
+          });
+          if (onDataChanged) {
+            await onDataChanged();
+          }
         }
+        await StorageService.syncUserMutationToServer(userId).catch(() => {});
       } catch (err: any) {
-        console.error('[ERRO AO EXCLUIR META NO APPWRITE]', err);
-        alert(`[FALHA AO GRAVAR NO APPWRITE]\nCódigo: ${err.code || 'N/A'}\nMensagem: ${err.message}`);
+        console.error('Erro ao excluir meta na nuvem em background:', err);
+        // Rollback on failure
+        setGoals(previousGoals);
+        PortfolioStorageService.saveGoals(previousGoals, userId);
+        try {
+          localStorage.setItem('dsf_investment_goals_cache', JSON.stringify(previousGoals));
+          localStorage.setItem(`dsf_investment_goals_cache_${userId}`, JSON.stringify(previousGoals));
+        } catch (e) {}
+        window.dispatchEvent(new CustomEvent('app-toast', { detail: 'Falha ao excluir meta na nuvem. Alteração revertida.' }));
       }
-
-      // Execute atomic server transaction and direct Appwrite deletion
-      try {
-        await executeTransactionalInvestmentGoal(userId, 'deleteGoal', {
-          goalId: idToDelete,
-        });
-      } catch (e) {
-        console.warn('[Transactional delete fallback]', e);
-      }
-
-      await StorageService.syncUserMutationToServer(userId).catch(() => {});
-      await onDataChanged?.();
-      window.dispatchEvent(new Event('portfolio_updated'));
-      window.dispatchEvent(new Event('remote_data_updated'));
-      window.dispatchEvent(new CustomEvent('financial_data_mutated', { detail: { userId } }));
-      loadData();
-    }
+    })();
   };
 
   // Transaction CRUD handlers
