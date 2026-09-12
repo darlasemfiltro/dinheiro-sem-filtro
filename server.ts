@@ -1523,8 +1523,8 @@ async function startServer() {
 
       // Se renda numérica direta não informada, derivar valor representativo da faixa de renda selecionada
       if ((isNaN(numericIncome) || numericIncome <= 0) && cleanIncomeBracket) {
-        if (cleanIncomeBracket.includes('1.500') && cleanIncomeBracket.toLowerCase().includes('até')) numericIncome = 1500;
-        else if (cleanIncomeBracket.includes('3.000')) numericIncome = 2500;
+        if ((cleanIncomeBracket.includes('1.621') || cleanIncomeBracket.includes('1.500')) && cleanIncomeBracket.toLowerCase().includes('até')) numericIncome = 1621;
+        else if (cleanIncomeBracket.includes('3.242') || cleanIncomeBracket.includes('3.000')) numericIncome = 2432;
         else if (cleanIncomeBracket.includes('5.000')) numericIncome = 4000;
         else if (cleanIncomeBracket.includes('10.000')) numericIncome = 7500;
         else if (cleanIncomeBracket.includes('20.000') && !cleanIncomeBracket.toLowerCase().includes('acima')) numericIncome = 15000;

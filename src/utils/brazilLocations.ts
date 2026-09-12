@@ -258,6 +258,8 @@ export function getRegionalBenchmark(state?: string): number {
   return 67; // Média Nacional do Brasil
 }
 
+export const MINIMUM_WAGE = 1621;
+
 export interface IncomeBracket {
   id: string;
   label: string;
@@ -267,48 +269,48 @@ export interface IncomeBracket {
 
 export const INCOME_BRACKETS: IncomeBracket[] = [
   {
-    id: 'ate-1500',
-    label: 'Até R$ 1.500',
+    id: 'ate-1621',
+    label: 'Até R$ 1.621',
     sublabel: 'Até 1 salário mínimo',
-    representativeValue: 1500,
+    representativeValue: 1621,
   },
   {
-    id: '1501-3000',
-    label: 'R$ 1.501 a R$ 3.000',
+    id: '1622-3242',
+    label: 'R$ 1.622 a R$ 3.242',
     sublabel: '1 a 2 salários mínimos',
-    representativeValue: 2500,
+    representativeValue: 2432,
   },
   {
-    id: '3001-5000',
-    label: 'R$ 3.001 a R$ 5.000',
-    sublabel: '2 a 3,5 salários mínimos',
+    id: '3243-5000',
+    label: 'R$ 3.243 a R$ 5.000',
+    sublabel: '2 a 3 salários mínimos',
     representativeValue: 4000,
   },
   {
     id: '5001-10000',
     label: 'R$ 5.001 a R$ 10.000',
-    sublabel: '3,5 a 7 salários mínimos',
+    sublabel: '3 a 6 salários mínimos',
     representativeValue: 7500,
   },
   {
     id: '10001-20000',
     label: 'R$ 10.001 a R$ 20.000',
-    sublabel: '7 a 14 salários mínimos',
+    sublabel: '6 a 12 salários mínimos',
     representativeValue: 15000,
   },
   {
     id: 'acima-20000',
     label: 'Acima de R$ 20.000',
-    sublabel: 'Mais de 14 salários mínimos',
+    sublabel: 'Mais de 12 salários mínimos',
     representativeValue: 25000,
   },
 ];
 
 export function getIncomeBracketFromValue(val?: number): string {
   if (!val || val <= 0) return '';
-  if (val <= 1500) return 'Até R$ 1.500';
-  if (val <= 3000) return 'R$ 1.501 a R$ 3.000';
-  if (val <= 5000) return 'R$ 3.001 a R$ 5.000';
+  if (val <= 1621) return 'Até R$ 1.621';
+  if (val <= 3242) return 'R$ 1.622 a R$ 3.242';
+  if (val <= 5000) return 'R$ 3.243 a R$ 5.000';
   if (val <= 10000) return 'R$ 5.001 a R$ 10.000';
   if (val <= 20000) return 'R$ 10.001 a R$ 20.000';
   return 'Acima de R$ 20.000';
@@ -322,8 +324,8 @@ export function getValueFromIncomeBracket(bracket?: string): number {
   if (found) return found.representativeValue;
 
   const b = bracket.trim();
-  if (b.includes('1.500') && b.toLowerCase().includes('até')) return 1500;
-  if (b.includes('3.000')) return 2500;
+  if ((b.includes('1.621') || b.includes('1.500')) && b.toLowerCase().includes('até')) return 1621;
+  if (b.includes('3.242') || b.includes('3.000')) return 2432;
   if (b.includes('5.000')) return 4000;
   if (b.includes('10.000')) return 7500;
   if (b.includes('20.000') && !b.toLowerCase().includes('acima')) return 15000;
