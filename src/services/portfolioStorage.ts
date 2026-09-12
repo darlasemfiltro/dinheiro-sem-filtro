@@ -1636,6 +1636,21 @@ export class PortfolioStorageService {
     }
     deletePortfolioAssetFromFirestore(id);
 
+    try {
+      fetch('/api/portfolio/delete-item', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ userId, type: 'assets', id })
+      }).catch(() => {});
+      if (deletedAsset?.ticker) {
+        fetch('/api/portfolio/delete-item', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ userId, type: 'assets', id: deletedAsset.ticker })
+        }).catch(() => {});
+      }
+    } catch {}
+
     if (deletedAsset) {
       const cleanTicker = deletedAsset.ticker.trim().toUpperCase();
       const txs = this.getTransactions(userId).filter(
@@ -2247,6 +2262,14 @@ export class PortfolioStorageService {
     this.markPortfolioItemAsDeleted(id, 'goals', userId);
     deletePortfolioGoalFromFirestore(id);
     
+    try {
+      fetch('/api/portfolio/delete-item', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ userId, type: 'goals', id })
+      }).catch(() => {});
+    } catch {}
+
     // Also delete from StorageService goals to prevent cross-sync resurrection
     try {
       const canonicalId = getCanonicalUserId(userId || 'default');
@@ -2300,6 +2323,15 @@ export class PortfolioStorageService {
     } catch {}
     this.markPortfolioItemAsDeleted(id, 'transactions', userId);
     deletePortfolioTransactionFromFirestore(id);
+
+    try {
+      fetch('/api/portfolio/delete-item', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ userId, type: 'transactions', id })
+      }).catch(() => {});
+    } catch {}
+
     if (deletedTx) {
       this.syncAssetForTicker(deletedTx.assetTicker, deletedTx.assetCategory, userId);
     }

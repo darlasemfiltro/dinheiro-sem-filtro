@@ -6690,32 +6690,28 @@ export const PortfolioView: React.FC<PortfolioViewProps> = ({
               <button
                 type="button"
                 onClick={(e) => {
-                  e.preventDefault();
                   e.stopPropagation();
                   setDeletingTxId(null);
                 }}
-                onTouchEnd={(e) => {
-                  e.preventDefault();
+                onPointerDown={(e) => {
                   e.stopPropagation();
                   setDeletingTxId(null);
                 }}
-                className="flex-1 py-3 px-4 rounded-xl border border-white/20 text-xs font-bold text-gray-300 hover:bg-white/10 transition cursor-pointer select-none active:scale-95"
+                className="flex-1 py-3 px-4 rounded-xl border border-white/20 text-xs font-bold text-gray-300 hover:bg-white/10 transition cursor-pointer select-none active:scale-95 touch-manipulation"
               >
                 Não
               </button>
               <button
                 type="button"
                 onClick={(e) => {
-                  e.preventDefault();
                   e.stopPropagation();
                   confirmDeleteTx();
                 }}
-                onTouchEnd={(e) => {
-                  e.preventDefault();
+                onPointerDown={(e) => {
                   e.stopPropagation();
                   confirmDeleteTx();
                 }}
-                className="flex-1 py-3 px-4 rounded-xl bg-red-600 hover:bg-red-700 text-white font-extrabold text-xs transition cursor-pointer shadow-md select-none active:scale-95"
+                className="flex-1 py-3 px-4 rounded-xl bg-red-600 hover:bg-red-700 text-white font-extrabold text-xs transition cursor-pointer shadow-md select-none active:scale-95 touch-manipulation"
               >
                 Sim
               </button>
@@ -6749,32 +6745,28 @@ export const PortfolioView: React.FC<PortfolioViewProps> = ({
               <button
                 type="button"
                 onClick={(e) => {
-                  e.preventDefault();
                   e.stopPropagation();
                   setDeletingGoalId(null);
                 }}
-                onTouchEnd={(e) => {
-                  e.preventDefault();
+                onPointerDown={(e) => {
                   e.stopPropagation();
                   setDeletingGoalId(null);
                 }}
-                className="flex-1 py-3 px-4 rounded-xl border border-white/20 text-xs font-bold text-gray-300 hover:bg-white/10 transition cursor-pointer select-none active:scale-95"
+                className="flex-1 py-3 px-4 rounded-xl border border-white/20 text-xs font-bold text-gray-300 hover:bg-white/10 transition cursor-pointer select-none active:scale-95 touch-manipulation"
               >
                 Não
               </button>
               <button
                 type="button"
                 onClick={(e) => {
-                  e.preventDefault();
                   e.stopPropagation();
                   confirmDeleteGoal();
                 }}
-                onTouchEnd={(e) => {
-                  e.preventDefault();
+                onPointerDown={(e) => {
                   e.stopPropagation();
                   confirmDeleteGoal();
                 }}
-                className="flex-1 py-3 px-4 rounded-xl bg-red-600 hover:bg-red-700 text-white font-extrabold text-xs transition cursor-pointer shadow-md select-none active:scale-95"
+                className="flex-1 py-3 px-4 rounded-xl bg-red-600 hover:bg-red-700 text-white font-extrabold text-xs transition cursor-pointer shadow-md select-none active:scale-95 touch-manipulation"
               >
                 Sim
               </button>
