@@ -1125,7 +1125,7 @@ export async function executeTransactionalGoal(
  */
 export async function executeTransactionalInvestmentGoal(
   userId: string,
-  action: 'addGoal' | 'updateGoal' | 'deleteGoal' | 'updateGoalProgress',
+  action: 'addGoal' | 'updateGoal' | 'deleteGoal' | 'updateGoalProgress' | 'saveGoal',
   payload: { goalData?: any; goalId?: string; addedAmount?: number }
 ): Promise<{ success: boolean; goals: any[] }> {
   const targetId = payload.goalId || payload.goalData?.id;

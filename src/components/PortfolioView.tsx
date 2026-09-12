@@ -291,6 +291,7 @@ export type PortfolioSubTab =
 
 interface PortfolioViewProps {
   userId?: string;
+  currentUser?: any;
   initialSubTab?: PortfolioSubTab;
   onSubTabChange?: (subTab: PortfolioSubTab) => void;
   onDataChanged?: () => Promise<any> | void;
@@ -299,11 +300,13 @@ interface PortfolioViewProps {
   onDeleteInvestmentTransaction?: (id: string) => Promise<any> | void;
   investmentGoals?: any[];
   onSaveInvestmentGoal?: (goal: any) => Promise<any> | void;
+  onDeleteInvestmentGoal?: (id: string) => Promise<any> | void;
   isReadOnly?: boolean;
 }
 
 export const PortfolioView: React.FC<PortfolioViewProps> = ({
   userId = 'default',
+  currentUser,
   initialSubTab = 'dashboard',
   onSubTabChange,
   onDataChanged,
@@ -312,6 +315,7 @@ export const PortfolioView: React.FC<PortfolioViewProps> = ({
   onDeleteInvestmentTransaction,
   investmentGoals,
   onSaveInvestmentGoal,
+  onDeleteInvestmentGoal,
   isReadOnly = false,
 }) => {
   const checkReadOnly = () => {
