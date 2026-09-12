@@ -186,27 +186,55 @@ export async function syncAppDataToCloud(userId?: string | any, appData?: any, u
       const mergedPayloadData = {
         ...jsonDoBanco,
         ...payloadData,
-        investmentTransactions: Array.isArray(payloadData.investmentTransactions)
-          ? payloadData.investmentTransactions
-          : (jsonDoBanco.investmentTransactions || jsonDoBanco.investments || []),
-        investments: Array.isArray(payloadData.investments)
-          ? payloadData.investments
-          : (jsonDoBanco.investments || jsonDoBanco.investmentTransactions || []),
-        transactions: Array.isArray(payloadData.transactions)
-          ? payloadData.transactions
-          : (jsonDoBanco.transactions || []),
-        accounts: Array.isArray(payloadData.accounts)
-          ? payloadData.accounts
-          : (jsonDoBanco.accounts || []),
-        goals: Array.isArray(payloadData.goals)
-          ? payloadData.goals
-          : (jsonDoBanco.goals || []),
-        investmentGoals: Array.isArray(payloadData.investmentGoals)
-          ? payloadData.investmentGoals
-          : (jsonDoBanco.investmentGoals || jsonDoBanco.investorGoals || []),
-        investorGoals: Array.isArray(payloadData.investmentGoals)
-          ? payloadData.investmentGoals
-          : (jsonDoBanco.investmentGoals || jsonDoBanco.investorGoals || []),
+        investmentTransactions: mergeRemoteInvestmentTransactionsWithOptimistic([
+          ...(jsonDoBanco.investmentTransactions || jsonDoBanco.investments || []),
+          ...(payloadData.investmentTransactions || payloadData.investments || [])
+        ]),
+        investments: mergeRemoteInvestmentTransactionsWithOptimistic([
+          ...(jsonDoBanco.investments || jsonDoBanco.investmentTransactions || []),
+          ...(payloadData.investments || payloadData.investmentTransactions || [])
+        ]),
+        transactions: (() => {
+          const remoteTxs = jsonDoBanco.transactions || [];
+          const localTxs = payloadData.transactions || [];
+          const map = new Map<string, any>();
+          [...remoteTxs, ...localTxs].forEach(t => {
+            if (t && t.id) {
+              map.set(t.id, t);
+            }
+          });
+          return Array.from(map.values());
+        })(),
+        accounts: (() => {
+          const remoteAccs = jsonDoBanco.accounts || [];
+          const localAccs = payloadData.accounts || [];
+          const map = new Map<string, any>();
+          [...remoteAccs, ...localAccs].forEach(a => {
+            if (a && (a.id || a.name)) {
+              map.set(a.id || a.name, a);
+            }
+          });
+          return Array.from(map.values());
+        })(),
+        goals: (() => {
+          const remoteGoals = jsonDoBanco.goals || [];
+          const localGoals = payloadData.goals || [];
+          const map = new Map<string, any>();
+          [...remoteGoals, ...localGoals].forEach(g => {
+            if (g && g.id) {
+              map.set(g.id, g);
+            }
+          });
+          return Array.from(map.values());
+        })(),
+        investmentGoals: mergeRemoteGoalsWithOptimistic([
+          ...(jsonDoBanco.investmentGoals || jsonDoBanco.investorGoals || []),
+          ...(payloadData.investmentGoals || payloadData.investmentGoals || [])
+        ]),
+        investorGoals: mergeRemoteGoalsWithOptimistic([
+          ...(jsonDoBanco.investorGoals || jsonDoBanco.investmentGoals || []),
+          ...(payloadData.investmentGoals || payloadData.investmentGoals || [])
+        ]),
         pedidos_acesso: jsonDoBanco.pedidos_acesso || payloadData.pedidos_acesso || [],
         allowed_users: jsonDoBanco.allowed_users || payloadData.allowed_users || [],
         shared_members: jsonDoBanco.shared_members || payloadData.shared_members || [],

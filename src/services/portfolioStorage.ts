@@ -1142,16 +1142,39 @@ export class PortfolioStorageService {
   }
 
   private static getPossibleKeys(baseKey: string, userId: string): string[] {
+    const cleanId = (userId || 'default').toLowerCase().trim();
     const canonicalId = getCanonicalUserId(userId || 'default');
-    return [`${baseKey}_${canonicalId}`];
+    const keys = [
+      `${baseKey}_${canonicalId}`,
+      `${baseKey}_${cleanId}`,
+      `${baseKey}_default`,
+      baseKey,
+      'dsf_investments_cache'
+    ];
+    if (cleanId.includes('@')) {
+      keys.push(`${baseKey}_${cleanId.replace(/@/g, '_').replace(/[^a-z0-9._-]/g, '_')}`);
+    }
+    return Array.from(new Set(keys));
   }
 
   private static saveToAllAliasKeys(baseKey: string, userId: string, data: any) {
+    const cleanId = (userId || 'default').toLowerCase().trim();
     const canonicalId = getCanonicalUserId(userId || 'default');
-    const key = `${baseKey}_${canonicalId}`;
-    try {
-      localStorage.setItem(key, JSON.stringify(data));
-    } catch {}
+    const keys = [
+      `${baseKey}_${canonicalId}`,
+      `${baseKey}_${cleanId}`,
+      `${baseKey}_default`,
+      baseKey,
+      'dsf_investments_cache'
+    ];
+    if (cleanId.includes('@')) {
+      keys.push(`${baseKey}_${cleanId.replace(/@/g, '_').replace(/[^a-z0-9._-]/g, '_')}`);
+    }
+    keys.forEach(k => {
+      try {
+        localStorage.setItem(k, JSON.stringify(data));
+      } catch {}
+    });
   }
 
   static async syncPortfolioWithRemote(userId = 'default'): Promise<void> {
