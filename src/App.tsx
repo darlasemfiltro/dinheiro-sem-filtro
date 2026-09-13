@@ -803,26 +803,17 @@ export default function App() {
           localStorage.removeItem('darla_oauth_pending');
 
           if (!regCheck.exists || !regCheck.user) {
-            try {
-              const newUserData: User = {
-                id: session.$id || session.id || 'usr_' + Date.now(),
-                name: session.name || cleanEmail.split('@')[0],
+            // E-mail NÃO cadastrado -> Mostrar aviso de usuário não cadastrado e direcionar para Criar Conta
+            if (mounted) {
+              setAuthInitialConfig({
+                mode: 'register',
                 email: cleanEmail,
-                authProvider: 'google',
-                createdAt: session.$createdAt || new Date().toISOString(),
-                isPro: true,
-                plan: 'lifetime',
-                subscriptionStatus: 'active',
-              };
-              await fetch('/api/users/register', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(newUserData),
+                notice: `O e-mail "${cleanEmail}" autenticado com o Google ainda não possui cadastro no sistema. Complete seus dados abaixo para criar sua conta gratuita!`,
               });
-              regCheck = { exists: true, user: newUserData };
-            } catch (err) {
-              console.warn('[Auto-register Google user error]', err);
+              setCurrentUser(null);
+              setIsAuthLoading(false);
             }
+            return;
           }
 
           const userObj: User = {
