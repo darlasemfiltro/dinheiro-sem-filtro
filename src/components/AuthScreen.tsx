@@ -23,6 +23,8 @@ import {
   DollarSign,
   FileText,
   MapPinOff,
+  Eye,
+  EyeOff,
 } from 'lucide-react';
 import {
   BRAZIL_STATES,
@@ -97,6 +99,7 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({
 
   // Google Login Loading State
   const [isLoadingGoogle, setIsLoadingGoogle] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
 
   // Password Reset State
   const [resetStep, setResetStep] = useState<1 | 2>(1);
@@ -606,13 +609,21 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({
                 <div className="relative">
                   <Lock className="w-4 h-4 text-[#D4AF37] absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none" />
                   <input
-                    type="password"
+                    type={showPassword ? 'text' : 'password'}
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
                     placeholder="••••••••"
-                    className="w-full pl-10 pr-4 min-h-[48px] py-3 bg-gray-50 border border-gray-200 rounded-xl text-xs sm:text-sm text-[#121212] placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-[#D4AF37] focus:bg-white transition"
+                    className="w-full pl-10 pr-10 min-h-[48px] py-3 bg-gray-50 border border-gray-200 rounded-xl text-xs sm:text-sm text-[#121212] placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-[#D4AF37] focus:bg-white transition"
                     required
                   />
+                  <button
+                    type="button"
+                    onClick={() => setShowPassword(!showPassword)}
+                    className="absolute right-3.5 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 cursor-pointer p-1"
+                    title={showPassword ? "Ocultar senha" : "Ver senha"}
+                  >
+                    {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                  </button>
                 </div>
                 {isRegister && (
                   <p className="text-[10px] text-gray-500 font-medium">Mínimo de 6 caracteres.</p>
