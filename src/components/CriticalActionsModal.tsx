@@ -1,0 +1,321 @@
+import React, { useState } from 'react';
+import { ShieldAlert, Trash2, UserX, AlertTriangle, X, Mail, Headphones, Lock } from 'lucide-react';
+import { User } from '../types';
+import { appwriteDatabases as databases } from '../lib/appwrite';
+import { StorageService } from '../services/storage';
+import { Query } from 'appwrite';
+
+interface CriticalActionsModalProps {
+  isOpen: boolean;
+  onClose: () => void;
+  user: User;
+  onResetBudgetToZero: () => void;
+  onDeleteAccount: () => void;
+  activeBudgetId?: string;
+  currentBudgetId?: string;
+  setTransactions?: (txs: any[]) => void;
+  setAccounts?: (accs: any[]) => void;
+  setRollover?: (val: number) => void;
+  setTotalBalance?: (val: number) => void;
+}
+
+export const CriticalActionsModal: React.FC<CriticalActionsModalProps> = ({
+  isOpen,
+  onClose,
+  user,
+  onResetBudgetToZero,
+  onDeleteAccount,
+  activeBudgetId,
+  currentBudgetId,
+  setTransactions,
+  setAccounts,
+  setRollover,
+  setTotalBalance,
+}) => {
+  const [confirmingAction, setConfirmingAction] = useState<'reset' | 'delete' | null>(null);
+  const [deleteConfirmationText, setDeleteConfirmationText] = useState('');
+
+  if (!isOpen) return null;
+
+  const effectiveBudgetId = activeBudgetId || currentBudgetId || StorageService.getEffectiveBudgetId(user);
+  const isTitular = StorageService.isBudgetOwner(user, effectiveBudgetId);
+
+  const handleExecuteZerarOrcamento = async () => {
+    if (!isTitular) {
+      alert('Ação bloqueada: Apenas o titular da conta possui permissão para zerar o orçamento.');
+      return;
+    }
+    try {
+      onResetBudgetToZero();
+      setConfirmingAction(null);
+      onClose();
+    } catch (error: any) {
+      console.error('[DEDO-DURO EXCEÇÃO]:', error);
+    }
+  };
+
+  const handleConfirmDelete = () => {
+    if (!isTitular) {
+      alert('Ação bloqueada: Apenas o titular da conta possui permissão para excluir a conta.');
+      return;
+    }
+    onDeleteAccount();
+    setDeleteConfirmationText('');
+    setConfirmingAction(null);
+    onClose();
+  };
+
+  return (
+    <div className="fixed inset-0 bg-black/60 backdrop-blur-xs flex items-center justify-center p-3 sm:p-4 z-50 animate-in fade-in duration-200 overflow-y-auto">
+      <div className="bg-white rounded-3xl max-w-md w-full p-5 sm:p-6 shadow-2xl border-2 border-[#FF3D00] relative my-auto">
+        {/* Header */}
+        <div className="flex items-center justify-between pb-4 border-b border-gray-200">
+          <div className="flex items-center gap-2.5">
+            <div className="p-2 bg-red-100 text-[#FF3D00] rounded-2xl shrink-0">
+              <ShieldAlert className="w-6 h-6" />
+            </div>
+            <div>
+              <div className="flex items-center gap-2">
+                <h2 className="text-base sm:text-lg font-black text-[#121212] font-serif">
+                  Menu de Ações Críticas
+                </h2>
+                {isTitular ? (
+                  <span className="text-[10px] bg-emerald-100 text-emerald-800 font-black px-2 py-0.5 rounded-full border border-emerald-300 shrink-0">
+                    👑 TITULAR
+                  </span>
+                ) : (
+                  <span className="text-[10px] bg-amber-100 text-amber-800 font-black px-2 py-0.5 rounded-full border border-amber-300 shrink-0">
+                    👥 MEMBRO
+                  </span>
+                )}
+              </div>
+              <p className="text-xs text-gray-500">
+                Operações sensíveis de segurança da conta
+              </p>
+            </div>
+          </div>
+          <button
+            onClick={() => {
+              setConfirmingAction(null);
+              onClose();
+            }}
+            className="p-1 text-gray-400 hover:text-black hover:bg-gray-100 rounded-full transition cursor-pointer"
+          >
+            <X className="w-5 h-5" />
+          </button>
+        </div>
+
+        {/* Content */}
+        <div className="py-4 space-y-3">
+          {/* Mensagem informativa quando em modo membro */}
+          {!isTitular && (
+            <div className="p-3 bg-amber-50 border border-amber-200 rounded-2xl flex items-start gap-2.5">
+              <Lock className="w-5 h-5 text-amber-600 shrink-0 mt-0.5" />
+              <div className="text-xs text-amber-950">
+                <p className="font-bold">Ações Ativas Apenas para o Titular</p>
+                <p className="text-[11px] text-amber-800 mt-0.5 leading-relaxed">
+                  Por segurança, as ações de <strong>Zerar Orçamento</strong> e <strong>Excluir Conta</strong> estão ativas exclusivamente para o titular da conta.
+                </p>
+              </div>
+            </div>
+          )}
+
+          {confirmingAction === null ? (
+            <div className="space-y-3">
+              <p className="text-xs text-gray-600 font-medium">
+                {isTitular ? 'Selecione uma das opções críticas abaixo:' : 'Status das opções críticas:'}
+              </p>
+
+              {/* OPÇÃO 1: Zerar Orçamento */}
+              <button
+                type="button"
+                disabled={!isTitular}
+                onClick={() => {
+                  if (!isTitular) return;
+                  setConfirmingAction('reset');
+                }}
+                className={`w-full text-left p-4 rounded-2xl transition flex items-center justify-between gap-3 shadow-xs ${
+                  isTitular
+                    ? 'bg-amber-50 hover:bg-amber-100 text-amber-950 border border-amber-300 cursor-pointer group'
+                    : 'bg-gray-50 text-gray-400 border border-gray-200 cursor-not-allowed opacity-75'
+                }`}
+              >
+                <div className="flex items-center gap-3">
+                  <div className={`p-2 rounded-xl transition ${isTitular ? 'bg-amber-200 text-amber-800 group-hover:scale-105' : 'bg-gray-200 text-gray-400'}`}>
+                    <Trash2 className="w-5 h-5" />
+                  </div>
+                  <div>
+                    <div className="flex items-center gap-2">
+                      <h3 className={`text-xs sm:text-sm font-black ${isTitular ? 'text-amber-950' : 'text-gray-500'}`}>
+                        1. Zerar Orçamento
+                      </h3>
+                      {!isTitular && (
+                        <span className="text-[9px] bg-gray-200 text-gray-600 font-bold px-2 py-0.5 rounded-full uppercase flex items-center gap-1">
+                          <Lock className="w-2.5 h-2.5" /> Apenas Titular
+                        </span>
+                      )}
+                    </div>
+                    <p className={`text-[11px] ${isTitular ? 'text-amber-800' : 'text-gray-400'}`}>
+                      {isTitular
+                        ? 'Limpar todos os lançamentos e iniciar saldo em R$ 0,00'
+                        : 'Ação desativada: exclusiva para o titular da conta'}
+                    </p>
+                  </div>
+                </div>
+              </button>
+
+              {/* OPÇÃO 2: Excluir Conta */}
+              <button
+                type="button"
+                disabled={!isTitular}
+                onClick={() => {
+                  if (!isTitular) return;
+                  setConfirmingAction('delete');
+                }}
+                className={`w-full text-left p-4 rounded-2xl transition flex items-center justify-between gap-3 shadow-xs ${
+                  isTitular
+                    ? 'bg-red-50 hover:bg-red-100 text-[#FF3D00] border border-red-200 cursor-pointer group'
+                    : 'bg-gray-50 text-gray-400 border border-gray-200 cursor-not-allowed opacity-75'
+                }`}
+              >
+                <div className="flex items-center gap-3">
+                  <div className={`p-2 rounded-xl transition ${isTitular ? 'bg-red-200 text-[#FF3D00] group-hover:scale-105' : 'bg-gray-200 text-gray-400'}`}>
+                    <UserX className="w-5 h-5" />
+                  </div>
+                  <div>
+                    <div className="flex items-center gap-2">
+                      <h3 className={`text-xs sm:text-sm font-black ${isTitular ? 'text-[#FF3D00]' : 'text-gray-500'}`}>
+                        2. Excluir Conta
+                      </h3>
+                      {!isTitular && (
+                        <span className="text-[9px] bg-gray-200 text-gray-600 font-bold px-2 py-0.5 rounded-full uppercase flex items-center gap-1">
+                          <Lock className="w-2.5 h-2.5" /> Apenas Titular
+                        </span>
+                      )}
+                    </div>
+                    <p className={`text-[11px] ${isTitular ? 'text-red-700' : 'text-gray-400'}`}>
+                      {isTitular
+                        ? 'Excluir permanentemente seu cadastro e dados do sistema'
+                        : 'Ação desativada: exclusiva para o titular da conta'}
+                    </p>
+                  </div>
+                </div>
+              </button>
+
+              {/* OPÇÃO 3: Fale Conosco / Suporte Oficial */}
+              <a
+                href="mailto:suporte.dinheirosemfiltro@gmail.com?subject=Atendimento%20ao%20Cliente%20-%20Dinheiro%20Sem%20Filtro"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="w-full text-left p-4 bg-blue-50 hover:bg-blue-100 text-blue-900 border border-blue-200 rounded-2xl transition flex items-center justify-between gap-3 cursor-pointer group shadow-xs block"
+              >
+                <div className="flex items-center gap-3">
+                  <div className="p-2 bg-blue-200 text-blue-800 rounded-xl group-hover:scale-105 transition">
+                    <Headphones className="w-5 h-5" />
+                  </div>
+                  <div>
+                    <h3 className="text-xs sm:text-sm font-black text-blue-900 flex items-center gap-1.5">
+                      <span>3. Fale Conosco</span>
+                      <span className="text-[10px] bg-blue-600 text-white font-bold px-2 py-0.5 rounded-full uppercase">Atendimento</span>
+                    </h3>
+                    <p className="text-[11px] text-blue-700">Dúvidas, suporte ou solicitações (suporte.dinheirosemfiltro@gmail.com)</p>
+                  </div>
+                </div>
+              </a>
+            </div>
+          ) : confirmingAction === 'reset' ? (
+            /* Confirm Modal for Zerar Orçamento */
+            <div className="space-y-4 animate-in fade-in bg-amber-50 p-4 rounded-2xl border-2 border-amber-400">
+              <div className="flex items-center gap-2 text-amber-900 font-black text-xs sm:text-sm uppercase tracking-wider">
+                <AlertTriangle className="w-5 h-5 text-amber-600 shrink-0" />
+                <span>Confirmação de Segurança</span>
+              </div>
+              <p className="text-xs text-amber-950 leading-relaxed">
+                <strong>⚠️ ATENÇÃO:</strong> Esta ação é <strong>irreversível e não poderá ser desfeita</strong>. Todos os seus lançamentos, receitas e despesas serão permanentemente zerados.
+              </p>
+              <div className="flex flex-col sm:flex-row items-center gap-2 pt-2">
+                <button
+                  type="button"
+                  onClick={() => setConfirmingAction(null)}
+                  className="w-full sm:flex-1 py-2.5 bg-white border border-gray-300 text-gray-700 text-xs font-bold rounded-xl hover:bg-gray-100 transition cursor-pointer"
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="button"
+                  onClick={handleExecuteZerarOrcamento}
+                  className="w-full sm:flex-1 py-2.5 bg-amber-600 hover:bg-amber-700 text-white text-xs font-black rounded-xl shadow-md transition flex items-center justify-center gap-1.5 cursor-pointer"
+                >
+                  <Trash2 className="w-4 h-4" />
+                  Sim, Zerar Orçamento
+                </button>
+              </div>
+            </div>
+          ) : (
+            /* Confirm Modal for Excluir Conta */
+            <div className="space-y-4 animate-in fade-in bg-red-50 p-4 rounded-2xl border-2 border-red-400">
+              <div className="flex items-center gap-2 text-[#FF3D00] font-black text-xs sm:text-sm uppercase tracking-wider">
+                <AlertTriangle className="w-5 h-5 text-[#FF3D00] shrink-0 animate-bounce" />
+                <span>Confirmação Dupla de Segurança</span>
+              </div>
+              <p className="text-xs text-red-950 leading-relaxed">
+                <strong>⚠️ ATENÇÃO EXTREMA:</strong> A exclusão da conta é <strong>permanente e não poderá ser desfeita</strong>. Seu cadastro ({user.email}), dados e configurações serão excluídos do sistema.
+              </p>
+              <div className="space-y-1.5">
+                <label className="text-[11px] font-bold text-red-900 block">
+                  Digite <span className="bg-red-200 px-1 py-0.5 rounded font-mono font-black">EXCLUIR</span> para confirmar:
+                </label>
+                <input
+                  type="text"
+                  value={deleteConfirmationText}
+                  onChange={(e) => setDeleteConfirmationText(e.target.value)}
+                  placeholder="EXCLUIR"
+                  className="w-full px-3 py-2 bg-white border border-red-300 rounded-xl text-xs font-mono font-bold text-gray-900 focus:outline-none focus:ring-2 focus:ring-red-500"
+                />
+              </div>
+              <div className="flex flex-col sm:flex-row items-center gap-2 pt-2">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setDeleteConfirmationText('');
+                    setConfirmingAction(null);
+                  }}
+                  className="w-full sm:flex-1 py-2.5 bg-white border border-gray-300 text-gray-700 text-xs font-bold rounded-xl hover:bg-gray-100 transition cursor-pointer"
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="button"
+                  disabled={deleteConfirmationText.trim().toUpperCase() !== 'EXCLUIR'}
+                  onClick={handleConfirmDelete}
+                  className={`w-full sm:flex-1 py-2.5 text-xs font-black rounded-xl shadow-md transition flex items-center justify-center gap-1.5 cursor-pointer ${
+                    deleteConfirmationText.trim().toUpperCase() === 'EXCLUIR'
+                      ? 'bg-[#FF3D00] hover:bg-red-700 text-white'
+                      : 'bg-gray-300 text-gray-500 cursor-not-allowed'
+                  }`}
+                >
+                  <UserX className="w-4 h-4" />
+                  Sim, Excluir Minha Conta
+                </button>
+              </div>
+            </div>
+          )}
+        </div>
+
+        {/* Footer Close */}
+        <div className="pt-3 border-t border-gray-200 flex justify-end">
+          <button
+            type="button"
+            onClick={() => {
+              setConfirmingAction(null);
+              onClose();
+            }}
+            className="py-2 px-4 bg-gray-100 text-gray-700 hover:bg-gray-200 text-xs font-bold rounded-xl transition cursor-pointer"
+          >
+            Fechar Menu
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+};
