@@ -174,6 +174,117 @@ function syncDarlaUsers(users: ServerUser[]): ServerUser[] {
   return users;
 }
 
+const APPWRITE_SERVER_CONFIG = {
+  endpoint: process.env.APPWRITE_ENDPOINT || 'https://sfo.cloud.appwrite.io/v1',
+  projectId: process.env.APPWRITE_PROJECT_ID || '6a83a2d30034f2dd2811',
+  databaseId: process.env.APPWRITE_DATABASE_ID || '6a83aa8d0038331e040f',
+  apiKey: process.env.APPWRITE_API_KEY || 'standard_99d92ec8cd40a81d961408d5ec6f693f39d29756d25472acef5b313a9c9c859ef51dd2975aeb8e051e42441c63b06960eda27ee447b12bc54cb161c9a1627000be0d1348555ea4c28ed474e5bb4a2c3d0ffe43be9505b5c93ee4150118b54abb10d6d3ab05967b763b468648504702e52c3ae016f271b67903d411428fff22bf',
+  collectionId: 'user_financials',
+};
+
+async function checkAppwriteUserServer(emailOrId: string): Promise<{ exists: boolean; user: ServerUser | null; source?: string }> {
+  const cleanEmail = (emailOrId || '').trim().toLowerCase();
+  if (!cleanEmail || !APPWRITE_SERVER_CONFIG.projectId) {
+    return { exists: false, user: null };
+  }
+
+  const headers = {
+    'X-Appwrite-Project': APPWRITE_SERVER_CONFIG.projectId,
+    'X-Appwrite-Key': APPWRITE_SERVER_CONFIG.apiKey,
+  };
+
+  // 1. Check Appwrite Database (user_financials collection)
+  try {
+    const docId1 = `user_${cleanEmail.replace(/[^a-z0-9]/gi, '.')}`;
+    const docId2 = `user_${cleanEmail.replace(/[^a-z0-9]/gi, '_')}`;
+
+    for (const docId of [docId1, docId2]) {
+      try {
+        const res = await fetch(`${APPWRITE_SERVER_CONFIG.endpoint}/databases/${APPWRITE_SERVER_CONFIG.databaseId}/collections/${APPWRITE_SERVER_CONFIG.collectionId}/documents/${docId}`, { headers });
+        if (res.ok) {
+          const doc = (await res.json()) as any;
+          if (doc && (doc.$id || doc.userId)) {
+            const isDarla = isDarlaEmailOrId(cleanEmail);
+            let name = cleanEmail.split('@')[0];
+            if (doc.name) name = doc.name;
+            else if (isDarla) name = 'Darla Carvalho';
+
+            const user: ServerUser = {
+              id: doc.userId || cleanEmail,
+              name,
+              email: cleanEmail,
+              authProvider: 'google',
+              createdAt: doc.$createdAt || new Date().toISOString(),
+              isPro: isDarla,
+              plan: isDarla ? 'lifetime' : 'free',
+              subscriptionStatus: isDarla ? 'active' : 'trial',
+            };
+            return { exists: true, user, source: 'appwrite_database' };
+          }
+        }
+      } catch {}
+    }
+
+    // Also list documents by userId query
+    try {
+      const qRes = await fetch(`${APPWRITE_SERVER_CONFIG.endpoint}/databases/${APPWRITE_SERVER_CONFIG.databaseId}/collections/${APPWRITE_SERVER_CONFIG.collectionId}/documents?queries[]=equal%28%22userId%22%2C%20%22${encodeURIComponent(cleanEmail)}%22%29`, { headers });
+      if (qRes.ok) {
+        const qData = (await qRes.json()) as any;
+        if (qData && Array.isArray(qData.documents) && qData.documents.length > 0) {
+          const doc = qData.documents[0];
+          const isDarla = isDarlaEmailOrId(cleanEmail);
+          let name = cleanEmail.split('@')[0];
+          if (doc.name) name = doc.name;
+          else if (isDarla) name = 'Darla Carvalho';
+
+          const user: ServerUser = {
+            id: doc.userId || cleanEmail,
+            name,
+            email: cleanEmail,
+            authProvider: 'google',
+            createdAt: doc.$createdAt || new Date().toISOString(),
+            isPro: isDarla,
+            plan: isDarla ? 'lifetime' : 'free',
+            subscriptionStatus: isDarla ? 'active' : 'trial',
+          };
+          return { exists: true, user, source: 'appwrite_database' };
+        }
+      }
+    } catch {}
+  } catch (err) {
+    console.warn('[checkAppwriteUserServer Database Error]', err);
+  }
+
+  // 2. Check Appwrite Auth Users (by search query)
+  try {
+    const res = await fetch(`${APPWRITE_SERVER_CONFIG.endpoint}/users?search=${encodeURIComponent(cleanEmail)}`, { headers });
+    if (res.ok) {
+      const data = (await res.json()) as any;
+      if (data && Array.isArray(data.users)) {
+        const found = data.users.find((u: any) => (u.email || '').toLowerCase() === cleanEmail);
+        if (found) {
+          const isDarla = isDarlaEmailOrId(cleanEmail);
+          const user: ServerUser = {
+            id: found.$id || cleanEmail,
+            name: found.name || cleanEmail.split('@')[0],
+            email: cleanEmail,
+            authProvider: 'google',
+            createdAt: found.$createdAt || new Date().toISOString(),
+            isPro: isDarla,
+            plan: isDarla ? 'lifetime' : 'free',
+            subscriptionStatus: isDarla ? 'active' : 'trial',
+          };
+          return { exists: true, user, source: 'appwrite_auth' };
+        }
+      }
+    }
+  } catch (err) {
+    console.warn('[checkAppwriteUserServer Users Error]', err);
+  }
+
+  return { exists: false, user: null };
+}
+
 function deduplicateServerData() {
   try {
     // 1. DEDUPLICATE USERS
@@ -1294,7 +1405,7 @@ async function startServer() {
   // --- CENTRAL USER REGISTRY & MULTI-DEVICE AUTH SYNC ---
 
   // GET /api/users/lookup?email=...&userId=...
-  app.get('/api/users/lookup', (req, res) => {
+  app.get('/api/users/lookup', async (req, res) => {
     try {
       const rawEmail = typeof req.query.email === 'string' ? req.query.email : '';
       const rawUserId = typeof req.query.userId === 'string' ? req.query.userId : '';
@@ -1305,13 +1416,38 @@ async function startServer() {
         return res.status(400).json({ success: false, message: 'E-mail ou ID de usuário obrigatório.' });
       }
 
-      const allUsers = loadServerUsers();
+      let allUsers = loadServerUsers();
       let user = allUsers.find((u) => {
         if (cleanEmail && (u.email || '').trim().toLowerCase() === cleanEmail) return true;
         if (canonicalId && (u.id === canonicalId || getCanonicalUserIdServer(u.id) === canonicalId)) return true;
         if (rawUserId && u.id === rawUserId) return true;
         return false;
       });
+
+      // Se encontrou localmente mas não é conta Darla permanente, checar se a conta não foi excluída no Appwrite
+      if (user && cleanEmail && !isDarlaEmailOrId(cleanEmail)) {
+        try {
+          const appwriteCheck = await checkAppwriteUserServer(cleanEmail);
+          if (!appwriteCheck.exists) {
+            console.log(`[API Users Lookup] Usuário ${cleanEmail} não consta no Appwrite (excluído no console). Limpando registro local.`);
+            allUsers = allUsers.filter((u) => (u.email || '').trim().toLowerCase() !== cleanEmail);
+            saveServerUsers(allUsers);
+            user = undefined;
+          }
+        } catch (e) {}
+      }
+
+      // Se não encontrou no banco local, consultar diretamente o Appwrite (Auth e Banco de Dados)
+      if (!user && cleanEmail) {
+        try {
+          const appwriteResult = await checkAppwriteUserServer(cleanEmail);
+          if (appwriteResult.exists && appwriteResult.user) {
+            user = appwriteResult.user;
+            allUsers.push(user);
+            saveServerUsers(allUsers);
+          }
+        } catch (e) {}
+      }
 
       if (!user && cleanEmail) {
         const financials = loadServerFinancials();
@@ -1355,19 +1491,41 @@ async function startServer() {
   });
 
   // GET /api/users/validate?userId=...&email=...
-  app.get('/api/users/validate', (req, res) => {
+  app.get('/api/users/validate', async (req, res) => {
     try {
       const rawEmail = typeof req.query.email === 'string' ? req.query.email.trim().toLowerCase() : '';
       const rawUserId = typeof req.query.userId === 'string' ? req.query.userId.trim() : '';
       const canonicalId = rawUserId ? getCanonicalUserIdServer(rawUserId) : (rawEmail ? getCanonicalUserIdServer(rawEmail) : '');
 
-      const allUsers = loadServerUsers();
-      const user = allUsers.find((u) => {
+      let allUsers = loadServerUsers();
+      let user = allUsers.find((u) => {
         if (rawEmail && (u.email || '').trim().toLowerCase() === rawEmail) return true;
         if (canonicalId && (u.id === canonicalId || getCanonicalUserIdServer(u.id) === canonicalId)) return true;
         if (rawUserId && u.id === rawUserId) return true;
         return false;
       });
+
+      if (user && rawEmail && !isDarlaEmailOrId(rawEmail)) {
+        try {
+          const appwriteCheck = await checkAppwriteUserServer(rawEmail);
+          if (!appwriteCheck.exists) {
+            allUsers = allUsers.filter((u) => (u.email || '').trim().toLowerCase() !== rawEmail);
+            saveServerUsers(allUsers);
+            user = undefined;
+          }
+        } catch (e) {}
+      }
+
+      if (!user && rawEmail) {
+        try {
+          const appwriteResult = await checkAppwriteUserServer(rawEmail);
+          if (appwriteResult.exists && appwriteResult.user) {
+            user = appwriteResult.user;
+            allUsers.push(user);
+            saveServerUsers(allUsers);
+          }
+        } catch (e) {}
+      }
 
       if (user) {
         return res.json({ success: true, exists: true, user });
@@ -1894,7 +2052,33 @@ async function startServer() {
       });
       saveServerNotifs(updatedNotifs);
 
-      // 7. Broadcast real-time deletion to all connected devices
+      // 7. Delete from Appwrite Database and Appwrite Users (async background cleanup)
+      if (cleanEmail && APPWRITE_SERVER_CONFIG.projectId) {
+        const headers = {
+          'X-Appwrite-Project': APPWRITE_SERVER_CONFIG.projectId,
+          'X-Appwrite-Key': APPWRITE_SERVER_CONFIG.apiKey,
+        };
+        const docId1 = `user_${cleanEmail.replace(/[^a-z0-9]/gi, '.')}`;
+        const docId2 = `user_${cleanEmail.replace(/[^a-z0-9]/gi, '_')}`;
+        for (const docId of [docId1, docId2]) {
+          fetch(`${APPWRITE_SERVER_CONFIG.endpoint}/databases/${APPWRITE_SERVER_CONFIG.databaseId}/collections/${APPWRITE_SERVER_CONFIG.collectionId}/documents/${docId}`, {
+            method: 'DELETE',
+            headers,
+          }).catch(() => {});
+        }
+        fetch(`${APPWRITE_SERVER_CONFIG.endpoint}/users?search=${encodeURIComponent(cleanEmail)}`, { headers })
+          .then((r) => r.json())
+          .then((data: any) => {
+            if (data && Array.isArray(data.users)) {
+              data.users.filter((u: any) => (u.email || '').toLowerCase() === cleanEmail).forEach((u: any) => {
+                fetch(`${APPWRITE_SERVER_CONFIG.endpoint}/users/${u.$id}`, { method: 'DELETE', headers }).catch(() => {});
+              });
+            }
+          })
+          .catch(() => {});
+      }
+
+      // 8. Broadcast real-time deletion to all connected devices
       broadcastRealtime('USER_DELETED', { userId: canonicalId, email: cleanEmail, rawUserId: userId });
       broadcastRealtime('SHARED_BUDGET_UPDATED', { budgetId: canonicalId });
       broadcastRealtime('NOTIFICATIONS_UPDATED', { email: cleanEmail });

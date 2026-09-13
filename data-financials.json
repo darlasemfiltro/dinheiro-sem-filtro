@@ -1,7 +1,72 @@
 {
   "darla.semfiltro@gmail.com": {
     "accounts": [],
-    "categories": [],
+    "categories": [
+      {
+        "id": "cat_moradia_darla.semfiltro@gmail.com",
+        "userId": "darla.semfiltro@gmail.com",
+        "name": "Moradia & Contas Fixas",
+        "type": "expense",
+        "ruleGroup": "50_essentials",
+        "color": "#E11D48",
+        "icon": "Home",
+        "subcategories": [
+          {
+            "id": "sub_aluguel_darla.semfiltro@gmail.com",
+            "categoryId": "cat_moradia_darla.semfiltro@gmail.com",
+            "name": "Aluguel / Contas"
+          }
+        ]
+      },
+      {
+        "id": "cat_alimentacao_darla.semfiltro@gmail.com",
+        "userId": "darla.semfiltro@gmail.com",
+        "name": "Alimentação & Feira",
+        "type": "expense",
+        "ruleGroup": "50_essentials",
+        "color": "#F43F5E",
+        "icon": "Utensils",
+        "subcategories": [
+          {
+            "id": "sub_mercado_darla.semfiltro@gmail.com",
+            "categoryId": "cat_alimentacao_darla.semfiltro@gmail.com",
+            "name": "Supermercado"
+          }
+        ]
+      },
+      {
+        "id": "cat_lazer_darla.semfiltro@gmail.com",
+        "userId": "darla.semfiltro@gmail.com",
+        "name": "Lazer & Estilo de Vida",
+        "type": "expense",
+        "ruleGroup": "30_lifestyle",
+        "color": "#8B5CF6",
+        "icon": "Sparkles",
+        "subcategories": [
+          {
+            "id": "sub_restaurante_darla.semfiltro@gmail.com",
+            "categoryId": "cat_lazer_darla.semfiltro@gmail.com",
+            "name": "Restaurante & Passeios"
+          }
+        ]
+      },
+      {
+        "id": "cat_renda_darla.semfiltro@gmail.com",
+        "userId": "darla.semfiltro@gmail.com",
+        "name": "Receita Principal",
+        "type": "income",
+        "ruleGroup": "income",
+        "color": "#00C853",
+        "icon": "Wallet",
+        "subcategories": [
+          {
+            "id": "sub_salario_darla.semfiltro@gmail.com",
+            "categoryId": "cat_renda_darla.semfiltro@gmail.com",
+            "name": "Salário / Entradas"
+          }
+        ]
+      }
+    ],
     "familyMembers": [],
     "transactions": [],
     "goals": [],

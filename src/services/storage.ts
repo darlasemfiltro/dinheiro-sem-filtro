@@ -1939,7 +1939,54 @@ export class StorageService {
       console.warn('[isUserRegisteredAsync lookup error]', e);
     }
 
-    // 2. Fallback to local storage
+    // 2. Direct Appwrite Database Verification from Client
+    try {
+      const cfg = getAppwriteConfig();
+      if (cfg.projectId && cfg.projectId !== 'default-placeholder') {
+        const canonicalDocId = getCanonicalAppwriteDocId(cleanEmail);
+        let doc: any = null;
+
+        try {
+          doc = await appwriteDatabases.getDocument(cfg.databaseId, 'user_financials', canonicalDocId);
+        } catch (e: any) {
+          const altId = `user_${cleanEmail.replace(/[^a-z0-9]/gi, '_')}`;
+          try {
+            doc = await appwriteDatabases.getDocument(cfg.databaseId, 'user_financials', altId);
+          } catch {}
+        }
+
+        if (!doc) {
+          try {
+            const list = await appwriteDatabases.listDocuments(cfg.databaseId, 'user_financials', [
+              Query.equal('userId', cleanEmail),
+              Query.limit(1)
+            ]);
+            if (list && list.documents && list.documents.length > 0) {
+              doc = list.documents[0];
+            }
+          } catch {}
+        }
+
+        if (doc && (doc.$id || doc.userId)) {
+          const isDarla = isDarlaAccount(cleanEmail);
+          const appwriteUser: User = {
+            id: doc.userId || cleanEmail,
+            name: doc.name || cleanEmail.split('@')[0],
+            email: cleanEmail,
+            authProvider: 'google',
+            createdAt: doc.$createdAt || new Date().toISOString(),
+            isPro: isDarla,
+            plan: isDarla ? 'lifetime' : 'free',
+            subscriptionStatus: isDarla ? 'active' : 'trial',
+          };
+          return { exists: true, user: appwriteUser };
+        }
+      }
+    } catch (e) {
+      console.warn('[isUserRegisteredAsync client Appwrite check warning]', e);
+    }
+
+    // 3. Fallback to local storage
     const localUser = this.findUserByEmail(cleanEmail);
     if (localUser) {
       return { exists: true, user: localUser };

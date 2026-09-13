@@ -23,5 +23,16 @@
     "plan": "lifetime",
     "subscriptionStatus": "active",
     "sharedBudgetCode": "DARLLA-5921"
+  },
+  {
+    "id": "danilujb@gmail.com",
+    "name": "danilujb",
+    "email": "danilujb@gmail.com",
+    "authProvider": "google",
+    "avatarUrl": "https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150",
+    "createdAt": "2026-09-07T15:21:45.782+00:00",
+    "isPro": false,
+    "plan": "free",
+    "subscriptionStatus": "trial"
   }
 ]
