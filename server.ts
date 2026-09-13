@@ -1317,7 +1317,18 @@ async function startServer() {
         const financials = loadServerFinancials();
         const altId = getCanonicalUserIdServer(cleanEmail);
         const isDarla = isDarlaEmailOrId(cleanEmail);
-        if (financials[cleanEmail] || financials[altId] || financials[rawUserId] || isDarla) {
+
+        let foundInFinancials = false;
+        for (const [key, val] of Object.entries(financials)) {
+          const lowerKey = key.toLowerCase();
+          const valUserId = (val && (val as any).userId) ? String((val as any).userId).toLowerCase() : '';
+          if (lowerKey.includes(cleanEmail) || valUserId === cleanEmail || lowerKey.includes(altId)) {
+            foundInFinancials = true;
+            break;
+          }
+        }
+
+        if (foundInFinancials || isDarla) {
           user = {
             id: rawUserId || altId || `user_${cleanEmail.replace(/[^a-z0-9]/gi, '_')}`,
             name: cleanEmail.split('@')[0],
