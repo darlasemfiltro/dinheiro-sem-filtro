@@ -1901,19 +1901,6 @@ export class StorageService {
     const cleanEmail = (email || '').trim().toLowerCase();
     if (!cleanEmail) return { exists: false, user: null };
 
-    // 1. Check local storage first (immediate and robust for users who just created an account)
-    const localUser = this.findUserByEmail(cleanEmail);
-    if (localUser) {
-      const isDarla = isDarlaAccount(cleanEmail);
-      const userToReturn = isDarla ? {
-        ...localUser,
-        isPro: true,
-        plan: 'lifetime' as const,
-        subscriptionStatus: 'active' as const,
-      } : localUser;
-      return { exists: true, user: userToReturn };
-    }
-
     if (isDarlaAccount(cleanEmail)) {
       const darlaUser: User = {
         id: cleanEmail,
@@ -1927,7 +1914,7 @@ export class StorageService {
       return { exists: true, user: darlaUser };
     }
 
-    // 2. Query Central Server for User Record (Authoritative source across devices)
+    // 1. Query Central Server FIRST for User Record (Authoritative source across devices & sessions)
     try {
       const res = await fetch(`/api/users/lookup?email=${encodeURIComponent(cleanEmail)}`);
       if (res.ok) {
@@ -1938,18 +1925,10 @@ export class StorageService {
           try {
             const users: User[] = JSON.parse(usersStr);
             const idx = users.findIndex((u) => (u.email || '').toLowerCase() === cleanEmail);
-            const isDarla = isDarlaAccount(cleanEmail);
-            const cachedUser = isDarla ? {
-              ...data.user,
-              isPro: true,
-              plan: 'lifetime',
-              subscriptionStatus: 'active'
-            } : data.user;
-
             if (idx >= 0) {
-              users[idx] = { ...users[idx], ...cachedUser };
+              users[idx] = { ...users[idx], ...data.user };
             } else {
-              users.push(cachedUser);
+              users.push(data.user);
             }
             localStorage.setItem(STORAGE_KEYS.USERS, JSON.stringify(users));
           } catch (e) {}
@@ -1958,6 +1937,12 @@ export class StorageService {
       }
     } catch (e) {
       console.warn('[isUserRegisteredAsync lookup error]', e);
+    }
+
+    // 2. Fallback to local storage
+    const localUser = this.findUserByEmail(cleanEmail);
+    if (localUser) {
+      return { exists: true, user: localUser };
     }
 
     return { exists: false, user: null };
