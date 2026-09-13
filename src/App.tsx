@@ -941,15 +941,20 @@ export default function App() {
               // Multi-device simultaneous access enabled
               setCurrentUser((prev) => {
                 if (!prev) return serverUser;
+                const emailPrefix = (prev.email || '').split('@')[0];
+                const prevNameIsCustom = prev.name && prev.name.trim() !== '' && prev.name !== emailPrefix && !prev.name.includes('@');
+                const serverNameIsPrefix = !serverUser.name || serverUser.name === emailPrefix;
+                const resolvedName = (prevNameIsCustom && serverNameIsPrefix) ? prev.name : (serverUser.name || prev.name);
+
                 if (
                   prev.createdAt !== serverUser.createdAt ||
                   prev.isPro !== serverUser.isPro ||
                   prev.plan !== serverUser.plan ||
                   prev.subscriptionStatus !== serverUser.subscriptionStatus ||
-                  prev.name !== serverUser.name ||
+                  prev.name !== resolvedName ||
                   prev.avatarUrl !== serverUser.avatarUrl
                 ) {
-                  const updated = { ...prev, ...serverUser };
+                  const updated = { ...prev, ...serverUser, name: resolvedName };
                   localStorage.setItem('darla_current_user', JSON.stringify(updated));
                   return updated;
                 }
@@ -2325,15 +2330,18 @@ export default function App() {
 
   const handleSaveUserName = (newName: string, avatarUrl?: string) => {
     if (!currentUser) return;
-    const updated = StorageService.updateUserProfile(currentUser.id, newName, avatarUrl);
+    const identifier = currentUser.email || currentUser.id;
+    const updated = StorageService.updateUserProfile(identifier, newName, avatarUrl);
     if (updated) {
       setCurrentUser(updated);
     } else {
-      setCurrentUser({ 
+      const merged = { 
         ...currentUser, 
         name: newName, 
-        avatarUrl
-      });
+        avatarUrl: avatarUrl !== undefined ? avatarUrl : currentUser.avatarUrl
+      };
+      StorageService.setCurrentUser(merged);
+      setCurrentUser(merged);
     }
   };
 

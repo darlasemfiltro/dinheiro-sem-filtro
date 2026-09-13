@@ -846,7 +846,7 @@ export class StorageService {
           const parsed = JSON.parse(rawFam);
           if (Array.isArray(parsed)) {
             _inMemoryStore.familyMembers = parsed.map((f: any) => {
-              if (f && (f.name === 'Darla (Titular)' || (typeof f.name === 'string' && f.name.toLowerCase().includes('darla') && f.relationship === 'Titular'))) {
+              if (f && f.name === 'Darla (Titular)') {
                 return { ...f, name: 'Titular' };
               }
               return f;
@@ -1392,7 +1392,7 @@ export class StorageService {
           const existing = fmMap.get(f.id);
           if (existing && existing._pendingSync) return;
           let name = f.name;
-          if (name === 'Darla (Titular)' || (typeof name === 'string' && name.toLowerCase().includes('darla') && f.relationship === 'Titular')) {
+          if (name === 'Darla (Titular)') {
             name = 'Titular';
           }
           if (!existing || new Date(f.updatedAt || 0).getTime() >= new Date(existing.updatedAt || 0).getTime()) {
@@ -1442,7 +1442,21 @@ export class StorageService {
         mergeTransactions(appwriteConnData.transactions);
         if (appwriteConnData.user) {
           const existingBudgetId = _inMemoryStore.currentUser?.budgetId || JSON.parse(localStorage.getItem(STORAGE_KEYS.CURRENT_USER) || '{}')?.budgetId;
-          _inMemoryStore.currentUser = { ..._inMemoryStore.currentUser, ...appwriteConnData.user, id: canonicalId, budgetId: existingBudgetId || appwriteConnData.user.budgetId };
+          const currentName = _inMemoryStore.currentUser?.name || JSON.parse(localStorage.getItem(STORAGE_KEYS.CURRENT_USER) || '{}')?.name;
+          const incomingName = appwriteConnData.user.name;
+          const cleanEmail = String(canonicalId || '').toLowerCase();
+          const emailPrefix = cleanEmail.split('@')[0];
+          const resolvedName = (currentName && currentName !== emailPrefix && (!incomingName || incomingName === emailPrefix))
+            ? currentName
+            : (incomingName || currentName);
+
+          _inMemoryStore.currentUser = {
+            ..._inMemoryStore.currentUser,
+            ...appwriteConnData.user,
+            id: canonicalId,
+            budgetId: existingBudgetId || appwriteConnData.user.budgetId,
+            name: resolvedName || appwriteConnData.user.name || currentName
+          };
         }
       }
 
@@ -1636,6 +1650,7 @@ export class StorageService {
 
   // --- AUTHENTICATION & SUBSCRIPTIONS ---
   static setCurrentUser(user: User | null) {
+    _inMemoryStore.currentUser = user;
     if (!user) {
       localStorage.removeItem(STORAGE_KEYS.CURRENT_USER);
     } else {
@@ -1649,6 +1664,7 @@ export class StorageService {
         } else {
           users.push(user);
         }
+        _inMemoryStore.users = users;
         localStorage.setItem(STORAGE_KEYS.USERS, JSON.stringify(users));
       } catch (e) {}
     }
@@ -1979,10 +1995,18 @@ export class StorageService {
         }
 
         if (doc && (doc.$id || doc.userId)) {
+          let docDataName: string | undefined;
+          try {
+            if (doc.data) {
+              const parsed = typeof doc.data === 'string' ? JSON.parse(doc.data) : doc.data;
+              docDataName = parsed?.user?.name || parsed?.name;
+            }
+          } catch (e) {}
+
           const isDarla = isDarlaAccount(cleanEmail);
           const appwriteUser: User = {
             id: doc.userId || cleanEmail,
-            name: doc.name || cleanEmail.split('@')[0],
+            name: docDataName || doc.name || cleanEmail.split('@')[0],
             email: cleanEmail,
             authProvider: 'google',
             createdAt: doc.$createdAt || new Date().toISOString(),
@@ -2602,37 +2626,69 @@ export class StorageService {
 
   static updateUserProfile(userId: string, newName: string, avatarUrl?: string): User | null {
     this.initialize();
+    const cleanUserId = (userId || '').trim();
+    const cleanEmail = cleanUserId.toLowerCase();
+
+    // 1. Update in-memory user list
     const usersStr = localStorage.getItem(STORAGE_KEYS.USERS) || '[]';
     try {
       const users: User[] = JSON.parse(usersStr);
-      const idx = users.findIndex((u) => u.id === userId || u.email === userId);
+      const idx = users.findIndex((u) => u.id === cleanUserId || (u.email && u.email.toLowerCase() === cleanEmail));
       if (idx !== -1) {
         users[idx].name = newName;
         if (avatarUrl !== undefined) {
           users[idx].avatarUrl = avatarUrl;
         }
+        _inMemoryStore.users = users;
         localStorage.setItem(STORAGE_KEYS.USERS, JSON.stringify(users));
       }
-    } catch (e) {
-      // ignore
-    }
+    } catch (e) {}
 
-    const currentUser = this.getCurrentUser();
+    // 2. Update current user
+    let currentUser = this.getCurrentUser();
     if (currentUser) {
       currentUser.name = newName;
       if (avatarUrl !== undefined) {
         currentUser.avatarUrl = avatarUrl;
       }
+      _inMemoryStore.currentUser = currentUser;
       localStorage.setItem(STORAGE_KEYS.CURRENT_USER, JSON.stringify(currentUser));
       pushUserToFirestore(currentUser);
+
+      // 3. Update Appwrite Client Auth name
+      try {
+        appwriteAccount.updateName(newName).catch(() => {});
+      } catch (e) {}
+
+      // 4. Update Appwrite Database user_financials
+      const canonicalId = getCanonicalUserId(currentUser.id || currentUser.email || 'default');
+      try {
+        syncUserDataWithAppwrite(canonicalId, {
+          accounts: _inMemoryStore.accounts.filter(a => getCanonicalUserId(a.userId) === canonicalId),
+          categories: _inMemoryStore.categories.filter(c => getCanonicalUserId(c.userId) === canonicalId),
+          familyMembers: _inMemoryStore.familyMembers.filter(f => getCanonicalUserId(f.userId) === canonicalId),
+          transactions: _inMemoryStore.transactions.filter(t => getCanonicalUserId(t.userId) === canonicalId),
+          goals: _inMemoryStore.goals.filter(g => getCanonicalUserId(g.userId) === canonicalId),
+          user: currentUser,
+        }).catch(() => {});
+      } catch (e) {}
+
+      // 5. Sync to server
       fetch('/api/users/sync', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           ...currentUser,
+          name: newName,
           active_budget_owner: currentUser.budgetId
         }),
       }).catch(() => {});
+
+      // 6. Broadcast local notification
+      try {
+        window.dispatchEvent(new CustomEvent('user_profile_updated', { detail: { user: currentUser } }));
+      } catch (e) {}
+
       return currentUser;
     }
     return null;
@@ -4519,7 +4575,7 @@ export class StorageService {
     const key = `darla_family_members_${canonicalId}`;
     const updated = familyMembers.map((f) => {
       let name = f.name;
-      if (name === 'Darla (Titular)' || (typeof name === 'string' && name.toLowerCase().includes('darla') && f.relationship === 'Titular')) {
+      if (name === 'Darla (Titular)') {
         name = 'Titular';
       }
       return { ...f, name, userId: canonicalId };
@@ -4819,7 +4875,7 @@ export class StorageService {
 
     const normalizeMember = (f: any): FamilyMember => {
       let name = f.name;
-      if (name === 'Darla (Titular)' || (typeof name === 'string' && name.toLowerCase().includes('darla') && f.relationship === 'Titular')) {
+      if (name === 'Darla (Titular)') {
         name = 'Titular';
       }
       return { ...f, name, userId: canonicalId };
@@ -4834,7 +4890,7 @@ export class StorageService {
             .filter((f: any) => f && f.id && !deletedIds.has(f.id))
             .map(normalizeMember);
           if (valid.length > 0) {
-            const needsUpdate = parsed.some((f: any) => f.name === 'Darla (Titular)' || (typeof f.name === 'string' && f.name.toLowerCase().includes('darla') && f.relationship === 'Titular'));
+            const needsUpdate = parsed.some((f: any) => f && f.name === 'Darla (Titular)');
             if (needsUpdate) {
               this.setFamilyMembers(valid, canonicalId);
             }

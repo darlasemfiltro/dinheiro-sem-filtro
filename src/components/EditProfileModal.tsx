@@ -24,6 +24,7 @@ export const EditProfileModal: React.FC<EditProfileModalProps> = ({
   onLogout,
 }) => {
   const [name, setName] = useState(user.name || '');
+  const [savedName, setSavedName] = useState(user.name || '');
   const [avatarUrl, setAvatarUrl] = useState(user.avatarUrl || '');
   const [error, setError] = useState('');
   const [successMsg, setSuccessMsg] = useState('');
@@ -41,16 +42,18 @@ export const EditProfileModal: React.FC<EditProfileModalProps> = ({
   useEffect(() => {
     if (isOpen && !prevIsOpenRef.current) {
       if (user) {
-        setName(user.name || '');
+        const currentName = user.name || '';
+        setName(currentName);
+        setSavedName(currentName);
         setAvatarUrl(user.avatarUrl || '');
       }
     }
     prevIsOpenRef.current = isOpen;
-  }, [isOpen, user?.id]);
+  }, [isOpen, user?.id, user?.name]);
 
   if (!isOpen) return null;
 
-  const initialLetter = (name || user.name || 'U').trim().charAt(0).toUpperCase();
+  const initialLetter = (savedName || name || user.name || 'U').trim().charAt(0).toUpperCase();
 
   const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -90,8 +93,10 @@ export const EditProfileModal: React.FC<EditProfileModalProps> = ({
 
     try {
       setError('');
-      onSaveName(name.trim(), avatarUrl);
-      const updatedUser = StorageService.updateUserProfile(user.email, name.trim(), avatarUrl);
+      const trimmedName = name.trim();
+      setSavedName(trimmedName);
+      onSaveName(trimmedName, avatarUrl);
+      const updatedUser = StorageService.updateUserProfile(user.email, trimmedName, avatarUrl);
       if (updatedUser && onUserUpdated) {
         onUserUpdated(updatedUser);
       }
@@ -153,7 +158,7 @@ export const EditProfileModal: React.FC<EditProfileModalProps> = ({
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
                 <div className="p-2.5 bg-white rounded-xl border border-gray-200">
                   <span className="text-[10px] text-gray-500 font-bold uppercase block">Nome Registrado</span>
-                  <span className="font-extrabold text-[#121212]">{user.name || 'Não informado'}</span>
+                  <span className="font-extrabold text-[#121212]">{savedName || user.name || 'Não informado'}</span>
                 </div>
 
                 <div className="p-2.5 bg-white rounded-xl border border-gray-200">

@@ -205,9 +205,17 @@ async function checkAppwriteUserServer(emailOrId: string): Promise<{ exists: boo
           const doc = (await res.json()) as any;
           if (doc && (doc.$id || doc.userId)) {
             const isDarla = isDarlaEmailOrId(cleanEmail);
-            let name = cleanEmail.split('@')[0];
-            if (doc.name) name = doc.name;
-            else if (isDarla) name = 'Darla Carvalho';
+            let name = '';
+            try {
+              if (doc.data) {
+                const parsed = typeof doc.data === 'string' ? JSON.parse(doc.data) : doc.data;
+                if (parsed?.user?.name && parsed.user.name.trim()) name = parsed.user.name.trim();
+                else if (parsed?.name && parsed.name.trim()) name = parsed.name.trim();
+              }
+            } catch (e) {}
+            if (!name && doc.name && doc.name.trim()) name = doc.name.trim();
+            if (!name && isDarla) name = 'Darla Carvalho';
+            if (!name) name = cleanEmail.split('@')[0];
 
             const user: ServerUser = {
               id: doc.userId || cleanEmail,
@@ -233,9 +241,17 @@ async function checkAppwriteUserServer(emailOrId: string): Promise<{ exists: boo
         if (qData && Array.isArray(qData.documents) && qData.documents.length > 0) {
           const doc = qData.documents[0];
           const isDarla = isDarlaEmailOrId(cleanEmail);
-          let name = cleanEmail.split('@')[0];
-          if (doc.name) name = doc.name;
-          else if (isDarla) name = 'Darla Carvalho';
+          let name = '';
+          try {
+            if (doc.data) {
+              const parsed = typeof doc.data === 'string' ? JSON.parse(doc.data) : doc.data;
+              if (parsed?.user?.name && parsed.user.name.trim()) name = parsed.user.name.trim();
+              else if (parsed?.name && parsed.name.trim()) name = parsed.name.trim();
+            }
+          } catch (e) {}
+          if (!name && doc.name && doc.name.trim()) name = doc.name.trim();
+          if (!name && isDarla) name = 'Darla Carvalho';
+          if (!name) name = cleanEmail.split('@')[0];
 
           const user: ServerUser = {
             id: doc.userId || cleanEmail,
@@ -283,6 +299,33 @@ async function checkAppwriteUserServer(emailOrId: string): Promise<{ exists: boo
   }
 
   return { exists: false, user: null };
+}
+
+async function syncUserProfileToAppwriteDatabase(cleanEmail: string, name?: string, avatarUrl?: string) {
+  if (!cleanEmail || !APPWRITE_SERVER_CONFIG.projectId || !name) return;
+  const headers = {
+    'X-Appwrite-Project': APPWRITE_SERVER_CONFIG.projectId,
+    'X-Appwrite-Key': APPWRITE_SERVER_CONFIG.apiKey,
+    'Content-Type': 'application/json'
+  };
+  const docId = `user_${cleanEmail.replace(/@/g, '.').replace(/[^a-zA-Z0-9._-]/g, '_')}`.slice(0, 36);
+  try {
+    const res = await fetch(`${APPWRITE_SERVER_CONFIG.endpoint}/databases/${APPWRITE_SERVER_CONFIG.databaseId}/collections/${APPWRITE_SERVER_CONFIG.collectionId}/documents/${docId}`, { headers });
+    if (res.ok) {
+      const doc = (await res.json()) as any;
+      if (doc && doc.data) {
+        const parsed = typeof doc.data === 'string' ? JSON.parse(doc.data) : doc.data;
+        if (!parsed.user) parsed.user = {};
+        parsed.user.name = name;
+        if (avatarUrl !== undefined) parsed.user.avatarUrl = avatarUrl;
+        await fetch(`${APPWRITE_SERVER_CONFIG.endpoint}/databases/${APPWRITE_SERVER_CONFIG.databaseId}/collections/${APPWRITE_SERVER_CONFIG.collectionId}/documents/${docId}`, {
+          method: 'PATCH',
+          headers,
+          body: JSON.stringify({ data: JSON.stringify(parsed) })
+        });
+      }
+    }
+  } catch (e) {}
 }
 
 function deduplicateServerData() {
@@ -1820,6 +1863,10 @@ async function startServer() {
         if (userData.authProvider) updatedUser.authProvider = userData.authProvider;
         allUsers[idx] = updatedUser;
         saveServerUsers(allUsers);
+
+        if (updatedUser.name) {
+          syncUserProfileToAppwriteDatabase(cleanEmail, updatedUser.name, updatedUser.avatarUrl).catch(() => {});
+        }
 
         broadcastRealtime('USER_UPDATED', { email: cleanEmail, userId: updatedUser.id, user: updatedUser });
 
