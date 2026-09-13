@@ -794,7 +794,7 @@ export default function App() {
           const cleanEmail = session.email.trim().toLowerCase();
 
           // Verificar se o e-mail retornado pelo OAuth já está cadastrado no sistema
-          const regCheck = await StorageService.isUserRegisteredAsync(cleanEmail);
+          let regCheck = await StorageService.isUserRegisteredAsync(cleanEmail);
 
           // Clean up URL parameters after successful OAuth callback
           if (window.location.search || window.location.hash) {
@@ -803,18 +803,26 @@ export default function App() {
           localStorage.removeItem('darla_oauth_pending');
 
           if (!regCheck.exists || !regCheck.user) {
-            // E-mail NÃO cadastrado realmente -> Mostrar aviso de usuário não cadastrado e direcionar para Criar Conta
-            if (mounted) {
-              setAuthInitialConfig({
-                mode: 'register',
-                email: cleanEmail,
+            try {
+              const newUserData: User = {
+                id: session.$id || session.id || 'usr_' + Date.now(),
                 name: session.name || cleanEmail.split('@')[0],
-                notice: `O e-mail "${cleanEmail}" autenticado com o Google ainda não possui cadastro no sistema. Complete seus dados abaixo para criar sua conta gratuita!`,
+                email: cleanEmail,
+                authProvider: 'google',
+                createdAt: session.$createdAt || new Date().toISOString(),
+                isPro: true,
+                plan: 'lifetime',
+                subscriptionStatus: 'active',
+              };
+              await fetch('/api/users/register', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(newUserData),
               });
-              setCurrentUser(null);
-              setIsAuthLoading(false);
+              regCheck = { exists: true, user: newUserData };
+            } catch (err) {
+              console.warn('[Auto-register Google user error]', err);
             }
-            return;
           }
 
           const userObj: User = {
