@@ -1219,7 +1219,7 @@ export const CategoriesView: React.FC<CategoriesViewProps> = ({
                   type="text"
                   value={memberName}
                   onChange={(e) => setMemberName(e.target.value)}
-                  placeholder="Ex: Darla, Carlos, Sophia..."
+                  placeholder="Ex: Titular, Carlos, Sophia..."
                   className="w-full px-3 py-2 bg-gray-50 border border-gray-200 rounded-xl text-xs text-[#121212] focus:outline-none focus:ring-2 focus:ring-[#D4AF37]"
                   required
                 />

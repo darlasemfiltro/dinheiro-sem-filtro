@@ -2206,7 +2206,11 @@ async function startServer() {
         data: {
           accounts: filterDeleted(safeEntry.accounts).map((a: any) => ({ ...a, userId: rawUserId })),
           categories: filterDeleted(safeEntry.categories).map((c: any) => ({ ...c, userId: rawUserId })),
-          familyMembers: filterDeleted(safeEntry.familyMembers).map((f: any) => ({ ...f, userId: rawUserId })),
+          familyMembers: filterDeleted(safeEntry.familyMembers).map((f: any) => ({
+            ...f,
+            name: f.name === 'Darla (Titular)' ? 'Titular' : f.name,
+            userId: rawUserId,
+          })),
           transactions: filterDeleted(safeEntry.transactions).map((t: any) => ({ ...t, userId: rawUserId })),
           financialGoals: fGoals.map((g: any) => ({ ...g, userId: rawUserId })),
           goals: fGoals.map((g: any) => ({ ...g, userId: rawUserId })),
@@ -2817,7 +2821,7 @@ async function startServer() {
           ...memberData,
           id: String(memberData.id),
           userId: canonicalId,
-          name: String(memberData.name || '').trim(),
+          name: String(memberData.name || '').trim() === 'Darla (Titular)' ? 'Titular' : String(memberData.name || '').trim(),
           relationship: memberData.relationship || 'Titular',
           color: memberData.color || '#E11D48',
           updatedAt: new Date().toISOString(),

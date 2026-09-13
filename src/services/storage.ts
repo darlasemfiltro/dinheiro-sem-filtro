@@ -776,7 +776,7 @@ const SEED_TRANSACTIONS: Transaction[] = [
 ];
 
 const SEED_FAMILY_MEMBERS: FamilyMember[] = [
-  { id: 'fam_darla', userId: DEMO_USER.id, name: 'Darla (Titular)', relationship: 'Titular', color: '#E11D48' },
+  { id: 'fam_darla', userId: DEMO_USER.id, name: 'Titular', relationship: 'Titular', color: '#E11D48' },
   { id: 'fam_conjuge', userId: DEMO_USER.id, name: 'Cônjuge / Marido', relationship: 'Cônjuge', color: '#0284C7' },
   { id: 'fam_filhos', userId: DEMO_USER.id, name: 'Filho(a) / Crianças', relationship: 'Dependente', color: '#10B981' },
   { id: 'fam_geral', userId: DEMO_USER.id, name: 'Geral / Casa & Família', relationship: 'Compartilhado', color: '#8B5CF6' },
@@ -844,7 +844,14 @@ export class StorageService {
       if (rawFam) {
         try {
           const parsed = JSON.parse(rawFam);
-          if (Array.isArray(parsed)) _inMemoryStore.familyMembers = parsed;
+          if (Array.isArray(parsed)) {
+            _inMemoryStore.familyMembers = parsed.map((f: any) => {
+              if (f && (f.name === 'Darla (Titular)' || (typeof f.name === 'string' && f.name.toLowerCase().includes('darla') && f.relationship === 'Titular'))) {
+                return { ...f, name: 'Titular' };
+              }
+              return f;
+            });
+          }
         } catch (e) {}
       }
 
@@ -1384,8 +1391,12 @@ export class StorageService {
           if (!f || !f.id || deletedIds.has(f.id)) return;
           const existing = fmMap.get(f.id);
           if (existing && existing._pendingSync) return;
+          let name = f.name;
+          if (name === 'Darla (Titular)' || (typeof name === 'string' && name.toLowerCase().includes('darla') && f.relationship === 'Titular')) {
+            name = 'Titular';
+          }
           if (!existing || new Date(f.updatedAt || 0).getTime() >= new Date(existing.updatedAt || 0).getTime()) {
-            fmMap.set(f.id, { ...f, userId: canonicalId });
+            fmMap.set(f.id, { ...f, name, userId: canonicalId });
           }
         });
       };
@@ -4506,7 +4517,13 @@ export class StorageService {
     this.initialize();
     const canonicalId = getCanonicalUserId(budgetId || familyMembers[0]?.userId || resolveBudgetId());
     const key = `darla_family_members_${canonicalId}`;
-    const updated = familyMembers.map((f) => ({ ...f, userId: canonicalId }));
+    const updated = familyMembers.map((f) => {
+      let name = f.name;
+      if (name === 'Darla (Titular)' || (typeof name === 'string' && name.toLowerCase().includes('darla') && f.relationship === 'Titular')) {
+        name = 'Titular';
+      }
+      return { ...f, name, userId: canonicalId };
+    });
     _inMemoryStore.familyMembers = _inMemoryStore.familyMembers.filter((fm) => getCanonicalUserId(fm.userId) !== canonicalId).concat(updated);
     try {
       localStorage.setItem(key, JSON.stringify(updated));
@@ -4799,18 +4816,37 @@ export class StorageService {
     this.purgeDeletedItems(canonicalId);
     const deletedIds = this.getDeletedIds(canonicalId);
     const key = `darla_family_members_${canonicalId}`;
+
+    const normalizeMember = (f: any): FamilyMember => {
+      let name = f.name;
+      if (name === 'Darla (Titular)' || (typeof name === 'string' && name.toLowerCase().includes('darla') && f.relationship === 'Titular')) {
+        name = 'Titular';
+      }
+      return { ...f, name, userId: canonicalId };
+    };
+
     try {
       const raw = localStorage.getItem(key);
       if (raw) {
         const parsed = JSON.parse(raw);
         if (Array.isArray(parsed) && parsed.length > 0) {
-          const valid = parsed.filter((f: any) => f && f.id && !deletedIds.has(f.id)).map((f: any) => ({ ...f, userId: canonicalId }));
-          if (valid.length > 0) return valid;
+          const valid = parsed
+            .filter((f: any) => f && f.id && !deletedIds.has(f.id))
+            .map(normalizeMember);
+          if (valid.length > 0) {
+            const needsUpdate = parsed.some((f: any) => f.name === 'Darla (Titular)' || (typeof f.name === 'string' && f.name.toLowerCase().includes('darla') && f.relationship === 'Titular'));
+            if (needsUpdate) {
+              this.setFamilyMembers(valid, canonicalId);
+            }
+            return valid;
+          }
         }
       }
     } catch (e) {}
 
-    let fam = _inMemoryStore.familyMembers.filter((fm) => getCanonicalUserId(fm.userId) === canonicalId && !deletedIds.has(fm.id));
+    let fam = _inMemoryStore.familyMembers
+      .filter((fm) => getCanonicalUserId(fm.userId) === canonicalId && !deletedIds.has(fm.id))
+      .map(normalizeMember);
     if (fam.length === 0) {
       fam = SEED_FAMILY_MEMBERS.map((f) => ({ ...f, id: `${f.id}_${canonicalId}`, userId: canonicalId })).filter(f => !deletedIds.has(f.id));
     }
