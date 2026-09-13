@@ -793,8 +793,8 @@ export default function App() {
         if (session && session.email) {
           const cleanEmail = session.email.trim().toLowerCase();
 
-          // Verificar se o e-mail retornado pelo OAuth já está cadastrado no sistema
-          const regCheck = await StorageService.isUserRegisteredAsync(cleanEmail);
+          // Verificar se o e-mail retornado pelo OAuth já está cadastrado no sistema ou auto-registrar usuário do Google
+          let regCheck = await StorageService.isUserRegisteredAsync(cleanEmail);
 
           // Clean up URL parameters after successful OAuth callback
           if (window.location.search || window.location.hash) {
@@ -803,8 +803,23 @@ export default function App() {
           localStorage.removeItem('darla_oauth_pending');
 
           if (!regCheck.exists || !regCheck.user) {
-            // E-mail NÃO cadastrado! Direcionar imediatamente para a aba de Criar Conta
-            console.log(`[OAuth Check] E-mail ${cleanEmail} não cadastrado. Redirecionando para Criar Conta.`);
+            // Auto-sincronizar usuário autenticado com Google
+            try {
+              const syncedUser = await StorageService.ensureUserAndDataSyncedAsync(
+                cleanEmail,
+                undefined,
+                session.name || cleanEmail.split('@')[0],
+                undefined,
+                'google'
+              );
+              regCheck = { exists: true, user: syncedUser };
+            } catch (e) {
+              console.warn('[Google OAuth AutoSync Error]', e);
+            }
+          }
+
+          if (!regCheck.exists || !regCheck.user) {
+            // E-mail NÃO cadastrado realmente
             if (mounted) {
               setAuthInitialConfig({
                 mode: 'register',

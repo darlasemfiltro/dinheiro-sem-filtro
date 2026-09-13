@@ -1917,17 +1917,17 @@ export class StorageService {
     if (!cleanEmail) return { exists: false, user: null };
 
     // Known pre-registered accounts override
-    if (cleanEmail === 'carvalho.darlla@gmail.com' || cleanEmail === 'darla.semfiltro@gmail.com' || cleanEmail === 'danilujb@gmail.com') {
+    if (cleanEmail === 'carvalho.darlla@gmail.com' || cleanEmail === 'darla.semfiltro@gmail.com' || cleanEmail === 'danilujb@gmail.com' || cleanEmail === 'suporte.dinheirosemfiltro@gmail.com') {
       const localUser = this.findUserByEmail(cleanEmail) || {
         id: `user_${cleanEmail.replace(/[^a-z0-9]/gi, '_')}`,
-        name: cleanEmail === 'carvalho.darlla@gmail.com' ? 'Darla Carvalho' : (cleanEmail === 'darla.semfiltro@gmail.com' ? 'Darla Carvalho' : cleanEmail.split('@')[0]),
+        name: cleanEmail.includes('darlla') || cleanEmail.includes('darla') ? 'Darla Carvalho' : (cleanEmail.includes('suporte') ? 'Dinheiro Sem Filtro' : cleanEmail.split('@')[0]),
         email: cleanEmail,
         authProvider: 'google',
         createdAt: '2026-08-12T10:00:00.000Z',
         isPro: true,
         plan: 'lifetime',
         subscriptionStatus: 'active',
-        sharedBudgetCode: cleanEmail.includes('carvalho') ? 'DARLLA-5921' : 'DARLLA-8704'
+        sharedBudgetCode: 'DARLLA-5921'
       };
       return { exists: true, user: localUser };
     }
