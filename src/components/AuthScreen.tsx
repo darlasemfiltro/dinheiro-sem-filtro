@@ -231,6 +231,23 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({
         : {};
 
       if (isRegister) {
+        // Verificar se o usuário já está cadastrado no sistema
+        const regCheckExisting = await StorageService.isUserRegisteredAsync(cleanEmail);
+        if (regCheckExisting.exists && regCheckExisting.user) {
+          // Usuário já cadastrado! Entrar direto sem erro
+          const user = await StorageService.ensureUserAndDataSyncedAsync(
+            cleanEmail,
+            password,
+            regCheckExisting.user.name || name,
+            regCheckExisting.user.avatarUrl,
+            'email',
+            extraProfile
+          );
+          localStorage.removeItem('darla_explicit_logout');
+          onLoginSuccess(user);
+          return;
+        }
+
         // 1. Chamar endpoint de registro do backend com validações e persistência central
         try {
           const regRes = await fetch('/api/users/register', {
