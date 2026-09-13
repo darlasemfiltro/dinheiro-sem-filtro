@@ -1306,12 +1306,32 @@ async function startServer() {
       }
 
       const allUsers = loadServerUsers();
-      const user = allUsers.find((u) => {
+      let user = allUsers.find((u) => {
         if (cleanEmail && (u.email || '').trim().toLowerCase() === cleanEmail) return true;
         if (canonicalId && (u.id === canonicalId || getCanonicalUserIdServer(u.id) === canonicalId)) return true;
         if (rawUserId && u.id === rawUserId) return true;
         return false;
       });
+
+      if (!user && cleanEmail) {
+        const financials = loadServerFinancials();
+        const altId = getCanonicalUserIdServer(cleanEmail);
+        const isDarla = isDarlaEmailOrId(cleanEmail);
+        if (financials[cleanEmail] || financials[altId] || financials[rawUserId] || isDarla) {
+          user = {
+            id: rawUserId || altId || `user_${cleanEmail.replace(/[^a-z0-9]/gi, '_')}`,
+            name: cleanEmail.split('@')[0],
+            email: cleanEmail,
+            authProvider: 'google',
+            createdAt: new Date().toISOString(),
+            isPro: isDarla,
+            plan: isDarla ? 'lifetime' : 'free',
+            subscriptionStatus: isDarla ? 'active' : 'trial',
+          };
+          allUsers.push(user);
+          saveServerUsers(allUsers);
+        }
+      }
 
       if (user) {
         return res.json({ success: true, user });
