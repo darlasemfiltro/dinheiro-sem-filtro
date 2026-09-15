@@ -190,7 +190,7 @@ export const SharedBudgetModal: React.FC<SharedBudgetModalProps> = ({
       const config = getAppwriteConfig();
       const accessMode = (permissaoEscolhida === 'edicao' || permissaoEscolhida === 'edit' || permissaoEscolhida === 'edição') ? 'edit' : 'read';
 
-      // 1. Grava no documento do Titular (user_financials)
+      // 1. Grava no documento do Titular (user_financials) preservando atributos obrigatórios (estado, etc.)
       const listaDocs = await databases.listDocuments(config.databaseId, 'user_financials');
       const meuDoc = listaDocs.documents.find((d: any) =>
         String(d.email || '').toLowerCase().trim() === meuEmail ||
@@ -204,13 +204,16 @@ export const SharedBudgetModal: React.FC<SharedBudgetModalProps> = ({
         jsonAtual.member_permissions[emailMembro.toLowerCase().trim()] = permissaoEscolhida;
         const novaStringData = JSON.stringify(jsonAtual);
 
-        await databases.updateDocument(config.databaseId, 'user_financials', meuDoc.$id, {
+        const updatePayload: Record<string, any> = {
           userId: meuEmail,
           data: novaStringData,
-        });
+          estado: meuDoc.estado || 'DF',
+          cidade: meuDoc.cidade || 'Brasília',
+          renda_mensal: meuDoc.renda_mensal ?? 0,
+          consent_lgpd: meuDoc.consent_lgpd ?? true
+        };
 
-        let financialData: any = meuDoc;
-        if (financialData) financialData.data = novaStringData;
+        await databases.updateDocument(config.databaseId, 'user_financials', meuDoc.$id, updatePayload);
       }
 
       // 2. Dispara registro na tabela 'notificacoes' para o membro
@@ -231,6 +234,7 @@ export const SharedBudgetModal: React.FC<SharedBudgetModalProps> = ({
         await StorageService.updateCollaboratorAccessMode(sharedBudget.budgetId, emailMembro, accessMode);
       }
 
+      window.dispatchEvent(new CustomEvent('shared_budget_updated', { detail: { budgetId: meuDoc?.$id } }));
       window.dispatchEvent(new CustomEvent('shared_budgets_updated'));
       window.dispatchEvent(new Event('remote_data_updated'));
       window.dispatchEvent(new Event('financial_data_mutated'));
