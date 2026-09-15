@@ -104,6 +104,260 @@ export default function App() {
   }, []);
 
   // Modal States
+  const activeDocumentIdRef = useRef<string | null>(null);
+
+  /**
+   * 1. FUNÇÃO UNIVERSAL DE RESOLUÇÃO DO DOCUMENTO REAL (App.tsx)
+   */
+  const resolveCanonicalAppwriteDocument = async (): Promise<string | null> => {
+    const cfg = getAppwriteConfig();
+    const DATABASE_ID = cfg.databaseId;
+    const collectionId = 'user_financials';
+
+    if (!currentUser) return 'user_default';
+
+    const effectiveBudgetId = StorageService.getEffectiveBudgetId(currentUser);
+    let targetEmail = currentUser.email || '';
+
+    if (effectiveBudgetId && effectiveBudgetId !== 'default' && effectiveBudgetId.includes('@')) {
+      targetEmail = effectiveBudgetId;
+    } else if (currentUser.email) {
+      targetEmail = currentUser.email;
+    }
+
+    const emailSanitizado = (targetEmail || '').toLowerCase().trim();
+
+    try {
+      console.log(`[DEDO-DURO] Resolvendo documento canônico no Appwrite para:`, { emailSanitizado, effectiveBudgetId });
+      
+      if (emailSanitizado) {
+        const res = await databases.listDocuments(DATABASE_ID, collectionId, [
+          Query.equal('userId', [emailSanitizado]),
+          Query.limit(1)
+        ]);
+        if (res && res.documents && res.documents.length > 0) {
+          const docId = res.documents[0].$id;
+          console.log(`[DEDO-DURO] Documento resolvido via Query userId:`, docId);
+          activeDocumentIdRef.current = docId;
+          return docId;
+        }
+      }
+
+      if (effectiveBudgetId && effectiveBudgetId !== 'default') {
+        try {
+          const docDirect = await databases.getDocument(DATABASE_ID, collectionId, effectiveBudgetId);
+          if (docDirect && docDirect.$id) {
+            console.log(`[DEDO-DURO] Documento resolvido via ID direto effectiveBudgetId:`, docDirect.$id);
+            activeDocumentIdRef.current = docDirect.$id;
+            return docDirect.$id;
+          }
+        } catch (e) {}
+      }
+
+      const resAll = await databases.listDocuments(DATABASE_ID, collectionId, [
+        Query.limit(20)
+      ]);
+      if (resAll && resAll.documents && resAll.documents.length > 0) {
+        const docs = resAll.documents;
+        docs.sort((a: any, b: any) => {
+          const tA = new Date(a.$updatedAt || a.$createdAt || 0).getTime();
+          const tB = new Date(b.$updatedAt || b.$createdAt || 0).getTime();
+          return tB - tA;
+        });
+
+        const match = docs.find((d: any) => 
+          d.userId?.toLowerCase() === emailSanitizado || 
+          d.$id?.toLowerCase().includes(emailSanitizado.replace(/[@\.]/g, '_')) ||
+          d.$id === effectiveBudgetId
+        );
+
+        if (match) {
+          console.log(`[DEDO-DURO] Documento resolvido via listagem por correspondência:`, match.$id);
+          activeDocumentIdRef.current = match.$id;
+          return match.$id;
+        }
+
+        console.log(`[DEDO-DURO] Documento resolvido usando primeiro documento acessível (fallback):`, docs[0].$id);
+        activeDocumentIdRef.current = docs[0].$id;
+        return docs[0].$id;
+      }
+    } catch (err: any) {
+      console.error(`[DEDO-DURO] Erro ao resolver documento canônico:`, err);
+    }
+
+    const fallbackId = 'user_' + (emailSanitizado ? emailSanitizado.replace('@', '_').replace(/\./g, '_') : 'default');
+    activeDocumentIdRef.current = fallbackId;
+    return fallbackId;
+  };
+
+  /**
+   * 3. DISPATCHER SEGURO DE GRAVAÇÃO E PURGA DE EXCLUSÃO
+   */
+  const persistFinancialMutation = async (nextDataState: any): Promise<boolean> => {
+    if (checkReadOnlyPermission()) {
+      setGlobalAlert({
+        isOpen: true,
+        title: 'Ação Bloqueada',
+        message: 'Modo Leitura: Você não tem permissão para alterar dados neste orçamento compartilhado.',
+        type: 'error'
+      });
+      return false;
+    }
+
+    try {
+      const cfg = getAppwriteConfig();
+      const DATABASE_ID = cfg.databaseId;
+      const collectionId = 'user_financials';
+
+      const resolvedDocId = await resolveCanonicalAppwriteDocument();
+      if (!resolvedDocId) {
+        throw new Error('Não foi possível determinar o documento canônico no Appwrite.');
+      }
+
+      console.log(`[DEDO-DURO] Persistindo mutação em persistFinancialMutation para documento:`, resolvedDocId);
+
+      await databases.updateDocument(
+        DATABASE_ID,
+        collectionId,
+        resolvedDocId,
+        {
+          data: JSON.stringify(nextDataState)
+        }
+      );
+
+      console.log(`[DEDO-DURO] Sucesso ao atualizar documento ${resolvedDocId} no Appwrite.`);
+
+      const budgetId = currentUser ? StorageService.getEffectiveBudgetId(currentUser) : 'default';
+      if (nextDataState.transactions) {
+        setTransactions(nextDataState.transactions);
+        StorageService.setTransactions(nextDataState.transactions, budgetId);
+      }
+      if (nextDataState.accounts) {
+        setAccounts(nextDataState.accounts);
+        StorageService.setAccounts(nextDataState.accounts, budgetId);
+      }
+      if (nextDataState.categories) {
+        setCategories(nextDataState.categories);
+        StorageService.setCategories(nextDataState.categories, budgetId);
+      }
+      if (nextDataState.financialGoals || nextDataState.goals) {
+        const goalsArr = nextDataState.financialGoals || nextDataState.goals || [];
+        setFinancialGoals(goalsArr);
+        StorageService.saveGoals(goalsArr, budgetId);
+      }
+      if (nextDataState.familyMembers || nextDataState.familyBudget) {
+        const famArr = nextDataState.familyMembers || [];
+        setFamilyMembers(famArr);
+      }
+      if (nextDataState.investmentTransactions || nextDataState.investments) {
+        const invArr = nextDataState.investmentTransactions || nextDataState.investments || [];
+        setInvestmentTransactions(invArr);
+        localStorage.setItem(`dsf_investments_cache_${budgetId}`, JSON.stringify(invArr));
+      }
+      if (nextDataState.investmentGoals || nextDataState.investorGoals) {
+        const invGoalsArr = nextDataState.investmentGoals || nextDataState.investorGoals || [];
+        setInvestmentGoals(invGoalsArr);
+      }
+
+      window.dispatchEvent(new Event('portfolio_updated'));
+      window.dispatchEvent(new Event('remote_data_updated'));
+      window.dispatchEvent(new CustomEvent('financial_data_mutated', { detail: { userId: budgetId } }));
+
+      return true;
+    } catch (err: any) {
+      console.error(`[DEDO-DURO] Erro crítico em persistFinancialMutation:`, err);
+      setGlobalAlert({
+        isOpen: true,
+        title: 'Falha de Sincronização na Nuvem',
+        message: `Erro ao gravar dados no Appwrite: ${err?.message || err}`,
+        type: 'error'
+      });
+      return false;
+    }
+  };
+
+  /**
+   * 2. WEBSOCKET REALTIME UNIVERSAL ATIVO
+   */
+  useEffect(() => {
+    let unsubscribe: (() => void) | null = null;
+
+    async function initRealtimeSubscription() {
+      if (!currentUser) return;
+      try {
+        const cfg = getAppwriteConfig();
+        const DATABASE_ID = cfg.databaseId;
+        const resolvedDocId = await resolveCanonicalAppwriteDocument();
+
+        if (!resolvedDocId) return;
+
+        const channel = `databases.${DATABASE_ID}.collections.user_financials.documents.${resolvedDocId}`;
+        console.log(`[DEDO-DURO] Inscrevendo no WebSocket Realtime canal:`, channel);
+
+        unsubscribe = client.subscribe(channel, (response: any) => {
+          console.log(`[DEDO-DURO] Evento WebSocket Realtime recebido:`, response);
+          if (response.events && response.events.some((e: string) => e.includes('.update') || e.includes('.create'))) {
+            const docPayload = response.payload;
+            if (docPayload && docPayload.data) {
+              let remoteData: any = {};
+              try {
+                remoteData = typeof docPayload.data === 'string' ? JSON.parse(docPayload.data) : docPayload.data;
+              } catch (e) {
+                remoteData = docPayload.data;
+              }
+
+              console.log(`[DEDO-DURO] Sincronização em tempo real aplicada. Dados remotos:`, remoteData);
+
+              const budgetId = currentUser ? StorageService.getEffectiveBudgetId(currentUser) : 'default';
+
+              if (remoteData.transactions && Array.isArray(remoteData.transactions)) {
+                setTransactions(remoteData.transactions);
+                StorageService.setTransactions(remoteData.transactions, budgetId);
+              }
+              if (remoteData.accounts && Array.isArray(remoteData.accounts)) {
+                setAccounts(remoteData.accounts);
+                StorageService.setAccounts(remoteData.accounts, budgetId);
+              }
+              if (remoteData.categories && Array.isArray(remoteData.categories)) {
+                setCategories(remoteData.categories);
+                StorageService.setCategories(remoteData.categories, budgetId);
+              }
+              if (remoteData.financialGoals && Array.isArray(remoteData.financialGoals)) {
+                setFinancialGoals(remoteData.financialGoals);
+                StorageService.saveGoals(remoteData.financialGoals, budgetId);
+              }
+              if (remoteData.familyMembers && Array.isArray(remoteData.familyMembers)) {
+                setFamilyMembers(remoteData.familyMembers);
+              }
+              if (remoteData.investmentTransactions && Array.isArray(remoteData.investmentTransactions)) {
+                setInvestmentTransactions(remoteData.investmentTransactions);
+                localStorage.setItem(`dsf_investments_cache_${budgetId}`, JSON.stringify(remoteData.investmentTransactions));
+              }
+              if (remoteData.investmentGoals && Array.isArray(remoteData.investmentGoals)) {
+                setInvestmentGoals(remoteData.investmentGoals);
+              }
+
+              window.dispatchEvent(new Event('portfolio_updated'));
+              window.dispatchEvent(new Event('remote_data_updated'));
+            }
+          }
+        });
+      } catch (err) {
+        console.warn(`[DEDO-DURO] Falha ao inicializar WebSocket Realtime:`, err);
+      }
+    }
+
+    initRealtimeSubscription();
+
+    return () => {
+      if (unsubscribe) {
+        try {
+          unsubscribe();
+        } catch (e) {}
+      }
+    };
+  }, [currentUser?.email, currentUser?.id]);
+
   const [recoveryTokens, setRecoveryTokens] = useState<{ userId: string; secret: string } | null>(null);
   const [isResetPasswordOpen, setIsResetPasswordOpen] = useState(false);
   const [isEditProfileModalOpen, setIsEditProfileModalOpen] = useState(false);
