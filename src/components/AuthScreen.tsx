@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { DarlaLogo } from './DarlaLogo';
 import { StorageService } from '../services/storage';
-import { appwriteSignUp, appwriteSignIn, appwriteGoogleOAuthLogin, appwritePasswordReset, appwriteCompleteRecovery, appwriteSignOut } from '../lib/appwrite';
+import { appwriteSignUp, appwriteSignIn, appwriteGoogleOAuthLogin, appwritePasswordReset, appwriteCompleteRecovery, appwriteSignOut, persistUserInitialDocument } from '../lib/appwrite';
 import { User } from '../types';
 import {
   Lock,
@@ -290,8 +290,18 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({
           console.warn('[Register] Servidor indisponível ou ambiente estático, prosseguindo com cadastro local/nuvem:', backendErr);
         }
 
-        // 2. Registrar também no Appwrite se disponível
-        await appwriteSignUp(cleanEmail, password, name).catch(() => {});
+        // 2. Registrar também no Appwrite se disponível e persistir documento na collection user_financials
+        try {
+          const accRes = await appwriteSignUp(cleanEmail, password, name);
+          await persistUserInitialDocument(accRes || { email: cleanEmail }, {
+            birthDate,
+            city,
+            state,
+            monthlyIncome: resolvedIncome
+          });
+        } catch (appwriteErr: any) {
+          console.warn('[Appwrite Signup/Persist Notice]', appwriteErr);
+        }
       } else {
         // Login flow: Verificar previamente se o e-mail informado já possui cadastro
         const regCheck = await StorageService.isUserRegisteredAsync(cleanEmail);

@@ -1,4 +1,111 @@
-import { Client, Databases, Account, ID, Query } from 'appwrite';
+import { Client, Databases, Account, ID, Query, Permission, Role } from 'appwrite';
+
+export async function persistUserInitialDocument(userAccount: any, formProfileData?: any) {
+  const cfg = getAppwriteConfig();
+  const DATABASE_ID = cfg?.databaseId || '6a83aa8d0038331e040f';
+  const COLLECTION_ID = 'user_financials';
+  const cleanEmail = (userAccount?.email || '').trim().toLowerCase();
+
+  if (!cleanEmail) {
+    console.warn('[persistUserInitialDocument] Email inválido fornecido.');
+    return null;
+  }
+
+  // Gera document ID válido no Appwrite (<= 36 caracteres alfanuméricos)
+  const sanitized = cleanEmail.replace(/[^a-zA-Z0-9]/g, '_').slice(0, 31);
+  const docId = `usr_${sanitized}`.slice(0, 36);
+
+  const initialFinancialData = {
+    saldo: 0,
+    receitas: 0,
+    despesas: 0,
+    transactions: [],
+    accounts: [
+      {
+        id: 'default',
+        userId: cleanEmail,
+        name: 'Conta Corrente Principal',
+        initialBalance: 0,
+        color: '#4F46E5',
+        icon: 'Wallet',
+        type: 'checking'
+      }
+    ],
+    categories: [],
+    financialGoals: [],
+    goals: [],
+    familyMembers: [],
+    investmentTransactions: [],
+    investmentGoals: [],
+    updatedAt: new Date().toISOString()
+  };
+
+  // Conversão segura da data de nascimento para ISO Datetime
+  let isoBirthDate = '1995-01-27T00:00:00.000Z';
+  const rawBirth = formProfileData?.birthDate || formProfileData?.dataNascimento || formProfileData?.data_nascimento;
+  if (rawBirth && typeof rawBirth === 'string') {
+    if (rawBirth.includes('/')) {
+      const parts = rawBirth.split('/');
+      if (parts.length === 3) {
+        isoBirthDate = new Date(`${parts[2]}-${parts[1]}-${parts[0]}T00:00:00.000Z`).toISOString();
+      }
+    } else if (rawBirth.includes('-')) {
+      try {
+        isoBirthDate = new Date(rawBirth).toISOString();
+      } catch (e) {}
+    }
+  }
+
+  const rawIncome = formProfileData?.monthlyIncome ?? formProfileData?.rendaMensal ?? formProfileData?.renda_mensal ?? 0;
+  const numericIncome = typeof rawIncome === 'number' ? rawIncome : parseFloat(String(rawIncome).replace(/[^0-9.,]/g, '').replace(/\./g, '').replace(',', '.')) || 0;
+
+  // Payload com TODOS os atributos da collection identificados no console
+  const docPayload: Record<string, any> = {
+    userId: cleanEmail,
+    data: JSON.stringify(initialFinancialData),
+    cidade: (formProfileData?.city || formProfileData?.cidade || 'Brasília').trim(),
+    estado: (formProfileData?.state || formProfileData?.estado || 'DF').toUpperCase().trim(),
+    data_nascimento: isoBirthDate,
+    renda_mensal: numericIncome,
+    consent_lgpd: true,
+    consent_date: new Date().toISOString() // Datetime ISO obrigatório da coluna consent_date
+  };
+
+  const permissions = [
+    Permission.read(Role.any()),
+    Permission.write(Role.any()),
+    Permission.update(Role.any()),
+    Permission.delete(Role.any())
+  ];
+
+  try {
+    const created = await appwriteDatabases.createDocument(
+      DATABASE_ID,
+      COLLECTION_ID,
+      docId,
+      docPayload,
+      permissions
+    );
+    console.log('[APPWRITE SUCESSO] Documento criado na collection user_financials:', created.$id);
+    return created;
+  } catch (err: any) {
+    // Se o erro for de documento duplicado, tenta atualizar
+    if (err?.code === 409 || err?.type === 'document_already_exists' || err?.message?.includes('already exists')) {
+      try {
+        const updated = await appwriteDatabases.updateDocument(DATABASE_ID, COLLECTION_ID, docId, docPayload);
+        console.log('[APPWRITE SUCESSO] Documento já existente atualizado na collection user_financials:', docId);
+        return updated;
+      } catch (upErr: any) {
+        console.error('[ERRO CRÍTICO APPWRITE UPDATE DOCUMENT]', upErr);
+      }
+    }
+    console.error('[ERRO CRÍTICO APPWRITE CREATE DOCUMENT]', err);
+    if (typeof window !== 'undefined') {
+      window.alert(`ERRO DO BANCO DE DADOS APPWRITE AO CRIAR CONTA:\n${err.message || JSON.stringify(err)}`);
+    }
+    throw err;
+  }
+}
 
 export function getAppwriteConfig() {
   const customProjectId = typeof localStorage !== 'undefined' ? localStorage.getItem('APPWRITE_PROJECT_ID') : null;
