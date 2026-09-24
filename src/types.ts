@@ -109,6 +109,7 @@ export interface User {
   sharedBudgetCode?: string;
   lastSessionId?: string;
   lastSessionCreatedAt?: string;
+  updatedAt?: string;
 
   // LGPD & Demographics
   birthDate?: string; // Data de nascimento (YYYY-MM-DD ou DD/MM/AAAA)

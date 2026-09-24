@@ -408,6 +408,7 @@ export default function App() {
   }, [currentUser?.email, currentUser?.id]);
 
   const [isResetPasswordOpen, setIsResetPasswordOpen] = useState(false);
+  const [recoveryTokens, setRecoveryTokens] = useState<{ userId: string; secret: string } | null>(null);
   const [showOpenAppModal, setShowOpenAppModal] = useState(false);
 
   useEffect(() => {
@@ -3424,7 +3425,6 @@ export default function App() {
                   url.searchParams.delete('userId');
                   url.searchParams.delete('secret');
                   window.history.replaceState({}, '', url.toString());
-                  window.location.href = 'dinheirosemfiltro://';
                 }}
                 className="py-4 px-2 rounded-2xl bg-[#EAB308] hover:bg-[#CA8A04] text-neutral-900 font-bold text-sm shadow-lg shadow-amber-500/25 transition active:scale-95 cursor-pointer"
               >
