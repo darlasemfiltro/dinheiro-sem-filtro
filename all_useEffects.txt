@@ -1,0 +1,75 @@
+src/components/FiftyThirtyTwentyWidget.tsx:1:import React, { useState, useMemo, useEffect } from 'react';
+src/components/FiftyThirtyTwentyWidget.tsx:117:  useEffect(() => {
+src/components/AddAssetModal.tsx:1:import React, { useState, useEffect, useRef, useMemo } from 'react';
+src/components/AddAssetModal.tsx:715:  useEffect(() => {
+src/components/AddAssetModal.tsx:767:  useEffect(() => {
+src/components/AddAssetModal.tsx:866:  useEffect(() => {
+src/components/AddAssetModal.tsx:971:  useEffect(() => {
+src/components/AuthScreen.tsx:1:import React, { useState, useEffect } from 'react';
+src/components/AuthScreen.tsx:76:  useEffect(() => {
+src/components/AuthScreen.tsx:154:  useEffect(() => {
+src/components/FinancialSpeedometer.tsx:1:import React, { useState, useEffect, useMemo } from 'react';
+src/components/FinancialSpeedometer.tsx:93:  useEffect(() => {
+src/components/FinancialSpeedometer.tsx:102:  useEffect(() => {
+src/components/TransactionsView.tsx:77:  React.useEffect(() => {
+src/components/SharedBudgetModal.tsx:1:import React, { useState, useEffect } from 'react';
+src/components/SharedBudgetModal.tsx:75:  useEffect(() => {
+src/components/AiTipsView.tsx:1:import React, { useState, useEffect } from 'react';
+src/components/AiTipsView.tsx:36:  useEffect(() => {
+src/components/AiTipsView.tsx:168:  useEffect(() => {
+src/components/SearchableSelect.tsx:1:import React, { useState, useRef, useEffect } from 'react';
+src/components/SearchableSelect.tsx:45:  useEffect(() => {
+src/components/SearchableSelect.tsx:61:  useEffect(() => {
+src/components/AvatarCropModal.tsx:1:import React, { useState, useRef, useEffect, useCallback } from 'react';
+src/components/AvatarCropModal.tsx:27:  useEffect(() => {
+src/components/EditProfileModal.tsx:1:import React, { useState, useEffect, useRef } from 'react';
+src/components/EditProfileModal.tsx:42:  useEffect(() => {
+src/components/MonthlyComparisonDashboard.tsx:1:import React, { useState, useMemo, useRef, useEffect } from 'react';
+src/components/MonthlyComparisonDashboard.tsx:55:  useEffect(() => {
+src/components/DashboardView.tsx:90:  React.useEffect(() => {
+src/components/PortfolioView.tsx:1:import React, { useState, useEffect, useMemo, useRef } from 'react';
+src/components/PortfolioView.tsx:350:  // The manual sync useEffect was removed as it was creating an update loop.
+src/components/PortfolioView.tsx:353:  useEffect(() => {
+src/components/PortfolioView.tsx:359:  useEffect(() => {
+src/components/PortfolioView.tsx:436:  useEffect(() => {
+src/components/PortfolioView.tsx:783:  useEffect(() => {
+src/components/PortfolioView.tsx:840:  useEffect(() => {
+src/components/PortfolioView.tsx:844:  useEffect(() => {
+src/components/PortfolioView.tsx:924:  useEffect(() => {
+src/components/PortfolioView.tsx:1004:  useEffect(() => {
+src/components/PortfolioView.tsx:1011:  useEffect(() => {
+src/components/AppwriteConnectionBanner.tsx:1:import React, { useState, useEffect } from 'react';
+src/components/AppwriteConnectionBanner.tsx:22:  useEffect(() => {
+src/components/AppwriteSettingsModal.tsx:1:import React, { useState, useEffect } from 'react';
+src/components/AppwriteSettingsModal.tsx:54:  useEffect(() => {
+src/components/Header.tsx:1:import React, { useState, useEffect } from 'react';
+src/components/Header.tsx:93:  useEffect(() => {
+src/components/Header.tsx:115:  useEffect(() => {
+src/components/Header.tsx:124:  useEffect(() => {
+src/components/Header.tsx:132:  useEffect(() => {
+src/components/Header.tsx:172:  React.useEffect(() => {
+src/components/TransactionModal.tsx:1:import React, { useState, useEffect, useRef, useMemo } from 'react';
+src/components/TransactionModal.tsx:192:  useEffect(() => {
+src/components/TransactionModal.tsx:240:  useEffect(() => {
+src/components/TransactionModal.tsx:251:  useEffect(() => {
+src/components/TransactionModal.tsx:263:  // Removed auto-select useEffect to allow selecting 'Geral / Família Toda' (empty string)
+src/components/PlansAndPricingView.tsx:1:import React, { useState, useEffect } from 'react';
+src/components/PlansAndPricingView.tsx:22:  useEffect(() => {
+src/components/PlansAndPricingView.tsx:26:  useEffect(() => {
+src/components/GamificationView.tsx:1:import React, { useState, useEffect } from 'react';
+src/components/GamificationView.tsx:20:  useEffect(() => {
+src/components/MonthlyAiTipsCard.tsx:1:import React, { useState, useMemo, useEffect } from 'react';
+src/components/MonthlyAiTipsCard.tsx:110:  useEffect(() => {
+src/App.tsx:1:import React, { useState, useEffect, useRef } from 'react';
+src/App.tsx:80:  useEffect(() => {
+src/App.tsx:104:  useEffect(() => {
+src/App.tsx:264:  useEffect(() => {
+src/App.tsx:355:  useEffect(() => {
+src/App.tsx:528:  useEffect(() => {
+src/App.tsx:749:  useEffect(() => {
+src/App.tsx:881:  useEffect(() => {
+src/App.tsx:902:  useEffect(() => {
+src/App.tsx:932:  useEffect(() => {
+src/context/AppContext.tsx:1:import React, { createContext, useContext, useState, useEffect, useMemo, useCallback, ReactNode } from 'react';
+src/utils/finance.ts:1:import { useState, useEffect } from 'react';
+src/utils/finance.ts:8:  useEffect(() => {
