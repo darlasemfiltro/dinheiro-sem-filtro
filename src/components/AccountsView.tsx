@@ -37,6 +37,7 @@ export const AccountsView: React.FC<AccountsViewProps> = ({
   const [color, setColor] = useState('#E11D48');
   const [isTypePickerOpen, setIsTypePickerOpen] = useState(false);
   const [typeSearch, setTypeSearch] = useState('');
+  const [isSaving, setIsSaving] = useState(false);
 
   const handleOpenAdd = () => {
     setEditingAccount(null);
@@ -58,34 +59,41 @@ export const AccountsView: React.FC<AccountsViewProps> = ({
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!name.trim()) return;
+    if (!name.trim() || isSaving) return;
 
-    const parsedBalance = typeof initialBalance === 'number' 
-      ? initialBalance 
-      : parseFloat(String(initialBalance).replace(',', '.')) || 0;
+    setIsSaving(true);
+    try {
+      const parsedBalance = typeof initialBalance === 'number' 
+        ? initialBalance 
+        : parseFloat(String(initialBalance).replace(',', '.')) || 0;
 
-    const accToSave: Account = {
-      id: editingAccount ? editingAccount.id : `acc_${Date.now()}`,
-      userId: editingAccount?.userId || userId,
-      name: name.trim(),
-      type,
-      initialBalance: parsedBalance,
-      color,
-      icon: type === 'credit' ? 'CreditCard' : type === 'savings' ? 'PiggyBank' : 'Building2',
-      updatedAt: new Date().toISOString(),
-      _pendingSync: true,
-    };
+      const accToSave: Account = {
+        id: editingAccount ? editingAccount.id : `acc_${Date.now()}`,
+        userId: editingAccount?.userId || userId,
+        name: name.trim(),
+        type,
+        initialBalance: parsedBalance,
+        color,
+        icon: type === 'credit' ? 'CreditCard' : type === 'savings' ? 'PiggyBank' : 'Building2',
+        updatedAt: new Date().toISOString(),
+        _pendingSync: true,
+      };
 
-    const existingIndex = accounts.findIndex(a => a.id === accToSave.id);
-    let novaListaDeContas: Account[];
-    if (existingIndex >= 0) {
-      novaListaDeContas = accounts.map(a => a.id === accToSave.id ? accToSave : a);
-    } else {
-      novaListaDeContas = [...accounts, accToSave];
+      const existingIndex = accounts.findIndex(a => a.id === accToSave.id);
+      let novaListaDeContas: Account[];
+      if (existingIndex >= 0) {
+        novaListaDeContas = accounts.map(a => a.id === accToSave.id ? accToSave : a);
+      } else {
+        novaListaDeContas = [...accounts, accToSave];
+      }
+
+      await onSaveAccount(accToSave, novaListaDeContas);
+      setIsModalOpen(false);
+    } catch (err) {
+      console.error('Erro ao salvar conta:', err);
+    } finally {
+      setIsSaving(false);
     }
-
-    await onSaveAccount(accToSave, novaListaDeContas);
-    setIsModalOpen(false);
   };
 
   const getAccountTypeLabel = (accType: AccountType) => {
@@ -324,9 +332,10 @@ export const AccountsView: React.FC<AccountsViewProps> = ({
 
               <button
                 type="submit"
-                className="w-full py-3 bg-[#00C853] hover:bg-[#00E676] text-[#121212] font-black text-xs rounded-xl shadow-md transition cursor-pointer mt-2 border border-[#00A843]"
+                disabled={isSaving}
+                className={`w-full py-3 bg-[#00C853] hover:bg-[#00E676] text-[#121212] font-black text-xs rounded-xl shadow-md transition cursor-pointer mt-2 border border-[#00A843] ${isSaving ? 'opacity-70 cursor-not-allowed' : ''}`}
               >
-                Salvar Conta
+                {isSaving ? 'Salvando...' : 'Salvar Conta'}
               </button>
             </form>
           </div>

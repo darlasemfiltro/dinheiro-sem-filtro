@@ -1304,6 +1304,71 @@ export class StorageService {
     }
   }
 
+  /**
+   * Safe entry point for Realtime updates.
+   * Merges remote data into local state while protecting items with _pendingSync: true.
+   */
+  static handleRemoteStateUpdate(remoteData: any, budgetId: string): { 
+    accounts?: Account[], 
+    transactions?: Transaction[], 
+    categories?: Category[], 
+    goals?: Goal[], 
+    familyMembers?: FamilyMember[] 
+  } {
+    if (!remoteData || !budgetId) return {};
+    this.initialize();
+    const canonicalId = getCanonicalUserId(budgetId);
+    const deletedIds = this.getDeletedIds(canonicalId);
+
+    const result: any = {};
+
+    if (remoteData.accounts) {
+      const accMap = new Map(this.getAccounts(canonicalId).map(a => [a.id, a]));
+      remoteData.accounts.forEach((a: any) => {
+        if (!a || !a.id || deletedIds.has(a.id)) return;
+        const existing = accMap.get(a.id);
+        if (existing && existing._pendingSync) return;
+        if (!existing || new Date(a.updatedAt || 0).getTime() >= new Date(existing.updatedAt || 0).getTime()) {
+          accMap.set(a.id, { ...a, userId: canonicalId });
+        }
+      });
+      result.accounts = Array.from(accMap.values());
+      this.setAccounts(result.accounts, canonicalId);
+    }
+
+    if (remoteData.transactions) {
+      const txMap = new Map(this.getTransactions(canonicalId).map(t => [t.id, t]));
+      remoteData.transactions.forEach((t: any) => {
+        if (!t || !t.id || deletedIds.has(t.id)) return;
+        const existing = txMap.get(t.id);
+        if (existing && existing._pendingSync) return;
+        if (!existing || new Date(t.updatedAt || t.createdAt || 0).getTime() >= new Date(existing.updatedAt || existing.createdAt || 0).getTime()) {
+          txMap.set(t.id, { ...t, userId: canonicalId });
+        }
+      });
+      result.transactions = Array.from(txMap.values());
+      this.setTransactions(result.transactions, canonicalId);
+    }
+
+    if (remoteData.categories) {
+      this.setCategories(remoteData.categories, canonicalId);
+      result.categories = remoteData.categories;
+    }
+
+    if (remoteData.financialGoals || remoteData.goals) {
+      const incoming = remoteData.financialGoals || remoteData.goals || [];
+      this.setGoals(incoming, canonicalId);
+      result.goals = incoming;
+    }
+
+    if (remoteData.familyMembers) {
+      this.setFamilyMembers(remoteData.familyMembers, canonicalId);
+      result.familyMembers = remoteData.familyMembers;
+    }
+
+    return result;
+  }
+
   static async syncUserDataWithRemote(userId: string): Promise<boolean> {
     if (!userId) return false;
     this.isCloudSynced = true;

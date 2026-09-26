@@ -424,30 +424,15 @@ export default function App() {
 
                 console.log(`[REALTIME] Dados do orçamento atualizados:`, remoteData);
                 const budgetId = StorageService.getEffectiveBudgetId(currentUser);
-                const deletedIds = StorageService.getDeletedIds(budgetId);
-
-                // Update local storage and state for all collections, respecting deleted items
-                if (remoteData.transactions) {
-                  const filtered = remoteData.transactions.filter((t: any) => t && t.id && !deletedIds.has(t.id));
-                  setTransactions(filtered);
-                  StorageService.setTransactions(filtered, budgetId);
-                }
-                if (remoteData.accounts) {
-                  const filtered = remoteData.accounts.filter((a: any) => a && a.id && !deletedIds.has(a.id));
-                  setAccounts(filtered);
-                  StorageService.setAccounts(filtered, budgetId);
-                }
-                if (remoteData.categories) {
-                  setCategories(remoteData.categories);
-                  StorageService.setCategories(remoteData.categories, budgetId);
-                }
-                if (remoteData.financialGoals || remoteData.goals) {
-                  const goalsArr = remoteData.financialGoals || remoteData.goals || [];
-                  const filtered = goalsArr.filter((g: any) => g && g.id && !deletedIds.has(g.id));
-                  setFinancialGoals(filtered);
-                  StorageService.setGoals(filtered, budgetId);
-                }
-                if (remoteData.familyMembers) setFamilyMembers(remoteData.familyMembers);
+                
+                // Safe merge logic to protect pending local changes
+                const merged = StorageService.handleRemoteStateUpdate(remoteData, budgetId);
+                
+                if (merged.accounts) setAccounts(merged.accounts);
+                if (merged.transactions) setTransactions(merged.transactions);
+                if (merged.categories) setCategories(merged.categories);
+                if (merged.goals) setFinancialGoals(merged.goals);
+                if (merged.familyMembers) setFamilyMembers(merged.familyMembers);
                 
                 window.dispatchEvent(new Event('portfolio_updated'));
                 window.dispatchEvent(new Event('remote_data_updated'));
