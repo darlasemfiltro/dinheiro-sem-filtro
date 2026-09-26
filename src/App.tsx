@@ -734,17 +734,23 @@ export default function App() {
         const notifsRes = await databases.listDocuments(
           DATABASE_ID,
           'Notificacoes',
-          [Query.equal('userId', userEmail), Query.equal('tipo', 'request')]
+          [Query.equal('userId', userEmail), Query.equal('tipo', ['request', 'invite'])]
         );
         
-        const newNotifs = notifsRes.documents.map(doc => ({
-          id: doc.$id,
-          from_email: doc.mensagem.split('(')[1]?.split(')')[0] || 'Desconhecido',
-          from_name: doc.mensagem.split('📩 SOLICITAÇÃO DE ACESSO: ')[1]?.split(' (')[0] || 'Solicitante',
-          type: 'REQUEST',
-          budget_owner_id: doc.budgetId,
-          message: doc.mensagem
-        }));
+        const newNotifs = notifsRes.documents.map(doc => {
+          const isInvite = doc.tipo === 'invite';
+          return {
+            id: doc.$id,
+            from_email: doc.mensagem.split('(')[1]?.split(')')[0] || 'Desconhecido',
+            from_name: isInvite 
+              ? (doc.mensagem.split('📩 CONVITE DE ACESSO: ')[1]?.split(' (')[0] || 'Titular')
+              : (doc.mensagem.split('📩 SOLICITAÇÃO DE ACESSO: ')[1]?.split(' (')[0] || 'Solicitante'),
+            type: isInvite ? 'INVITE' : 'REQUEST',
+            budget_owner_id: doc.budgetId,
+            owner_budget_id: doc.budgetId, // Needed for INVITE acceptance
+            message: doc.mensagem
+          };
+        });
         
         pending = [...pending, ...newNotifs];
       } catch (eNotif) {

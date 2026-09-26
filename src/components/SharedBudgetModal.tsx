@@ -354,8 +354,8 @@ export const SharedBudgetModal: React.FC<SharedBudgetModalProps> = ({
         await databases.createDocument(config.databaseId, 'Notificacoes', ID.unique(), {
           userId: emailAlvo,
           budgetId: myDocIdForNotif,
-          mensagem: `${meuEmail} concedeu a você acesso de ${nivelDefinido === 'leitura' ? 'Leitura' : 'Edição'} ao orçamento.`,
-          tipo: 'permissao_alterada'
+          mensagem: `📩 CONVITE DE ACESSO: ${currentUser.name || meuEmail} (${meuEmail}) convidou você para o seu orçamento.`,
+          tipo: 'invite'
         });
       } catch (errNotif) {
         console.warn("[Notif Error] Notification creation failed:", errNotif);
