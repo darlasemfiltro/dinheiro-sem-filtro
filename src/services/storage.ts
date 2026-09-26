@@ -880,6 +880,7 @@ export class StorageService {
   }
 
   private static initialize() {
+    this.loadDurableBalances();
     let newlyInitialized = false;
     if (!localStorage.getItem(STORAGE_KEYS.USERS)) {
       localStorage.setItem(STORAGE_KEYS.USERS, JSON.stringify([]));
@@ -1306,6 +1307,25 @@ export class StorageService {
 
   private static recentlyMutated = new Map<string, number>();
   private static durableInitialBalances = new Map<string, number>();
+
+  static loadDurableBalances() {
+    try {
+      const stored = localStorage.getItem('darla_durable_initial_balances');
+      if (stored) {
+        const parsed = JSON.parse(stored);
+        Object.entries(parsed).forEach(([k, v]) => {
+          this.durableInitialBalances.set(k, v as number);
+        });
+      }
+    } catch (e) {}
+  }
+
+  static saveDurableBalances() {
+    try {
+      const obj = Object.fromEntries(this.durableInitialBalances);
+      localStorage.setItem('darla_durable_initial_balances', JSON.stringify(obj));
+    } catch (e) {}
+  }
 
   /**
    * Safe entry point for Realtime updates.
@@ -2806,7 +2826,6 @@ export class StorageService {
     localStorage.setItem(STORAGE_KEYS.GOALS, JSON.stringify([]));
     localStorage.setItem(STORAGE_KEYS.CATEGORIES, JSON.stringify(freshCategories));
     _inMemoryStore.categories = _inMemoryStore.categories.filter(c => getCanonicalUserId(c.userId) !== getCanonicalUserId(budgetId)).concat(freshCategories);
-    localStorage.setItem('DARLA_FORCE_ZERO', 'true');
     localStorage.setItem('cached_app_data', JSON.stringify({
       transactions: [],
       accounts: freshAccounts,
@@ -4650,6 +4669,7 @@ export class StorageService {
     this.setAccounts(accounts, canonicalId);
     if (accToSave.initialBalance > 0) {
       this.durableInitialBalances.set(`${canonicalId}_${accToSave.id}`, accToSave.initialBalance);
+      this.saveDurableBalances();
     }
     pushAccountToFirestore(accToSave);
     this.markAsRecentlyMutated(accToSave.id);
@@ -4659,6 +4679,7 @@ export class StorageService {
 
   static setAccounts(accounts: Account[], budgetId?: string) {
     this.initialize();
+    this.loadDurableBalances();
     const canonicalId = getCanonicalUserId(budgetId || accounts[0]?.userId || resolveBudgetId());
     const accountsKey = `darla_accounts_${canonicalId}`;
     
@@ -4673,6 +4694,18 @@ export class StorageService {
         } else if (a.initialBalance) {
           initialVal = parseFloat(String(a.initialBalance).replace(',', '.')) || 0;
         }
+
+        // AGGRESSIVE RESTORATION: If value is 0 but we have a non-zero durable balance
+        const durableKey = `${canonicalId}_${a.id}`;
+        const durableVal = this.durableInitialBalances.get(durableKey) || 0;
+        const lastMutation = this.recentlyMutated.get(a.id) || 0;
+        const isMutationRecent = (Date.now() - lastMutation < 120000); // 2 minutes
+
+        if (initialVal === 0 && durableVal > 0 && !isMutationRecent) {
+          console.warn(`[StorageService] RESTAURANDO SALDO: Conta ${a.name} (${a.id}) teve tentativa de zeragem. Restaurado R$ ${durableVal}`);
+          initialVal = durableVal;
+        }
+
         return { ...a, initialBalance: initialVal, userId: canonicalId };
       });
 
@@ -5190,7 +5223,7 @@ export class StorageService {
     }
 
     try {
-      localStorage.setItem('DARLA_FORCE_ZERO', 'true');
+      // Flag removed
     } catch (e) {}
 
     // 1. Retrieve user details before removing
