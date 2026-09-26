@@ -1022,9 +1022,13 @@ export default function App() {
             StorageService.setTransactions(remoteData.transactions, effectiveBudgetId);
           }
 
-          if (merged.accounts) {
+          if (merged.accounts && Array.isArray(merged.accounts) && merged.accounts.length > 0) {
             setAccounts(merged.accounts);
-          } else if (remoteData.accounts) {
+          } else if (remoteData.accounts && Array.isArray(remoteData.accounts) && remoteData.accounts.length > 0) {
+            setAccounts(remoteData.accounts);
+            StorageService.setAccounts(remoteData.accounts, effectiveBudgetId);
+          } else if (!merged.accounts && !remoteData.accounts) {
+            // Only use default if both are missing
             const defaultAccs = [{ id: 'default', userId: effectiveBudgetId, name: 'Conta Principal', initialBalance: 0, color: '#4F46E5', icon: 'Wallet', type: 'checking' as const }];
             setAccounts(defaultAccs);
             StorageService.setAccounts(defaultAccs, effectiveBudgetId);

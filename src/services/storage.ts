@@ -1333,10 +1333,10 @@ export class StorageService {
       const accMap = new Map(localAccounts.map(a => [a.id, a]));
       let hasChanges = false;
 
-      // Ensure local durable balances are populated from memory
+      // Populate durable balances from memory AND localStorage for this session
       localAccounts.forEach(la => {
         if (la.initialBalance > 0) {
-          this.durableInitialBalances.set(la.id, la.initialBalance);
+          this.durableInitialBalances.set(`${canonicalId}_${la.id}`, la.initialBalance);
         }
       });
 
@@ -1349,32 +1349,31 @@ export class StorageService {
         const isPendingProtected = (existing && existing._pendingSync);
         
         if (isMutationProtected || isPendingProtected) {
-          console.log(`[REALTIME] Ignorando atualização remota para conta ${a.id} (proteção ativa por mais ${Math.max(0, Math.round((PROTECTION_WINDOW - (now - lastMutation))/1000))}s)`);
+          console.log(`[REALTIME] PROTEGIDO: Ignorando atualização remota para conta ${a.id} (mutação recente)`);
           return;
         }
 
-        // AGGRESSIVE SAFEGUARD: If remote initialBalance is 0 but local was non-zero, reject unless remote is MUCH newer (e.g. > 10 mins)
         const remoteInitialBalance = typeof a.initialBalance === 'number' ? a.initialBalance : parseFloat(String(a.initialBalance || 0)) || 0;
-        const localDurableBalance = this.durableInitialBalances.get(a.id) || (existing ? existing.initialBalance : 0);
+        const localDurableBalance = this.durableInitialBalances.get(`${canonicalId}_${a.id}`) || (existing ? existing.initialBalance : 0);
         
         const remoteUpdateAt = new Date(a.updatedAt || 0).getTime();
         const localUpdateAt = existing ? new Date(existing.updatedAt || 0).getTime() : 0;
         
-        // If remote tries to set balance to 0 when we had a positive balance, we are extremely suspicious
+        // ULTIMATE PROTECTION: Reject 0 balance if we have a known good balance and the update is "young"
         if (remoteInitialBalance === 0 && localDurableBalance > 0) {
-          const tenMinutes = 10 * 60 * 1000;
-          if (remoteUpdateAt - localUpdateAt < tenMinutes) {
-            console.warn(`[REALTIME] Bloqueada tentativa suspeita de reverter saldo da conta ${a.id} para zero.`);
+          const fiveMinutes = 5 * 60 * 1000;
+          if (now - localUpdateAt < fiveMinutes) {
+            console.warn(`[REALTIME] BLOQUEADO: Tentativa de zerar saldo da conta ${a.id} ignorada por precaução.`);
             return;
           }
         }
 
-        // Only update if remote is strictly newer or doesn't exist locally
+        // Only update if remote is strictly newer
         if (!existing || remoteUpdateAt > localUpdateAt) {
           accMap.set(a.id, { ...a, userId: canonicalId });
           hasChanges = true;
-          if (remoteInitialBalance > 0) this.durableInitialBalances.set(a.id, remoteInitialBalance);
-          console.log(`[REALTIME] Conta ${a.id} atualizada via nuvem (Remote: ${a.updatedAt})`);
+          if (remoteInitialBalance > 0) this.durableInitialBalances.set(`${canonicalId}_${a.id}`, remoteInitialBalance);
+          console.log(`[REALTIME] ATUALIZADO: Conta ${a.id} atualizada com dados da nuvem.`);
         }
       });
 
@@ -1487,15 +1486,9 @@ export class StorageService {
         console.warn('[StorageService Firestore fetch notice]', e);
       }
 
-      const accMap = new Map(_inMemoryStore.accounts.map(a => [a.id, a]));
-      const catMap = new Map(_inMemoryStore.categories.map(c => [c.id, c]));
-      const fmMap = new Map(_inMemoryStore.familyMembers.map(f => [f.id, f]));
-      const txMap = new Map(_inMemoryStore.transactions.map(t => [t.id, t]));
-      const goalMap = new Map(_inMemoryStore.goals.map(g => [g.id, g]));
-
       const deletedIds = this.getDeletedIds(canonicalId);
       
-      // 4. Merge remote deleted IDs into local storage so they persist across sessions/devices
+      // 4. Merge remote deleted IDs into local storage
       const remoteDeletedIds = [
         ...(Array.isArray(serverData?.deletedIds) ? serverData.deletedIds : []),
         ...(Array.isArray(appwriteConnData?.deletedIds) ? appwriteConnData.deletedIds : []),
@@ -1516,220 +1509,80 @@ export class StorageService {
         }
       }
 
-      // Force purge existing items in maps that are marked as deleted locally
-      // This prevents "resurrection" if memory still has them for some reason
-      accMap.forEach((a, id) => { if (deletedIds.has(id)) accMap.delete(id); });
-      catMap.forEach((c, id) => { if (deletedIds.has(id)) catMap.delete(id); });
-      fmMap.forEach((f, id) => { if (deletedIds.has(id)) fmMap.delete(id); });
-      txMap.forEach((t, id) => { if (deletedIds.has(id)) txMap.delete(id); });
-      goalMap.forEach((g, id) => { if (deletedIds.has(id)) goalMap.delete(id); });
-
-      const mergeAccounts = (list?: any[]) => {
-        if (!Array.isArray(list)) return;
-        list.forEach(a => {
-          if (!a || !a.id || deletedIds.has(a.id)) return;
-          const existing = accMap.get(a.id);
-          if (existing && existing._pendingSync) return;
-          if (!existing || new Date(a.updatedAt || 0).getTime() >= new Date(existing.updatedAt || 0).getTime()) {
-            accMap.set(a.id, { ...a, userId: canonicalId });
-          }
-        });
+      // 5. Aggregate all remote sources for central merge
+      const aggregatedRemote = {
+        accounts: [
+          ...(Array.isArray(serverData?.accounts) ? serverData.accounts : []),
+          ...(Array.isArray(appwriteConnData?.accounts) ? appwriteConnData.accounts : []),
+          ...(Array.isArray(firestoreData?.accounts) ? firestoreData.accounts : [])
+        ],
+        transactions: [
+          ...(Array.isArray(serverData?.transactions) ? serverData.transactions : []),
+          ...(Array.isArray(remoteTransactions) ? remoteTransactions : []),
+          ...(Array.isArray(firestoreData?.transactions) ? firestoreData.transactions : [])
+        ],
+        categories: [
+          ...(Array.isArray(serverData?.categories) ? serverData.categories : []),
+          ...(Array.isArray(appwriteConnData?.categories) ? appwriteConnData.categories : []),
+          ...(Array.isArray(firestoreData?.categories) ? firestoreData.categories : [])
+        ],
+        goals: [
+          ...(Array.isArray(serverData?.goals || serverData?.financialGoals) ? (serverData?.goals || serverData?.financialGoals) : []),
+          ...(Array.isArray(appwriteConnData?.goals || appwriteConnData?.financialGoals) ? (appwriteConnData?.goals || appwriteConnData?.financialGoals) : []),
+          ...(Array.isArray(firestoreData?.goals || firestoreData?.financialGoals) ? (firestoreData?.goals || firestoreData?.financialGoals) : [])
+        ],
+        familyMembers: [
+          ...(Array.isArray(serverData?.familyMembers) ? serverData.familyMembers : []),
+          ...(Array.isArray(appwriteConnData?.familyMembers) ? appwriteConnData.familyMembers : []),
+          ...(Array.isArray(firestoreData?.familyMembers) ? firestoreData.familyMembers : [])
+        ]
       };
 
-      const mergeCategories = (list?: any[]) => {
-        if (!Array.isArray(list)) return;
-        list.forEach(c => {
-          if (!c || !c.id || deletedIds.has(c.id)) return;
-          const existing = catMap.get(c.id);
-          if (existing && existing._pendingSync) return;
-          if (!existing) {
-            catMap.set(c.id, { ...c, userId: canonicalId });
-          } else {
-            const existingTime = new Date(existing.updatedAt || 0).getTime();
-            const incomingTime = new Date(c.updatedAt || 0).getTime();
-            const newer = incomingTime >= existingTime ? c : existing;
-            
-            // Protect subcategories from being overwritten by incoming sync
-            const existingSubs = Array.isArray(existing.subcategories) ? existing.subcategories : [];
-            const incomingSubs = Array.isArray(c.subcategories) ? c.subcategories : [];
-            const subMap = new Map<string, any>();
-            existingSubs.forEach((s: any) => { if (s && s.id) subMap.set(s.id, s); });
-            incomingSubs.forEach((s: any) => {
-              if (s && s.id) {
-                const prevSub = subMap.get(s.id);
-                subMap.set(s.id, prevSub ? { ...prevSub, ...s } : s);
-              }
-            });
-            const mergedSubs = Array.from(subMap.values());
+      // 6. Execute protected merge
+      const mergedResults = this.handleRemoteStateUpdate(aggregatedRemote, canonicalId);
 
-            catMap.set(c.id, {
-              ...existing,
-              ...c,
-              name: newer.name || existing.name,
-              color: newer.color || existing.color,
-              icon: newer.icon || existing.icon,
-              type: newer.type || existing.type,
-              ruleGroup: newer.ruleGroup || existing.ruleGroup,
-              subcategories: mergedSubs.length > 0 ? mergedSubs : (newer.subcategories || []),
-              userId: canonicalId,
-            });
-          }
-        });
-      };
-
-      const mergeFamily = (list?: any[]) => {
-        if (!Array.isArray(list)) return;
-        list.forEach(f => {
-          if (!f || !f.id || deletedIds.has(f.id)) return;
-          const existing = fmMap.get(f.id);
-          if (existing && existing._pendingSync) return;
-          let name = f.name;
-          if (name === 'Darla (Titular)') {
-            name = 'Titular';
-          }
-          if (!existing || new Date(f.updatedAt || 0).getTime() >= new Date(existing.updatedAt || 0).getTime()) {
-            fmMap.set(f.id, { ...f, name, userId: canonicalId });
-          }
-        });
-      };
-
-      const mergeGoals = (list?: any[]) => {
-        if (!Array.isArray(list)) return;
-        list.forEach(g => {
-          if (!g || !g.id || deletedIds.has(g.id)) return;
-          const existing = goalMap.get(g.id);
-          if (existing && existing._pendingSync) return;
-          if (!existing || new Date(g.updatedAt || 0).getTime() >= new Date(existing.updatedAt || 0).getTime()) {
-            goalMap.set(g.id, { ...g, userId: canonicalId });
-          }
-        });
-      };
-
-      const mergeTransactions = (list?: any[]) => {
-        if (!Array.isArray(list)) return;
-        const now = Date.now();
-        list.forEach(t => {
-          if (!t || !t.id || deletedIds.has(t.id)) return;
-          
-          // Double protection: Check if item was deleted very recently (even if deletedIds cache is somehow lagging)
-          // Note: We don't have a deletedTimestamp yet, so we rely on the set.
-          
-          const existing = txMap.get(t.id);
-          if (!existing || new Date(t.updatedAt || t.createdAt || 0).getTime() >= new Date(existing.updatedAt || existing.createdAt || 0).getTime()) {
-            txMap.set(t.id, { ...t, userId: canonicalId });
-          }
-        });
-      };
-
-      // Merge Server data
-      if (serverData) {
-        mergeAccounts(serverData.accounts);
-        mergeCategories(serverData.categories);
-        mergeFamily(serverData.familyMembers);
-        mergeGoals(serverData.goals);
-        mergeTransactions(serverData.transactions);
+      // 7. Update memory and localStorage
+      if (mergedResults.accounts) {
+        _inMemoryStore.accounts = mergedResults.accounts;
+        this.setAccounts(mergedResults.accounts, canonicalId);
+      }
+      if (mergedResults.transactions) {
+        _inMemoryStore.transactions = mergedResults.transactions;
+        this.setTransactions(mergedResults.transactions, canonicalId);
+      }
+      if (mergedResults.categories) {
+        _inMemoryStore.categories = mergedResults.categories;
+        this.setCategories(mergedResults.categories, canonicalId);
+      }
+      if (mergedResults.goals) {
+        _inMemoryStore.goals = mergedResults.goals;
+        this.setGoals(mergedResults.goals, canonicalId);
+      }
+      if (mergedResults.familyMembers) {
+        _inMemoryStore.familyMembers = mergedResults.familyMembers;
+        this.setFamilyMembers(mergedResults.familyMembers, canonicalId);
       }
 
-      // Merge Appwrite data
-      if (appwriteConnData) {
-        mergeAccounts(appwriteConnData.accounts);
-        mergeCategories(appwriteConnData.categories);
-        mergeFamily(appwriteConnData.familyMembers);
-        mergeGoals(appwriteConnData.goals);
-        mergeTransactions(appwriteConnData.transactions);
-        if (appwriteConnData.user) {
-          const currentInMem = _inMemoryStore.currentUser || JSON.parse(localStorage.getItem(STORAGE_KEYS.CURRENT_USER) || '{}');
-          const incomingUser = appwriteConnData.user;
-          
-          const currentTime = new Date(currentInMem.updatedAt || 0).getTime();
-          const incomingTime = new Date(incomingUser.updatedAt || 0).getTime();
-          
-          if (incomingTime >= currentTime) {
-            const existingBudgetId = currentInMem?.budgetId;
-            const currentName = currentInMem?.name;
-            const incomingName = incomingUser.name;
-            const cleanEmail = String(canonicalId || '').toLowerCase();
-            const emailPrefix = cleanEmail.split('@')[0];
-            const resolvedName = (currentName && currentName !== emailPrefix && (!incomingName || incomingName === emailPrefix))
-              ? currentName
-              : (incomingName || currentName);
-
-            _inMemoryStore.currentUser = {
-              ...currentInMem,
-              ...incomingUser,
-              id: canonicalId,
-              budgetId: existingBudgetId || incomingUser.budgetId,
-              name: resolvedName || incomingUser.name || currentName,
-              updatedAt: incomingUser.updatedAt // preserve the newer timestamp
-            };
-          }
-        }
-      }
-
-      // Merge remote individual transactions
-      if (Array.isArray(remoteTransactions) && remoteTransactions.length > 0) {
-        mergeTransactions(remoteTransactions);
-      }
-
-      // Merge Firestore data
-      if (firestoreData) {
-        mergeAccounts(firestoreData.accounts);
-        mergeCategories(firestoreData.categories);
-        mergeFamily(firestoreData.familyMembers);
-        mergeGoals(firestoreData.goals);
-        mergeTransactions(firestoreData.transactions);
-      }
-
-      _inMemoryStore.accounts = Array.from(accMap.values());
-      _inMemoryStore.categories = Array.from(catMap.values());
-      _inMemoryStore.familyMembers = Array.from(fmMap.values());
-      _inMemoryStore.transactions = Array.from(txMap.values());
-      _inMemoryStore.goals = Array.from(goalMap.values());
-
-      if (!_inMemoryStore.transactions || _inMemoryStore.transactions.length === 0) {
-        _inMemoryStore.accounts = _inMemoryStore.accounts.map(a => ({
-          ...a,
-          balance: 0,
-          initialBalance: 0
-        }));
-      }
-
-      // Save to localStorage immediately
-      try {
-        localStorage.setItem(STORAGE_KEYS.ACCOUNTS, JSON.stringify(_inMemoryStore.accounts));
-        localStorage.setItem(STORAGE_KEYS.CATEGORIES, JSON.stringify(_inMemoryStore.categories));
-        localStorage.setItem(STORAGE_KEYS.FAMILY_MEMBERS, JSON.stringify(_inMemoryStore.familyMembers));
-        localStorage.setItem(STORAGE_KEYS.TRANSACTIONS, JSON.stringify(_inMemoryStore.transactions));
-        localStorage.setItem(STORAGE_KEYS.GOALS, JSON.stringify(_inMemoryStore.goals));
-        const userCats = _inMemoryStore.categories.filter(c => getCanonicalUserId(c.userId) === canonicalId);
-        localStorage.setItem(`darla_categories_${canonicalId}`, JSON.stringify(userCats));
-        if (_inMemoryStore.currentUser) {
+      // 8. Special User Profile Merge
+      const remoteUser = serverData?.user || appwriteConnData?.user || firestoreData?.user;
+      if (remoteUser && _inMemoryStore.currentUser) {
+        const localUpdateAt = new Date(_inMemoryStore.currentUser.updatedAt || 0).getTime();
+        const remoteUpdateAt = new Date(remoteUser.updatedAt || 0).getTime();
+        if (remoteUpdateAt > localUpdateAt) {
+          _inMemoryStore.currentUser = { ..._inMemoryStore.currentUser, ...remoteUser };
           localStorage.setItem(STORAGE_KEYS.CURRENT_USER, JSON.stringify(_inMemoryStore.currentUser));
         }
-      } catch (e) {}
-
-      // Push merged state to Appwrite in background
-      try {
-        await syncUserDataWithAppwrite(canonicalId, {
-          accounts: _inMemoryStore.accounts.filter(a => getCanonicalUserId(a.userId) === canonicalId),
-          categories: _inMemoryStore.categories.filter(c => getCanonicalUserId(c.userId) === canonicalId),
-          familyMembers: _inMemoryStore.familyMembers.filter(f => getCanonicalUserId(f.userId) === canonicalId),
-          transactions: _inMemoryStore.transactions.filter(t => getCanonicalUserId(t.userId) === canonicalId),
-          goals: _inMemoryStore.goals.filter(g => getCanonicalUserId(g.userId) === canonicalId),
-          user: _inMemoryStore.currentUser,
-        });
-      } catch (err) {}
+      }
 
       // Sync portfolio with remote
       try {
         await PortfolioStorageService.loadPortfolioFromRemote(canonicalId);
       } catch (e) {}
 
-      // Remote sync complete without triggering recursive mutation events
       return true;
     } catch (err) {
       console.warn('[StorageService Sync Remote Notice]', err);
-      return true;
+      return false;
     }
   }
 
@@ -4795,6 +4648,9 @@ export class StorageService {
       accounts.push(accToSave);
     }
     this.setAccounts(accounts, canonicalId);
+    if (accToSave.initialBalance > 0) {
+      this.durableInitialBalances.set(`${canonicalId}_${accToSave.id}`, accToSave.initialBalance);
+    }
     pushAccountToFirestore(accToSave);
     this.markAsRecentlyMutated(accToSave.id);
     this.syncUserMutationToServer(canonicalId);
