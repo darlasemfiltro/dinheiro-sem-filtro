@@ -2099,7 +2099,6 @@ export default function App() {
         cidade: docAny.cidade || 'Brasília',
         estado: docAny.estado || 'DF',
         data_nascimento: docAny.data_nascimento || '1999-12-31T22:00:00.000Z',
-        renda_mensal: docAny.renda_mensal ?? 0,
         consent_lgpd: docAny.consent_lgpd ?? false
       };
 
@@ -2310,7 +2309,6 @@ export default function App() {
         cidade: currentDoc?.cidade || 'Brasília',
         estado: currentDoc?.estado || 'DF',
         data_nascimento: currentDoc?.data_nascimento || '1999-12-31T22:00:00.000Z',
-        renda_mensal: currentDoc?.renda_mensal ?? 0,
         consent_lgpd: currentDoc?.consent_lgpd ?? false
       };
 
