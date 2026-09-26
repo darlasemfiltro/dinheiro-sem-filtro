@@ -1323,7 +1323,7 @@ export class StorageService {
     const canonicalId = getCanonicalUserId(budgetId);
     const deletedIds = this.getDeletedIds(canonicalId);
     const now = Date.now();
-    const PROTECTION_WINDOW = 5000; // 5 seconds
+    const PROTECTION_WINDOW = 15000; // 15 seconds
 
     const result: any = {};
 
@@ -1340,14 +1340,18 @@ export class StorageService {
         const isProtected = (existing && existing._pendingSync) || (now - lastMutation < PROTECTION_WINDOW);
 
         if (isProtected) {
-          console.log(`[REALTIME] Ignorando atualização remota para conta ${a.id} (proteção ativa)`);
+          console.log(`[REALTIME] Ignorando atualização remota para conta ${a.id} (proteção ativa por ${Math.round((PROTECTION_WINDOW - (now - lastMutation))/1000)}s)`);
           return;
         }
 
-        // Only update if remote is newer or doesn't exist locally
-        if (!existing || new Date(a.updatedAt || 0).getTime() >= new Date(existing.updatedAt || 0).getTime()) {
+        // Only update if remote is strictly newer or doesn't exist locally
+        const remoteUpdateAt = new Date(a.updatedAt || 0).getTime();
+        const localUpdateAt = existing ? new Date(existing.updatedAt || 0).getTime() : 0;
+
+        if (!existing || remoteUpdateAt > localUpdateAt) {
           accMap.set(a.id, { ...a, userId: canonicalId });
           hasChanges = true;
+          console.log(`[REALTIME] Conta ${a.id} atualizada via nuvem (Remote: ${a.updatedAt})`);
         }
       });
 
@@ -1372,11 +1376,14 @@ export class StorageService {
         const isProtected = (existing && existing._pendingSync) || (now - lastMutation < PROTECTION_WINDOW);
 
         if (isProtected) {
-          console.log(`[REALTIME] Ignorando atualização remota para transação ${t.id} (proteção ativa)`);
+          console.log(`[REALTIME] Ignorando atualização remota para transação ${t.id} (proteção ativa por ${Math.round((PROTECTION_WINDOW - (now - lastMutation))/1000)}s)`);
           return;
         }
 
-        if (!existing || new Date(t.updatedAt || t.createdAt || 0).getTime() >= new Date(existing.updatedAt || existing.createdAt || 0).getTime()) {
+        const remoteUpdateAt = new Date(t.updatedAt || t.createdAt || 0).getTime();
+        const localUpdateAt = existing ? new Date(existing.updatedAt || existing.createdAt || 0).getTime() : 0;
+
+        if (!existing || remoteUpdateAt > localUpdateAt) {
           txMap.set(t.id, { ...t, userId: canonicalId });
           hasChanges = true;
         }
@@ -4780,7 +4787,15 @@ export class StorageService {
     const deletedIds = this.getDeletedIds(canonicalId);
     const updated = accounts
       .filter(a => a && a.id && !deletedIds.has(a.id))
-      .map((a) => ({ ...a, userId: canonicalId }));
+      .map((a) => {
+        let initialVal = 0;
+        if (typeof a.initialBalance === 'number') {
+          initialVal = a.initialBalance;
+        } else if (a.initialBalance) {
+          initialVal = parseFloat(String(a.initialBalance).replace(',', '.')) || 0;
+        }
+        return { ...a, initialBalance: initialVal, userId: canonicalId };
+      });
 
     _inMemoryStore.accounts = _inMemoryStore.accounts.filter((a) => getCanonicalUserId(a.userId) !== canonicalId).concat(updated);
     try {
