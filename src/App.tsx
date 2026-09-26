@@ -2813,7 +2813,10 @@ export default function App() {
     if (checkReadOnlyPermission()) return false;
     const budgetId = currentUser ? StorageService.getEffectiveBudgetId(currentUser) : 'default';
     
-    StorageService.deleteAccount(id);
+    // Pass the budgetId to ensure we delete from the correct budget (important for Shared Budgets)
+    StorageService.deleteAccount(id, budgetId);
+    
+    // Refresh the local state immediately
     const accountsList = StorageService.getAccounts(budgetId);
     setAccounts(accountsList);
 

@@ -4779,16 +4779,32 @@ export class StorageService {
   }
 
   static deleteAccount(accountId: string, budgetId?: string) {
-    const acc = _inMemoryStore.accounts.find((a) => a.id === accountId);
-    const currUser = this.getCurrentUser();
-    const targetUserId = budgetId || acc?.userId || currUser?.id || '';
-    const canonicalId = resolveBudgetId(targetUserId);
+    this.initialize();
     
+    // Find the account to get its associated budgetId if not provided
+    const acc = _inMemoryStore.accounts.find((a) => a.id === accountId) || 
+                this.getAccounts(budgetId || 'default').find(a => a.id === accountId);
+    
+    const currUser = this.getCurrentUser();
+    const targetUserId = budgetId || acc?.userId || currUser?.email || currUser?.id || 'default';
+    const canonicalId = getCanonicalUserId(targetUserId);
+    
+    console.log(`[StorageService] EXCLUINDO CONTA: ${accountId} do orçamento ${canonicalId}`);
+    
+    // Filter out the account from the specific budget
     const accs = this.getAccounts(canonicalId).filter((a) => a.id !== accountId);
     this.setAccounts(accs, canonicalId);
 
+    // Global in-memory cleanup
+    _inMemoryStore.accounts = _inMemoryStore.accounts.filter(a => a.id !== accountId);
+
     this.markAsDeleted(accountId, canonicalId, 'accounts');
     this.markAsRecentlyMutated(accountId);
+    
+    // Cleanup durable balance cofre for this account
+    this.durableInitialBalances.delete(`${canonicalId}_${accountId}`);
+    this.saveDurableBalances();
+    
     deleteAccountFromFirestore(accountId);
     if (canonicalId) {
       this.syncUserMutationToServer(canonicalId);

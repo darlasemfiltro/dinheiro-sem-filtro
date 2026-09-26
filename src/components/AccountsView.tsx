@@ -38,6 +38,7 @@ export const AccountsView: React.FC<AccountsViewProps> = ({
   const [isTypePickerOpen, setIsTypePickerOpen] = useState(false);
   const [typeSearch, setTypeSearch] = useState('');
   const [isSaving, setIsSaving] = useState(false);
+  const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
 
   const handleOpenAdd = () => {
     setEditingAccount(null);
@@ -46,6 +47,7 @@ export const AccountsView: React.FC<AccountsViewProps> = ({
     setInitialBalance('0');
     setColor('#E11D48');
     setIsModalOpen(true);
+    setDeleteConfirmId(null);
   };
 
   const handleOpenEdit = (acc: Account) => {
@@ -55,6 +57,18 @@ export const AccountsView: React.FC<AccountsViewProps> = ({
     setInitialBalance(acc.initialBalance !== undefined && acc.initialBalance !== null ? String(acc.initialBalance) : '0');
     setColor(acc.color || '#E11D48');
     setIsModalOpen(true);
+    setDeleteConfirmId(null);
+  };
+
+  const handleDeleteClick = (id: string) => {
+    if (deleteConfirmId === id) {
+      onDeleteAccount(id);
+      setDeleteConfirmId(null);
+    } else {
+      setDeleteConfirmId(id);
+      // Auto-cancel confirmation after 5 seconds
+      setTimeout(() => setDeleteConfirmId(prev => prev === id ? null : prev), 5000);
+    }
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -220,10 +234,18 @@ export const AccountsView: React.FC<AccountsViewProps> = ({
                     </button>
                     {accounts.length > 1 && (
                       <button
-                        onClick={() => onDeleteAccount(acc.id)}
-                        className="p-1.5 text-gray-400 hover:text-[#FF3D00] hover:bg-[#FF3D00]/10 rounded-xl transition cursor-pointer"
+                        onClick={() => handleDeleteClick(acc.id)}
+                        className={`p-2.5 rounded-xl transition cursor-pointer flex items-center gap-1.5 ${
+                          deleteConfirmId === acc.id 
+                            ? 'bg-[#FF3D00] text-white shadow-md scale-110' 
+                            : 'text-gray-400 hover:text-[#FF3D00] hover:bg-[#FF3D00]/10'
+                        }`}
+                        title={deleteConfirmId === acc.id ? 'Clique novamente para confirmar' : 'Excluir conta'}
                       >
-                        <Trash2 className="w-3.5 h-3.5" />
+                        <Trash2 className={`${deleteConfirmId === acc.id ? 'w-4 h-4' : 'w-4 h-4'}`} />
+                        {deleteConfirmId === acc.id && (
+                          <span className="text-[10px] font-black uppercase tracking-tighter animate-pulse">Confirmar?</span>
+                        )}
                       </button>
                     )}
                   </div>
