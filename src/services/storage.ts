@@ -1416,8 +1416,13 @@ export class StorageService {
 
       const mergeTransactions = (list?: any[]) => {
         if (!Array.isArray(list)) return;
+        const now = Date.now();
         list.forEach(t => {
           if (!t || !t.id || deletedIds.has(t.id)) return;
+          
+          // Double protection: Check if item was deleted very recently (even if deletedIds cache is somehow lagging)
+          // Note: We don't have a deletedTimestamp yet, so we rely on the set.
+          
           const existing = txMap.get(t.id);
           if (!existing || new Date(t.updatedAt || t.createdAt || 0).getTime() >= new Date(existing.updatedAt || existing.createdAt || 0).getTime()) {
             txMap.set(t.id, { ...t, userId: canonicalId });
@@ -1566,23 +1571,24 @@ export class StorageService {
       const deletedIds = this.getDeletedIds(canonicalId);
 
       // Save directly to Cloud Appwrite & Firestore
-      syncUserDataWithAppwrite(canonicalId, {
-        accounts,
-        categories,
-        familyMembers,
-        transactions,
-        goals,
-        deletedIds: Array.from(deletedIds),
-      }).catch(() => {});
-
-      saveUserDataToFirestore(canonicalId, {
-        accounts,
-        categories,
-        familyMembers,
-        transactions,
-        goals,
-        deletedIds: Array.from(deletedIds),
-      }).catch(() => {});
+      await Promise.allSettled([
+        syncUserDataWithAppwrite(canonicalId, {
+          accounts,
+          categories,
+          familyMembers,
+          transactions,
+          goals,
+          deletedIds: Array.from(deletedIds),
+        }),
+        saveUserDataToFirestore(canonicalId, {
+          accounts,
+          categories,
+          familyMembers,
+          transactions,
+          goals,
+          deletedIds: Array.from(deletedIds),
+        })
+      ]);
 
       let member_permissions = {};
       try {
@@ -4608,7 +4614,13 @@ export class StorageService {
     this.initialize();
     const canonicalId = getCanonicalUserId(budgetId || accounts[0]?.userId || resolveBudgetId());
     const accountsKey = `darla_accounts_${canonicalId}`;
-    const updated = accounts.map((a) => ({ ...a, userId: canonicalId }));
+    
+    // Safety check: Never re-add items that are marked as deleted locally
+    const deletedIds = this.getDeletedIds(canonicalId);
+    const updated = accounts
+      .filter(a => a && a.id && !deletedIds.has(a.id))
+      .map((a) => ({ ...a, userId: canonicalId }));
+
     _inMemoryStore.accounts = _inMemoryStore.accounts.filter((a) => getCanonicalUserId(a.userId) !== canonicalId).concat(updated);
     try {
       localStorage.setItem(accountsKey, JSON.stringify(updated));
@@ -4648,7 +4660,13 @@ export class StorageService {
     this.initialize();
     const canonicalId = getCanonicalUserId(budgetId || transactions[0]?.userId || resolveBudgetId());
     const key = `darla_transactions_${canonicalId}`;
-    const updated = transactions.map((t) => ({ ...t, userId: canonicalId }));
+    
+    // Safety check: Never re-add items that are marked as deleted locally
+    const deletedIds = this.getDeletedIds(canonicalId);
+    const updated = transactions
+      .filter(t => t && t.id && !deletedIds.has(t.id))
+      .map((t) => ({ ...t, userId: canonicalId }));
+
     _inMemoryStore.transactions = _inMemoryStore.transactions.filter((t) => getCanonicalUserId(t.userId) !== canonicalId).concat(updated);
     try {
       localStorage.setItem(key, JSON.stringify(updated));
@@ -4659,7 +4677,13 @@ export class StorageService {
     this.initialize();
     const canonicalId = getCanonicalUserId(budgetId || goals[0]?.userId || resolveBudgetId());
     const key = `darla_goals_${canonicalId}`;
-    const updated = goals.map((g) => ({ ...g, userId: canonicalId }));
+    
+    // Safety check: Never re-add items that are marked as deleted locally
+    const deletedIds = this.getDeletedIds(canonicalId);
+    const updated = goals
+      .filter(g => g && g.id && !deletedIds.has(g.id))
+      .map((g) => ({ ...g, userId: canonicalId }));
+
     _inMemoryStore.goals = _inMemoryStore.goals.filter((g) => getCanonicalUserId(g.userId) !== canonicalId).concat(updated);
     try {
       localStorage.setItem(key, JSON.stringify(updated));
@@ -4796,21 +4820,24 @@ export class StorageService {
     return null;
   }
 
-  static deleteTransaction(transactionId: string, budgetId?: string) {
+  static async deleteTransaction(transactionId: string, budgetId?: string) {
     if (!transactionId) return;
     const tx = _inMemoryStore.transactions.find((t) => t.id === transactionId);
     const currUser = this.getCurrentUser();
     const targetUserId = budgetId || tx?.userId || currUser?.id || '';
     const canonicalId = resolveBudgetId(targetUserId);
 
-    // 1. Remove from in-memory store immediately
+    // 1. Mark as deleted globally FIRST (Authority for sync logic)
+    this.markAsDeleted(transactionId, canonicalId, 'transactions');
+
+    // 2. Remove from in-memory store immediately
     _inMemoryStore.transactions = _inMemoryStore.transactions.filter((t) => t.id !== transactionId);
 
-    // 2. Get filtered transactions for canonicalId and update storage
+    // 3. Get filtered transactions for canonicalId and update storage
     const txs = this.getTransactions(canonicalId).filter((t) => t.id !== transactionId);
     this.setTransactions(txs, canonicalId);
 
-    // 3. Purge strictly across all local storage keys
+    // 4. Purge strictly across all local storage keys
     try {
       if (typeof localStorage !== 'undefined') {
         const keysToClean = [
@@ -4834,14 +4861,15 @@ export class StorageService {
       }
     } catch (e) {}
 
-    // 4. Mark as deleted globally
-    this.markAsDeleted(transactionId, canonicalId, 'transactions');
-    deleteAppwriteTransaction(canonicalId, transactionId).catch(() => {});
-    deleteTransactionFromFirestore(transactionId);
+    // 5. Cloud Deletion
+    await Promise.allSettled([
+      deleteAppwriteTransaction(canonicalId, transactionId),
+      deleteTransactionFromFirestore(transactionId)
+    ]);
     
-    // 5. Cancel any pending timer/queue if needed and sync state
+    // 6. Force server sync
     if (canonicalId) {
-      this.syncUserMutationToServer(canonicalId);
+      await this.syncUserMutationToServer(canonicalId);
     }
   }
 

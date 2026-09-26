@@ -218,8 +218,13 @@ export const AppProvider: React.FC<{
 
   const deleteTransaction = useCallback(
     async (id: string): Promise<boolean> => {
-      StorageService.deleteTransaction(id);
+      // Use local filtered list for immediate UI response
       const nextTransactions = transactions.filter((t) => t.id !== id);
+      
+      // Perform storage deletion (now async)
+      await StorageService.deleteTransaction(id);
+      
+      // Persist across context and cloud
       return await persistAllData(accounts, nextTransactions);
     },
     [transactions, accounts, persistAllData]
