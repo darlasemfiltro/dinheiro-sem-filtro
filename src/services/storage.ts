@@ -1304,9 +1304,12 @@ export class StorageService {
     }
   }
 
+  private static recentlyMutated = new Map<string, number>();
+
   /**
    * Safe entry point for Realtime updates.
-   * Merges remote data into local state while protecting items with _pendingSync: true.
+   * Merges remote data into local state while protecting items with _pendingSync: true
+   * or items that were recently mutated locally.
    */
   static handleRemoteStateUpdate(remoteData: any, budgetId: string): { 
     accounts?: Account[], 
@@ -1319,35 +1322,72 @@ export class StorageService {
     this.initialize();
     const canonicalId = getCanonicalUserId(budgetId);
     const deletedIds = this.getDeletedIds(canonicalId);
+    const now = Date.now();
+    const PROTECTION_WINDOW = 5000; // 5 seconds
 
     const result: any = {};
 
     if (remoteData.accounts) {
-      const accMap = new Map(this.getAccounts(canonicalId).map(a => [a.id, a]));
+      const localAccounts = this.getAccounts(canonicalId);
+      const accMap = new Map(localAccounts.map(a => [a.id, a]));
+      let hasChanges = false;
+
       remoteData.accounts.forEach((a: any) => {
         if (!a || !a.id || deletedIds.has(a.id)) return;
+        
         const existing = accMap.get(a.id);
-        if (existing && existing._pendingSync) return;
+        const lastMutation = this.recentlyMutated.get(a.id) || 0;
+        const isProtected = (existing && existing._pendingSync) || (now - lastMutation < PROTECTION_WINDOW);
+
+        if (isProtected) {
+          console.log(`[REALTIME] Ignorando atualização remota para conta ${a.id} (proteção ativa)`);
+          return;
+        }
+
+        // Only update if remote is newer or doesn't exist locally
         if (!existing || new Date(a.updatedAt || 0).getTime() >= new Date(existing.updatedAt || 0).getTime()) {
           accMap.set(a.id, { ...a, userId: canonicalId });
+          hasChanges = true;
         }
       });
-      result.accounts = Array.from(accMap.values());
-      this.setAccounts(result.accounts, canonicalId);
+
+      if (hasChanges) {
+        result.accounts = Array.from(accMap.values());
+        this.setAccounts(result.accounts, canonicalId);
+      } else {
+        result.accounts = localAccounts;
+      }
     }
 
     if (remoteData.transactions) {
-      const txMap = new Map(this.getTransactions(canonicalId).map(t => [t.id, t]));
+      const localTransactions = this.getTransactions(canonicalId);
+      const txMap = new Map(localTransactions.map(t => [t.id, t]));
+      let hasChanges = false;
+
       remoteData.transactions.forEach((t: any) => {
         if (!t || !t.id || deletedIds.has(t.id)) return;
+
         const existing = txMap.get(t.id);
-        if (existing && existing._pendingSync) return;
+        const lastMutation = this.recentlyMutated.get(t.id) || 0;
+        const isProtected = (existing && existing._pendingSync) || (now - lastMutation < PROTECTION_WINDOW);
+
+        if (isProtected) {
+          console.log(`[REALTIME] Ignorando atualização remota para transação ${t.id} (proteção ativa)`);
+          return;
+        }
+
         if (!existing || new Date(t.updatedAt || t.createdAt || 0).getTime() >= new Date(existing.updatedAt || existing.createdAt || 0).getTime()) {
           txMap.set(t.id, { ...t, userId: canonicalId });
+          hasChanges = true;
         }
       });
-      result.transactions = Array.from(txMap.values());
-      this.setTransactions(result.transactions, canonicalId);
+
+      if (hasChanges) {
+        result.transactions = Array.from(txMap.values());
+        this.setTransactions(result.transactions, canonicalId);
+      } else {
+        result.transactions = localTransactions;
+      }
     }
 
     if (remoteData.categories) {
@@ -1367,6 +1407,10 @@ export class StorageService {
     }
 
     return result;
+  }
+
+  static markAsRecentlyMutated(id: string) {
+    this.recentlyMutated.set(id, Date.now());
   }
 
   static async syncUserDataWithRemote(userId: string): Promise<boolean> {
@@ -4721,8 +4765,8 @@ export class StorageService {
       accounts.push(accToSave);
     }
     this.setAccounts(accounts, canonicalId);
-
     pushAccountToFirestore(accToSave);
+    this.markAsRecentlyMutated(accToSave.id);
     this.syncUserMutationToServer(canonicalId);
     return accToSave;
   }
@@ -4817,6 +4861,7 @@ export class StorageService {
     this.setAccounts(accs, canonicalId);
 
     this.markAsDeleted(accountId, canonicalId, 'accounts');
+    this.markAsRecentlyMutated(accountId);
     deleteAccountFromFirestore(accountId);
     if (canonicalId) {
       this.syncUserMutationToServer(canonicalId);
@@ -4866,6 +4911,7 @@ export class StorageService {
 
     createAppwriteTransaction(canonicalId, newTx).catch(() => {});
     pushTransactionToFirestore(newTx);
+    this.markAsRecentlyMutated(newTx.id);
     this.syncUserMutationToServer(canonicalId);
     return newTx;
   }
@@ -4912,6 +4958,7 @@ export class StorageService {
 
     updateAppwriteTransaction(canonicalId, updatedTx).catch(() => {});
     pushTransactionToFirestore(updatedTx);
+    this.markAsRecentlyMutated(updatedTx.id);
     this.syncUserMutationToServer(canonicalId);
     return updatedTx;
   }
@@ -4946,6 +4993,7 @@ export class StorageService {
 
     // 1. Mark as deleted globally FIRST (Authority for sync logic)
     this.markAsDeleted(transactionId, canonicalId, 'transactions');
+    this.markAsRecentlyMutated(transactionId);
 
     // 2. Remove from in-memory store immediately
     _inMemoryStore.transactions = _inMemoryStore.transactions.filter((t) => t.id !== transactionId);
