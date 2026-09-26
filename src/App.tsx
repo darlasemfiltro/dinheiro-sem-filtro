@@ -1205,7 +1205,14 @@ export default function App() {
       setTransactions(prev => JSON.stringify(prev) === JSON.stringify(newTransactions) ? prev : newTransactions);
       setGoals(prev => JSON.stringify(prev) === JSON.stringify(newGoals) ? prev : newGoals);
       setFamilyMembers(prev => JSON.stringify(prev) === JSON.stringify(newFamily) ? prev : newFamily);
-      if (updatedUser) setCurrentUser(updatedUser);
+      
+      if (updatedUser) {
+        setCurrentUser(prev => {
+          if (!prev) return updatedUser;
+          if (JSON.stringify(prev) === JSON.stringify(updatedUser)) return prev;
+          return updatedUser;
+        });
+      }
 
       if (forceRemote) {
         // Guarantee synced status and success toast only AFTER data is fully loaded and setters executed
@@ -1521,15 +1528,9 @@ export default function App() {
                 const resolvedName = (prevNameIsCustom && serverNameIsPrefix) ? prev.name : (serverUser.name || prev.name);
                 const updated = { ...prev, ...serverUser, id: prev.id, name: resolvedName };
                 
-                // Only update if data truly changed
-                if (
-                  prev.id === updated.id &&
-                  prev.name === updated.name &&
-                  prev.isPro === updated.isPro &&
-                  prev.plan === updated.plan &&
-                  prev.subscriptionStatus === updated.subscriptionStatus &&
-                  prev.avatarUrl === updated.avatarUrl
-                ) return prev;
+                // Deep equality check to prevent re-render loops
+                const isSame = JSON.stringify(prev) === JSON.stringify(updated);
+                if (isSame) return prev;
                 
                 localStorage.setItem('darla_current_user', JSON.stringify(updated));
                 return updated;
@@ -1614,7 +1615,6 @@ export default function App() {
         if (remoteData.member_permissions) {
           StorageService.syncSharedBudgetsWithServer(currentUser.email).then(() => {
             window.dispatchEvent(new Event('shared_budgets_updated'));
-            refreshData(currentUser);
           });
         }
         const incomingBudgetGoals = remoteData.budgetGoals || remoteData.budgetStrategy;
@@ -1639,7 +1639,7 @@ export default function App() {
           }
         }
       }
-      refreshData(currentUser, false);
+      
       window.dispatchEvent(new Event('portfolio_updated'));
     });
 
@@ -1707,8 +1707,9 @@ export default function App() {
     }, [currentUser, refreshData]);
 
     const handleSharedBudgetsListUpdated = useCallback(() => {
-      refreshData(currentUser, false);
-    }, [currentUser, refreshData]);
+      // Avoid calling refreshData here to prevent recursive sync loops
+      // The state will be updated by the source that triggered the shared_budgets_updated event
+    }, []);
 
     const handleUserDeleted = useCallback((evt: any) => {
       const payload = evt?.detail;
