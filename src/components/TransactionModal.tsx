@@ -51,8 +51,8 @@ const isoToPtBr = (iso: string): string => {
 interface TransactionModalProps {
   isOpen: boolean;
   onClose: () => void;
-  onSaveSingle: (tx: Omit<Transaction, 'id' | 'createdAt'>, keepOpen?: boolean) => void;
-  onSaveMultiple: (txList: Omit<Transaction, 'id' | 'createdAt'>[], keepOpen?: boolean) => void;
+  onSaveSingle: (tx: Omit<Transaction, 'id' | 'createdAt'>, keepOpen?: boolean) => Promise<boolean | any>;
+  onSaveMultiple: (txList: Omit<Transaction, 'id' | 'createdAt'>[], keepOpen?: boolean) => Promise<boolean | any>;
   accounts: Account[];
   categories: Category[];
   familyMembers?: FamilyMember[];
@@ -93,6 +93,8 @@ export const TransactionModal: React.FC<TransactionModalProps> = ({
   const [isConsolidated, setIsConsolidated] = useState<boolean>(true);
   const [notes, setNotes] = useState<string>('');
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
+  const [isSaving, setIsSaving] = useState<boolean>(false);
+  const scrollContainerRef = useRef<HTMLDivElement>(null);
 
   // Active categories derived memo to immediately reflect new categories/subcategories without render loops
   const activeCategories = useMemo(() => {
@@ -267,21 +269,33 @@ export const TransactionModal: React.FC<TransactionModalProps> = ({
     setInstallmentInput('2');
   };
 
-  const handleSaveTransaction = (keepOpen: boolean): boolean => {
+  const handleSaveTransaction = async (keepOpen: boolean): Promise<boolean> => {
+    if (isSaving) return false;
+    
     const cleanAmountStr = String(amount).trim().replace(',', '.');
     const numAmount = parseFloat(cleanAmountStr);
+    
     if (isNaN(numAmount) || numAmount <= 0) {
       window.dispatchEvent(new CustomEvent('app-toast', { detail: 'Por favor, informe um valor maior que zero.' }));
+      if (scrollContainerRef.current) {
+        scrollContainerRef.current.scrollTo({ top: 0, behavior: 'smooth' });
+      }
       return false;
     }
     if (!accountId) {
       window.dispatchEvent(new CustomEvent('app-toast', { detail: 'Por favor, selecione uma conta.' }));
+      if (scrollContainerRef.current) {
+        scrollContainerRef.current.scrollTo({ top: 0, behavior: 'smooth' });
+      }
       return false;
     }
 
     const parsedDate = ptBrToIso(dateText) || date;
     if (!parsedDate || !/^\d{4}-\d{2}-\d{2}$/.test(parsedDate)) {
       window.dispatchEvent(new CustomEvent('app-toast', { detail: 'Por favor, informe uma data válida no formato DD/MM/AAAA.' }));
+      if (scrollContainerRef.current) {
+        scrollContainerRef.current.scrollTo({ top: 0, behavior: 'smooth' });
+      }
       return false;
     }
 
@@ -315,22 +329,33 @@ export const TransactionModal: React.FC<TransactionModalProps> = ({
       notes,
     };
 
-    if (isInstallment && installmentTotal > 1 && type !== 'transfer') {
-      const list = generateInstallmentTransactions(baseTx, installmentTotal);
-      onSaveMultiple(list, keepOpen);
-    } else {
-      onSaveSingle(baseTx, keepOpen);
-    }
+    setIsSaving(true);
+    try {
+      if (isInstallment && installmentTotal > 1 && type !== 'transfer') {
+        const list = generateInstallmentTransactions(baseTx, installmentTotal);
+        await onSaveMultiple(list, keepOpen);
+      } else {
+        await onSaveSingle(baseTx, keepOpen);
+      }
 
-    if (keepOpen) {
-      resetForm();
-      setSuccessMessage(`Lançamento (${finalDescription}) salvo com sucesso!`);
-      setTimeout(() => setSuccessMessage(null), 3500);
-    } else {
-      onClose();
+      if (keepOpen) {
+        resetForm();
+        setSuccessMessage(`Lançamento (${finalDescription}) salvo com sucesso!`);
+        setTimeout(() => setSuccessMessage(null), 3500);
+        if (scrollContainerRef.current) {
+          scrollContainerRef.current.scrollTo({ top: 0, behavior: 'smooth' });
+        }
+      } else {
+        onClose();
+      }
+      return true;
+    } catch (err) {
+      console.error('Erro ao salvar lançamento:', err);
+      window.dispatchEvent(new CustomEvent('app-toast', { detail: 'Falha ao salvar. Tente novamente.' }));
+      return false;
+    } finally {
+      setIsSaving(false);
     }
-
-    return true;
   };
 
   const handleSubmit = (e: React.FormEvent) => {
@@ -512,7 +537,7 @@ export const TransactionModal: React.FC<TransactionModalProps> = ({
 
         {/* Form Body - Scrollable */}
         <form onSubmit={handleSubmit} className="flex flex-col flex-1 overflow-hidden min-h-0">
-          <div className="p-4 sm:p-6 overflow-y-auto space-y-4 flex-1">
+          <div ref={scrollContainerRef} className="p-4 sm:p-6 overflow-y-auto space-y-4 flex-1">
             {/* Type Selector Tabs - Receita, Despesa ou Transferência */}
             <div className="space-y-2 bg-gray-50 p-3.5 rounded-2xl border border-gray-200 shadow-2xs">
               <label className="text-xs font-extrabold text-[#121212] block uppercase tracking-wider">
@@ -894,19 +919,21 @@ export const TransactionModal: React.FC<TransactionModalProps> = ({
             {!initialTransaction && (
               <button
                 type="button"
+                disabled={isSaving}
                 onClick={() => handleSaveTransaction(true)}
-                className="min-h-[48px] flex-1 py-3 px-4 bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-400 font-extrabold text-xs sm:text-sm rounded-xl transition cursor-pointer flex items-center justify-center gap-2 shadow-xs"
+                className={`min-h-[48px] flex-1 py-3 px-4 bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-400 font-extrabold text-xs sm:text-sm rounded-xl transition cursor-pointer flex items-center justify-center gap-2 shadow-xs ${isSaving ? 'opacity-50 cursor-not-allowed' : ''}`}
               >
                 <PlusCircle className="w-4 h-4 text-emerald-600 stroke-[2.5] shrink-0" />
-                <span>Cadastrar Novo Lançamento</span>
+                <span>{isSaving ? 'Salvando...' : 'Cadastrar Novo Lançamento'}</span>
               </button>
             )}
 
             <button
               type="submit"
-              className="min-h-[48px] flex-1 py-3 px-4 bg-[#121212] hover:bg-black text-[#D4AF37] font-black text-xs sm:text-sm rounded-xl shadow-md transition cursor-pointer border border-[#D4AF37]"
+              disabled={isSaving}
+              className={`min-h-[48px] flex-1 py-3 px-4 bg-[#121212] hover:bg-black text-[#D4AF37] font-black text-xs sm:text-sm rounded-xl shadow-md transition cursor-pointer border border-[#D4AF37] ${isSaving ? 'opacity-50 cursor-not-allowed' : ''}`}
             >
-              {initialTransaction ? 'Salvar Alterações' : 'Confirmar Lançamento'}
+              {isSaving ? 'Gravando...' : (initialTransaction ? 'Salvar Alterações' : 'Confirmar Lançamento')}
             </button>
           </div>
         </form>

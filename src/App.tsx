@@ -2176,7 +2176,19 @@ export default function App() {
 
   const handleSaveSingleTransaction = async (txData: Omit<Transaction, 'id' | 'createdAt'>, keepOpen: boolean = false): Promise<boolean> => {
     if (checkReadOnlyPermission()) return false;
-    let nextTransactions = transactions;
+    
+    console.log('[DEDO-DURO] Iniciando handleSaveSingleTransaction', {
+      isEditing: !!editingTx,
+      keepOpen,
+      txData: { ...txData, description: txData.description }
+    });
+
+    // 1. OTIMISMO: Prepara a transação e atualiza o cache local imediatamente
+    const budgetId = currentUser ? StorageService.getEffectiveBudgetId(currentUser) : 'default';
+    
+    let nextTransactions: Transaction[] = [];
+    let saved: Transaction | null = null;
+
     if (editingTx) {
       const series = editingTx.parentInstallmentId
         ? transactions.filter((t) => t.parentInstallmentId === editingTx.parentInstallmentId)
@@ -2217,9 +2229,15 @@ export default function App() {
             description: `${baseName} [${t.installmentIndex}/${t.installmentTotal}]`,
           };
         });
+        
         updatedSeries.forEach((upd) => StorageService.updateTransaction(upd));
         const updatedMap = new Map(updatedSeries.map((u) => [u.id, u]));
-        nextTransactions = transactions.map((t) => updatedMap.get(t.id) || t);
+        
+        setTransactions(prev => {
+          const next = prev.map((t) => updatedMap.get(t.id) || t);
+          nextTransactions = next;
+          return next;
+        });
       } else {
         const updated: Transaction = {
           ...txData,
@@ -2227,41 +2245,75 @@ export default function App() {
           createdAt: editingTx.createdAt,
         };
         StorageService.updateTransaction(updated);
-        nextTransactions = transactions.map((t) => (t.id === updated.id ? updated : t));
+        setTransactions(prev => {
+          const next = prev.map((t) => (t.id === updated.id ? updated : t));
+          nextTransactions = next;
+          return next;
+        });
       }
     } else {
-      const saved = StorageService.addTransaction(txData);
-      nextTransactions = [saved, ...transactions];
+      saved = StorageService.addTransaction(txData);
+      setTransactions(prev => {
+        const next = [saved!, ...prev];
+        nextTransactions = next;
+        return next;
+      });
       if (currentUser) {
         GamificationService.recordAction(currentUser.id, 'launches');
       }
     }
 
-    await persistAllData(accounts, nextTransactions);
+    // Fecha o modal se não for keepOpen (UX imediata)
     if (!keepOpen) {
       setIsTxModalOpen(false);
       setEditingTx(null);
     }
-    refreshData(currentUser, false);
+
+    // 2. SINCRONIZAÇÃO EM SEGUNDO PLANO
+    // Esperamos o estado ser atualizado para disparar a persistência
+    setTimeout(async () => {
+      try {
+        await persistAllData(accounts, nextTransactions);
+        refreshData(currentUser, false);
+      } catch (err) {
+        console.error('[SYNC ERROR] Falha ao persistir novo lançamento:', err);
+      }
+    }, 100);
+
     return true;
   };
 
   const handleSaveMultipleTransactions = async (txList: Omit<Transaction, 'id' | 'createdAt'>[], keepOpen: boolean = false): Promise<boolean> => {
     if (checkReadOnlyPermission()) return false;
+    
     const added = StorageService.addMultipleTransactions(txList);
-    const nextTransactions = [...added, ...transactions];
+    let nextTransactions: Transaction[] = [];
+
+    setTransactions(prev => {
+      const next = [...added, ...prev];
+      nextTransactions = next;
+      return next;
+    });
+
     if (currentUser) {
       GamificationService.recordAction(currentUser.id, 'launches', txList.length);
     }
 
-    const success = await persistAllData(accounts, nextTransactions);
-    if (success) {
-      if (!keepOpen) {
-        setIsTxModalOpen(false);
-      }
-      refreshData(currentUser, false);
+    if (!keepOpen) {
+      setIsTxModalOpen(false);
+      setEditingTx(null);
     }
-    return success;
+
+    setTimeout(async () => {
+      try {
+        await persistAllData(accounts, nextTransactions);
+        refreshData(currentUser, false);
+      } catch (err) {
+        console.error('[SYNC ERROR] Falha ao persistir múltiplos lançamentos:', err);
+      }
+    }, 100);
+
+    return true;
   };
 
   const handleDeleteTransaction = async (id: string): Promise<boolean> => {
@@ -2389,14 +2441,26 @@ export default function App() {
 
   const handleUpdateSingleTransaction = async (tx: Transaction): Promise<boolean> => {
     if (checkReadOnlyPermission()) return false;
+    
     StorageService.updateTransaction(tx);
-    const nextTransactions = transactions.map((t) => (t.id === tx.id ? tx : t));
+    let nextTransactions: Transaction[] = [];
+    
+    setTransactions(prev => {
+      const next = prev.map((t) => (t.id === tx.id ? tx : t));
+      nextTransactions = next;
+      return next;
+    });
 
-    const success = await persistAllData(accounts, nextTransactions);
-    if (success) {
-      refreshData(currentUser, false);
-    }
-    return success;
+    setTimeout(async () => {
+      try {
+        await persistAllData(accounts, nextTransactions);
+        refreshData(currentUser, false);
+      } catch (err) {
+        console.error('[SYNC ERROR] Falha ao persistir atualização de lançamento:', err);
+      }
+    }, 100);
+
+    return true;
   };
 
   // Investment Transaction Handlers
