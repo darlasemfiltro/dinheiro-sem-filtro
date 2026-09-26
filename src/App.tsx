@@ -1013,21 +1013,23 @@ export default function App() {
         const effectiveBudgetId = user ? StorageService.getEffectiveBudgetId(user) : 'default';
         const remoteData = await loadFromCloud(effectiveBudgetId, user?.email);
         if (remoteData) {
-          if (remoteData.transactions && Array.isArray(remoteData.transactions)) {
+          const merged = StorageService.handleRemoteStateUpdate(remoteData, effectiveBudgetId);
+          
+          if (merged.transactions) {
+            setTransactions(merged.transactions);
+          } else if (remoteData.transactions) {
             setTransactions(remoteData.transactions);
             StorageService.setTransactions(remoteData.transactions, effectiveBudgetId);
-          } else {
-            setTransactions([]);
-            StorageService.setTransactions([], effectiveBudgetId);
           }
-          if (remoteData.accounts && Array.isArray(remoteData.accounts)) {
-            setAccounts(remoteData.accounts);
-            StorageService.setAccounts(remoteData.accounts, effectiveBudgetId);
-          } else {
+
+          if (merged.accounts) {
+            setAccounts(merged.accounts);
+          } else if (remoteData.accounts) {
             const defaultAccs = [{ id: 'default', userId: effectiveBudgetId, name: 'Conta Principal', initialBalance: 0, color: '#4F46E5', icon: 'Wallet', type: 'checking' as const }];
             setAccounts(defaultAccs);
             StorageService.setAccounts(defaultAccs, effectiveBudgetId);
           }
+
           if (remoteData.budgets) {
             setBudgets(remoteData.budgets);
           }

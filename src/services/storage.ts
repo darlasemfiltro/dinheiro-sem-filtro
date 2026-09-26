@@ -1305,6 +1305,7 @@ export class StorageService {
   }
 
   private static recentlyMutated = new Map<string, number>();
+  private static durableInitialBalances = new Map<string, number>();
 
   /**
    * Safe entry point for Realtime updates.
@@ -1323,7 +1324,7 @@ export class StorageService {
     const canonicalId = getCanonicalUserId(budgetId);
     const deletedIds = this.getDeletedIds(canonicalId);
     const now = Date.now();
-    const PROTECTION_WINDOW = 15000; // 15 seconds
+    const PROTECTION_WINDOW = 120000; // 2 minutes protection for mutations
 
     const result: any = {};
 
@@ -1332,25 +1333,47 @@ export class StorageService {
       const accMap = new Map(localAccounts.map(a => [a.id, a]));
       let hasChanges = false;
 
+      // Ensure local durable balances are populated from memory
+      localAccounts.forEach(la => {
+        if (la.initialBalance > 0) {
+          this.durableInitialBalances.set(la.id, la.initialBalance);
+        }
+      });
+
       remoteData.accounts.forEach((a: any) => {
         if (!a || !a.id || deletedIds.has(a.id)) return;
         
         const existing = accMap.get(a.id);
         const lastMutation = this.recentlyMutated.get(a.id) || 0;
-        const isProtected = (existing && existing._pendingSync) || (now - lastMutation < PROTECTION_WINDOW);
-
-        if (isProtected) {
-          console.log(`[REALTIME] Ignorando atualização remota para conta ${a.id} (proteção ativa por ${Math.round((PROTECTION_WINDOW - (now - lastMutation))/1000)}s)`);
+        const isMutationProtected = (now - lastMutation < PROTECTION_WINDOW);
+        const isPendingProtected = (existing && existing._pendingSync);
+        
+        if (isMutationProtected || isPendingProtected) {
+          console.log(`[REALTIME] Ignorando atualização remota para conta ${a.id} (proteção ativa por mais ${Math.max(0, Math.round((PROTECTION_WINDOW - (now - lastMutation))/1000))}s)`);
           return;
         }
 
-        // Only update if remote is strictly newer or doesn't exist locally
+        // AGGRESSIVE SAFEGUARD: If remote initialBalance is 0 but local was non-zero, reject unless remote is MUCH newer (e.g. > 10 mins)
+        const remoteInitialBalance = typeof a.initialBalance === 'number' ? a.initialBalance : parseFloat(String(a.initialBalance || 0)) || 0;
+        const localDurableBalance = this.durableInitialBalances.get(a.id) || (existing ? existing.initialBalance : 0);
+        
         const remoteUpdateAt = new Date(a.updatedAt || 0).getTime();
         const localUpdateAt = existing ? new Date(existing.updatedAt || 0).getTime() : 0;
+        
+        // If remote tries to set balance to 0 when we had a positive balance, we are extremely suspicious
+        if (remoteInitialBalance === 0 && localDurableBalance > 0) {
+          const tenMinutes = 10 * 60 * 1000;
+          if (remoteUpdateAt - localUpdateAt < tenMinutes) {
+            console.warn(`[REALTIME] Bloqueada tentativa suspeita de reverter saldo da conta ${a.id} para zero.`);
+            return;
+          }
+        }
 
+        // Only update if remote is strictly newer or doesn't exist locally
         if (!existing || remoteUpdateAt > localUpdateAt) {
           accMap.set(a.id, { ...a, userId: canonicalId });
           hasChanges = true;
+          if (remoteInitialBalance > 0) this.durableInitialBalances.set(a.id, remoteInitialBalance);
           console.log(`[REALTIME] Conta ${a.id} atualizada via nuvem (Remote: ${a.updatedAt})`);
         }
       });
@@ -1376,7 +1399,7 @@ export class StorageService {
         const isProtected = (existing && existing._pendingSync) || (now - lastMutation < PROTECTION_WINDOW);
 
         if (isProtected) {
-          console.log(`[REALTIME] Ignorando atualização remota para transação ${t.id} (proteção ativa por ${Math.round((PROTECTION_WINDOW - (now - lastMutation))/1000)}s)`);
+          console.log(`[REALTIME] Ignorando atualização remota para transação ${t.id} (proteção ativa por mais ${Math.max(0, Math.round((PROTECTION_WINDOW - (now - lastMutation))/1000))}s)`);
           return;
         }
 

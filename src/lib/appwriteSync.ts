@@ -761,34 +761,8 @@ export async function loadFromCloud(userId?: string, userEmail?: string): Promis
           }
         }
         
-        // Sanitização estrita: se cloud data está zerado (transactions, investments, investmentTransactions vazios), força todos os rollovers e saldos anteriores para 0 e limpa cache local obsoleto
-        if ((!parsed.transactions || !Array.isArray(parsed.transactions) || parsed.transactions.length === 0) &&
-            (!parsed.investmentTransactions || !Array.isArray(parsed.investmentTransactions) || parsed.investmentTransactions.length === 0) &&
-            (!parsed.investments || !Array.isArray(parsed.investments) || parsed.investments.length === 0)) {
-          console.log('[Appwrite Sanitization] Cloud data is empty/reset. Forcing rollover, previous balance, and carryOver to 0.');
-          parsed.transactions = [];
-          parsed.rollover = 0;
-          parsed.accumulatedRollover = 0;
-          parsed.previousBalance = 0;
-          parsed.previousMonthBalance = 0;
-          parsed.initialBalance = 0;
-          parsed.carryOver = 0;
-          parsed.monthlyRollovers = {};
-          if (parsed.accounts && Array.isArray(parsed.accounts)) {
-            parsed.accounts = parsed.accounts.map((acc: any) => ({
-              ...acc,
-              balance: 0,
-              initialBalance: 0
-            }));
-          } else {
-            parsed.accounts = [{ id: 'default', name: 'Conta Principal', balance: 0, initialBalance: 0, type: 'checking' }];
-          }
-          try {
-            localStorage.setItem(`darla_transactions_${resolvedUserId}`, JSON.stringify([]));
-            localStorage.setItem(`darla_accounts_${resolvedUserId}`, JSON.stringify(parsed.accounts));
-          } catch {}
-        }
-
+        // Sanitização estrita REMOVIDA: Era a causa do reset de saldos para zero quando não haviam transações.
+        // Preservamos apenas o cache local do documento
         try {
           localStorage.setItem(`cached_app_data_${resolvedUserId}`, JSON.stringify(parsed));
         } catch {}
