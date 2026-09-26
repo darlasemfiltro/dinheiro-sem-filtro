@@ -1,0 +1,5 @@
+src/components/AddAssetModal.tsx:1:import React, { useState, useEffect, useRef, useMemo } from 'react';
+src/components/AddAssetModal.tsx:715:  useEffect(() => {
+src/components/AddAssetModal.tsx:767:  useEffect(() => {
+src/components/AddAssetModal.tsx:866:  useEffect(() => {
+src/components/AddAssetModal.tsx:971:  useEffect(() => {
