@@ -287,19 +287,36 @@ export default function App() {
 
       // FETCH-AND-MERGE STRATEGY FOR 100% RELIABILITY
       let finalDataState = nextDataState;
+      const budgetId = currentUser ? StorageService.getEffectiveBudgetId(currentUser) : 'default';
+      const deletedIds = StorageService.getDeletedIds(budgetId);
+
       try {
         const latestDoc = await databases.getDocument(DATABASE_ID, collectionId, resolvedDocId);
         if (latestDoc && latestDoc.data) {
           const remoteState = typeof latestDoc.data === 'string' ? JSON.parse(latestDoc.data) : latestDoc.data;
           
           // Merge logic: prefer newer data if IDs match, but keep remote stuff we don't have locally
-          // (Simples logic: merge arrays by unique ID)
+          // CRITICAL: Filter out any items that are marked as deleted locally to prevent "resurrection"
           const mergeArrays = (local: any[], remote: any[]) => {
-            if (!Array.isArray(local)) return remote;
-            if (!Array.isArray(remote)) return local;
+            if (!Array.isArray(local) && !Array.isArray(remote)) return [];
+            const localArr = Array.isArray(local) ? local : [];
+            const remoteArr = Array.isArray(remote) ? remote : [];
             const map = new Map();
-            remote.forEach(item => { if (item.id) map.set(item.id, item); });
-            local.forEach(item => { if (item.id) map.set(item.id, item); });
+            
+            // 1. Add remote items first
+            remoteArr.forEach(item => { 
+              if (item && item.id && !deletedIds.has(item.id)) {
+                map.set(item.id, item); 
+              }
+            });
+            
+            // 2. Overwrite with local items (authority)
+            localArr.forEach(item => { 
+              if (item && item.id && !deletedIds.has(item.id)) {
+                map.set(item.id, item); 
+              }
+            });
+            
             return Array.from(map.values());
           };
 
@@ -311,6 +328,7 @@ export default function App() {
             categories: mergeArrays(nextDataState.categories, remoteState.categories),
             goals: mergeArrays(nextDataState.goals, remoteState.goals),
             familyMembers: mergeArrays(nextDataState.familyMembers, remoteState.familyMembers),
+            deletedIds: Array.from(deletedIds) // Keep the server updated with the latest deleted IDs
           };
         }
       } catch (e) {
@@ -328,7 +346,6 @@ export default function App() {
 
       console.log(`[DEDO-DURO] Sucesso ao atualizar documento ${resolvedDocId} no Appwrite.`);
 
-      const budgetId = currentUser ? StorageService.getEffectiveBudgetId(currentUser) : 'default';
       if (nextDataState.transactions) {
         setTransactions(nextDataState.transactions);
         StorageService.setTransactions(nextDataState.transactions, budgetId);
@@ -407,15 +424,18 @@ export default function App() {
 
                 console.log(`[REALTIME] Dados do orçamento atualizados:`, remoteData);
                 const budgetId = StorageService.getEffectiveBudgetId(currentUser);
+                const deletedIds = StorageService.getDeletedIds(budgetId);
 
-                // Update local storage and state for all collections
+                // Update local storage and state for all collections, respecting deleted items
                 if (remoteData.transactions) {
-                  setTransactions(remoteData.transactions);
-                  StorageService.setTransactions(remoteData.transactions, budgetId);
+                  const filtered = remoteData.transactions.filter((t: any) => t && t.id && !deletedIds.has(t.id));
+                  setTransactions(filtered);
+                  StorageService.setTransactions(filtered, budgetId);
                 }
                 if (remoteData.accounts) {
-                  setAccounts(remoteData.accounts);
-                  StorageService.setAccounts(remoteData.accounts, budgetId);
+                  const filtered = remoteData.accounts.filter((a: any) => a && a.id && !deletedIds.has(a.id));
+                  setAccounts(filtered);
+                  StorageService.setAccounts(filtered, budgetId);
                 }
                 if (remoteData.categories) {
                   setCategories(remoteData.categories);
@@ -423,8 +443,9 @@ export default function App() {
                 }
                 if (remoteData.financialGoals || remoteData.goals) {
                   const goalsArr = remoteData.financialGoals || remoteData.goals || [];
-                  setFinancialGoals(goalsArr);
-                  StorageService.setGoals(goalsArr, budgetId);
+                  const filtered = goalsArr.filter((g: any) => g && g.id && !deletedIds.has(g.id));
+                  setFinancialGoals(filtered);
+                  StorageService.setGoals(filtered, budgetId);
                 }
                 if (remoteData.familyMembers) setFamilyMembers(remoteData.familyMembers);
                 
@@ -1543,13 +1564,16 @@ export default function App() {
     realtimeSync.connect(currentUser.email, activeBudgetId);
     const unsubscribeAppwrite = subscribeToAppwriteRealtime(activeBudgetId, (remoteData) => {
       if (remoteData) {
+        const deletedIds = StorageService.getDeletedIds(activeBudgetId);
         if (remoteData.transactions) {
-          setTransactions((prev) => JSON.stringify(remoteData.transactions) !== JSON.stringify(prev) ? remoteData.transactions : prev);
-          StorageService.setTransactions(remoteData.transactions, activeBudgetId);
+          const filtered = remoteData.transactions.filter((t: any) => t && t.id && !deletedIds.has(t.id));
+          setTransactions((prev) => JSON.stringify(filtered) !== JSON.stringify(prev) ? filtered : prev);
+          StorageService.setTransactions(filtered, activeBudgetId);
         }
         if (remoteData.accounts) {
-          setAccounts((prev) => JSON.stringify(remoteData.accounts) !== JSON.stringify(prev) ? remoteData.accounts : prev);
-          StorageService.setAccounts(remoteData.accounts, activeBudgetId);
+          const filtered = remoteData.accounts.filter((a: any) => a && a.id && !deletedIds.has(a.id));
+          setAccounts((prev) => JSON.stringify(filtered) !== JSON.stringify(prev) ? filtered : prev);
+          StorageService.setAccounts(filtered, activeBudgetId);
         }
         if (remoteData.investmentTransactions) {
           setInvestmentTransactions((prev) => JSON.stringify(remoteData.investmentTransactions) !== JSON.stringify(prev) ? remoteData.investmentTransactions : prev);
@@ -1653,10 +1677,15 @@ export default function App() {
       }
 
       // Debounce remote update so we never spam refreshData
+      // If we just synced locally, wait longer to avoid race conditions with server processing
+      const now = Date.now();
+      const syncCooldown = now - lastSyncTimeRef.current;
+      const debounceTime = syncCooldown < 5000 ? 3000 : 1000;
+
       if (remoteUpdateDebounceTimer) clearTimeout(remoteUpdateDebounceTimer);
       remoteUpdateDebounceTimer = setTimeout(() => {
         refreshData(currentUser, false);
-      }, 1000);
+      }, debounceTime);
     }, [currentUser, refreshData, setCategories]);
 
     const handleSharedBudgetUpdated = useCallback(async (evt?: any) => {
@@ -2261,86 +2290,85 @@ export default function App() {
       }
     }
 
-    // 1. Grava os IDs na blacklist imediata
-    idsToDelete.forEach((delId) => recordTransactionDeletion(delId));
+    // 1. OTIMISMO TOTAL: Atualiza a UI e o cache local INSTANTANEAMENTE
+    const budgetId = currentUser ? StorageService.getEffectiveBudgetId(currentUser) : 'default';
+    
+    // Marca na blacklist local para evitar ressurreição imediata por WebSocket
+    idsToDelete.forEach((delId) => {
+      recordTransactionDeletion(delId);
+      StorageService.markAsDeleted(delId, budgetId, 'transactions');
+    });
 
-    const totalAntes = transactions.length;
     const nextTransactions = transactions.filter((t) => !idsToDelete.includes(t.id));
-    const totalDepois = nextTransactions.length;
-
-    console.log(`[DEDO-DURO CONTAGEM] Itens antes: ${totalAntes} | Itens depois: ${totalDepois}`);
-
+    
+    // Atualiza estados do React e caches locais sem esperar a rede
+    setTransactions(nextTransactions);
+    StorageService.setTransactions(nextTransactions, budgetId);
+    
     try {
-      const cfg = getAppwriteConfig();
-      const DATABASE_ID = cfg?.databaseId || '6a83aa8d0038331e040f';
-      const COLLECTION_ID = 'user_financials';
+      localStorage.setItem(`darla_transactions_${budgetId}`, JSON.stringify(nextTransactions));
+      localStorage.setItem(`transactions_${budgetId}`, JSON.stringify(nextTransactions));
+      localStorage.setItem('transactions', JSON.stringify(nextTransactions));
+    } catch (e) {}
 
-      console.log('[DEDO-DURO BUSCA] Buscando documento ativo no Appwrite...');
-      const targetDocId = await resolveCanonicalAppwriteDocument();
-
-      if (!targetDocId) {
-        const errMsg = 'FALHA DEDO-DURO: Nenhum documento retornado do banco de dados para salvar a exclusão!';
-        console.error(errMsg);
-        window.alert(errMsg);
-        return false;
-      }
-
-      console.log('[DEDO-DURO ALVO] Documento localizado ID:', targetDocId);
-
-      let currentDoc: any = null;
+    // 2. SINCRONIZAÇÃO EM SEGUNDO PLANO: Atualiza a nuvem de forma resiliente
+    (async () => {
       try {
-        currentDoc = await databases.getDocument(DATABASE_ID, COLLECTION_ID, targetDocId);
-      } catch (e) {}
+        const cfg = getAppwriteConfig();
+        const DATABASE_ID = cfg?.databaseId || '6a83aa8d0038331e040f';
+        const COLLECTION_ID = 'user_financials';
 
-      let parsedData: any = {};
-      const rawData = currentDoc?.data;
-      if (typeof rawData === 'string') {
-        try { parsedData = JSON.parse(rawData); } catch (e) { parsedData = {}; }
-      } else if (rawData && typeof rawData === 'object') {
-        parsedData = rawData;
+        const targetDocId = await resolveCanonicalAppwriteDocument();
+        if (!targetDocId) return;
+
+        let currentDoc: any = null;
+        try {
+          currentDoc = await databases.getDocument(DATABASE_ID, COLLECTION_ID, targetDocId);
+        } catch (e) {}
+
+        let parsedData: any = {};
+        const rawData = currentDoc?.data;
+        if (typeof rawData === 'string') {
+          try { parsedData = JSON.parse(rawData); } catch (e) { parsedData = {}; }
+        } else if (rawData && typeof rawData === 'object') {
+          parsedData = rawData;
+        }
+
+        // Remove do array central do documento
+        parsedData.transactions = Array.isArray(parsedData.transactions) 
+          ? parsedData.transactions.filter((t: any) => !idsToDelete.includes(t.id || t.$id))
+          : nextTransactions;
+          
+        parsedData.updatedAt = new Date().toISOString();
+        parsedData.deletedIds = Array.from(StorageService.getDeletedIds(budgetId));
+
+        const finalPayload = {
+          userId: currentDoc?.userId || currentUser?.email || 'default',
+          data: JSON.stringify(parsedData),
+          updatedAt: parsedData.updatedAt
+        };
+
+        await databases.updateDocument(
+          DATABASE_ID,
+          COLLECTION_ID,
+          targetDocId,
+          finalPayload
+        );
+
+        // Limpeza individual nas outras coleções
+        idsToDelete.forEach((delId) => {
+          deleteAppwriteTransaction(budgetId, delId).catch(() => {});
+          deleteTransactionFromFirestore(delId);
+        });
+
+        window.dispatchEvent(new Event('remote_data_updated'));
+        window.dispatchEvent(new CustomEvent('financial_data_mutated', { detail: { userId: budgetId } }));
+      } catch (syncErr) {
+        console.warn('[DEDO-DURO SYNC BACKGROUND] Falha ao sincronizar exclusão, mas o cache local garante a remoção.', syncErr);
       }
+    })();
 
-      parsedData.transactions = nextTransactions;
-      parsedData.updatedAt = new Date().toISOString();
-
-      const finalPayload = {
-        userId: currentDoc?.userId || currentUser?.email || 'default',
-        data: JSON.stringify(parsedData),
-        cidade: currentDoc?.cidade || 'Brasília',
-        estado: currentDoc?.estado || 'DF',
-        data_nascimento: currentDoc?.data_nascimento || '1999-12-31T22:00:00.000Z',
-        consent_lgpd: currentDoc?.consent_lgpd ?? false
-      };
-
-      console.log('[DEDO-DURO UPDATE] Enviando updateDocument para Appwrite...');
-      const res = await databases.updateDocument(
-        DATABASE_ID,
-        COLLECTION_ID,
-        targetDocId,
-        finalPayload
-      );
-
-      console.log('[DEDO-DURO SUCESSO NUVEM] Resposta confirmada pelo Appwrite! $updatedAt:', res.$updatedAt);
-
-      setTransactions(nextTransactions);
-      const budgetId = currentUser ? StorageService.getEffectiveBudgetId(currentUser) : 'default';
-      StorageService.setTransactions(nextTransactions, budgetId);
-      try {
-        localStorage.setItem(`darla_transactions_${budgetId}`, JSON.stringify(nextTransactions));
-        localStorage.setItem(`transactions_${budgetId}`, JSON.stringify(nextTransactions));
-        localStorage.setItem('transactions', JSON.stringify(nextTransactions));
-      } catch (e) {}
-
-      refreshData(currentUser, false);
-      window.dispatchEvent(new Event('remote_data_updated'));
-      window.dispatchEvent(new CustomEvent('financial_data_mutated', { detail: { userId: budgetId } }));
-      return true;
-    } catch (err: any) {
-      const falhaMsg = `Falha ao excluir no banco de dados: ${err.message || JSON.stringify(err)}`;
-      console.error('[DEDO-DURO ERRO CRÍTICO]', err);
-      window.alert(falhaMsg);
-      return false;
-    }
+    return true;
   };
 
   const handleToggleConsolidated = async (id: string): Promise<boolean> => {

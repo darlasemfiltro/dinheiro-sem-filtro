@@ -218,16 +218,21 @@ export const AppProvider: React.FC<{
 
   const deleteTransaction = useCallback(
     async (id: string): Promise<boolean> => {
-      // Use local filtered list for immediate UI response
+      // 1. Instant UI update
       const nextTransactions = transactions.filter((t) => t.id !== id);
+      setTransactions(nextTransactions);
       
-      // Perform storage deletion (now async)
+      // 2. Definitive storage and cloud deletion
       await StorageService.deleteTransaction(id);
       
-      // Persist across context and cloud
-      return await persistAllData(accounts, nextTransactions);
+      // 3. Notify other components
+      const budgetId = StorageService.getEffectiveBudgetId(currentUser);
+      window.dispatchEvent(new Event('portfolio_updated'));
+      window.dispatchEvent(new CustomEvent('financial_data_mutated', { detail: { userId: budgetId } }));
+      
+      return true;
     },
-    [transactions, accounts, persistAllData]
+    [transactions, currentUser]
   );
 
   const toggleConsolidated = useCallback(

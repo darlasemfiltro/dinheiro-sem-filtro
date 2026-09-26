@@ -1253,7 +1253,18 @@ export class StorageService {
       localStorage.setItem(key, JSON.stringify(Array.from(existing)));
     } catch {}
 
-    // Immediately remove from all local storage collections
+    // Immediately remove from in-memory store
+    if (type === 'transactions' || !type) {
+      _inMemoryStore.transactions = _inMemoryStore.transactions.filter(t => t.id !== id);
+    }
+    if (type === 'accounts' || !type) {
+      _inMemoryStore.accounts = _inMemoryStore.accounts.filter(a => a.id !== id);
+    }
+    if (type === 'goals' || !type) {
+      _inMemoryStore.goals = _inMemoryStore.goals.filter(g => g.id !== id);
+    }
+
+    // Immediately remove from all local storage collections (including budget-specific ones)
     try {
       const pruneKey = (k: string) => {
         const raw = localStorage.getItem(k);
@@ -1269,7 +1280,19 @@ export class StorageService {
           } catch {}
         }
       };
-      [STORAGE_KEYS.TRANSACTIONS, STORAGE_KEYS.ACCOUNTS, STORAGE_KEYS.CATEGORIES, STORAGE_KEYS.GOALS, STORAGE_KEYS.FAMILY_MEMBERS].forEach(pruneKey);
+      
+      const genericKeys = [STORAGE_KEYS.TRANSACTIONS, STORAGE_KEYS.ACCOUNTS, STORAGE_KEYS.CATEGORIES, STORAGE_KEYS.GOALS, STORAGE_KEYS.FAMILY_MEMBERS];
+      const budgetKeys = [
+        `darla_transactions_${canonicalId}`,
+        `darla_accounts_${canonicalId}`,
+        `darla_categories_${canonicalId}`,
+        `darla_goals_${canonicalId}`,
+        `darla_family_members_${canonicalId}`,
+        `transactions_${canonicalId}`,
+        `accounts_${canonicalId}`
+      ];
+      
+      [...genericKeys, ...budgetKeys].forEach(pruneKey);
     } catch {}
 
     if (canonicalId) {
@@ -1332,6 +1355,35 @@ export class StorageService {
       const goalMap = new Map(_inMemoryStore.goals.map(g => [g.id, g]));
 
       const deletedIds = this.getDeletedIds(canonicalId);
+      
+      // 4. Merge remote deleted IDs into local storage so they persist across sessions/devices
+      const remoteDeletedIds = [
+        ...(Array.isArray(serverData?.deletedIds) ? serverData.deletedIds : []),
+        ...(Array.isArray(appwriteConnData?.deletedIds) ? appwriteConnData.deletedIds : []),
+        ...(Array.isArray(firestoreData?.deletedIds) ? firestoreData.deletedIds : [])
+      ];
+
+      if (remoteDeletedIds.length > 0) {
+        let localChanged = false;
+        remoteDeletedIds.forEach(id => {
+          if (id && !deletedIds.has(id)) {
+            deletedIds.add(id);
+            localChanged = true;
+          }
+        });
+        if (localChanged) {
+          const key = `${STORAGE_KEYS.DELETED_IDS}_${canonicalId}`;
+          localStorage.setItem(key, JSON.stringify(Array.from(deletedIds)));
+        }
+      }
+
+      // Force purge existing items in maps that are marked as deleted locally
+      // This prevents "resurrection" if memory still has them for some reason
+      accMap.forEach((a, id) => { if (deletedIds.has(id)) accMap.delete(id); });
+      catMap.forEach((c, id) => { if (deletedIds.has(id)) catMap.delete(id); });
+      fmMap.forEach((f, id) => { if (deletedIds.has(id)) fmMap.delete(id); });
+      txMap.forEach((t, id) => { if (deletedIds.has(id)) txMap.delete(id); });
+      goalMap.forEach((g, id) => { if (deletedIds.has(id)) goalMap.delete(id); });
 
       const mergeAccounts = (list?: any[]) => {
         if (!Array.isArray(list)) return;
@@ -4837,37 +4889,22 @@ export class StorageService {
     const txs = this.getTransactions(canonicalId).filter((t) => t.id !== transactionId);
     this.setTransactions(txs, canonicalId);
 
-    // 4. Purge strictly across all local storage keys
+    // 4. Force cloud deletion
     try {
-      if (typeof localStorage !== 'undefined') {
-        const keysToClean = [
-          `darla_transactions_${canonicalId}`,
-          `transactions_${canonicalId}`,
-          'transactions',
-          'darla_transactions'
-        ];
-        keysToClean.forEach(k => {
-          const raw = localStorage.getItem(k);
-          if (raw) {
-            try {
-              const parsed = JSON.parse(raw);
-              if (Array.isArray(parsed)) {
-                const filtered = parsed.filter((t: any) => t && t.id !== transactionId);
-                localStorage.setItem(k, JSON.stringify(filtered));
-              }
-            } catch (e) {}
-          }
-        });
-      }
-    } catch (e) {}
-
-    // 5. Cloud Deletion
-    await Promise.allSettled([
-      deleteAppwriteTransaction(canonicalId, transactionId),
-      deleteTransactionFromFirestore(transactionId)
-    ]);
+      await Promise.allSettled([
+        deleteAppwriteTransaction(canonicalId, transactionId),
+        deleteTransactionFromFirestore(transactionId),
+        fetch('/api/data/delete-item', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ userId: canonicalId, type: 'transactions', id: transactionId }),
+        }).catch(() => {})
+      ]);
+    } catch (e) {
+      console.warn('[StorageService deleteTransaction cloud warning]', e);
+    }
     
-    // 6. Force server sync
+    // 5. Force server sync to ensure user_financials document is updated without the transaction
     if (canonicalId) {
       await this.syncUserMutationToServer(canonicalId);
     }
