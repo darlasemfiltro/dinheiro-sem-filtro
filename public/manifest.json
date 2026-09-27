@@ -1,0 +1,22 @@
+{
+  "name": "DINHEIRO SEM FILTRO",
+  "short_name": "DINHEIRO SEM FILTRO",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#111827",
+  "theme_color": "#D4AF37",
+  "icons": [
+    {
+      "src": "/darla_logo_main.jpeg?v=8",
+      "sizes": "192x192",
+      "type": "image/jpeg",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "/darla_logo_main.jpeg?v=8",
+      "sizes": "512x512",
+      "type": "image/jpeg",
+      "purpose": "any maskable"
+    }
+  ]
+}
