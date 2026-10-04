@@ -142,6 +142,8 @@ export const FiftyThirtyTwentyWidget: React.FC<FiftyThirtyTwentyWidgetProps> = (
   const [breakdownViewMode, setBreakdownViewMode] = useState<'by_category' | 'by_member'>('by_category');
   const [selectedMemberFilter, setSelectedMemberFilter] = useState<string>('ALL');
   const [searchTerm, setSearchTerm] = useState<string>('');
+  const [isPeriodMenuOpen, setIsPeriodMenuOpen] = useState(false);
+  const [isBaseModeMenuOpen, setIsBaseModeMenuOpen] = useState(false);
 
   // Expand / Collapse state for category accordions (collapsed by default as requested)
   const [expandedBuckets, setExpandedBuckets] = useState<Record<string, boolean>>({
@@ -720,30 +722,49 @@ export const FiftyThirtyTwentyWidget: React.FC<FiftyThirtyTwentyWidgetProps> = (
 
         {/* Filter Controls & Actions */}
         <div className="flex flex-wrap items-center gap-2.5 self-start lg:self-auto shrink-0">
-          {/* Period Dropdown Filter */}
-          <div className="flex items-center gap-1.5 bg-[#121212] border border-white/20 rounded-xl px-3 py-2 text-xs sm:text-sm">
-            <Filter className="w-4 h-4 text-[#D4AF37] shrink-0" />
-            <select
-              value={period}
-              onChange={(e) => setPeriod(e.target.value as PerformancePeriod)}
-              className="bg-transparent text-white font-extrabold text-xs sm:text-sm focus:outline-none cursor-pointer pr-1"
+          {/* Period Custom Dropdown */}
+          <div className="relative">
+            <button
+              type="button"
+              onClick={() => {
+                setIsPeriodMenuOpen(!isPeriodMenuOpen);
+                setIsBaseModeMenuOpen(false);
+              }}
+              className="flex items-center gap-2 bg-[#121212] border border-white/20 hover:border-[#D4AF37]/60 rounded-xl px-3.5 py-2.5 text-xs sm:text-sm text-white font-extrabold transition cursor-pointer shadow-sm"
             >
-              <option value="monthly" className="bg-[#18181B] text-white">
-                Mensal (Mês)
-              </option>
-              <option value="quarterly" className="bg-[#18181B] text-white">
-                Trimestral (3 Meses)
-              </option>
-              <option value="semiannual" className="bg-[#18181B] text-white">
-                Semestral (6 Meses)
-              </option>
-              <option value="annual" className="bg-[#18181B] text-white">
-                Anual (Ano)
-              </option>
-              <option value="custom" className="bg-[#18181B] text-white">
-                Período Personalizado
-              </option>
-            </select>
+              <Filter className="w-4 h-4 text-[#D4AF37] shrink-0" />
+              <span>{getPeriodLabel(period)}</span>
+              <ChevronDown className="w-4 h-4 text-gray-400 shrink-0" />
+            </button>
+
+            {isPeriodMenuOpen && (
+              <div className="absolute right-0 mt-2 w-60 bg-[#18181B] border border-white/20 rounded-2xl shadow-2xl z-50 overflow-hidden py-1.5">
+                {[
+                  { value: 'monthly', label: 'Mensal (Mês)' },
+                  { value: 'quarterly', label: 'Trimestral (3 Meses)' },
+                  { value: 'semiannual', label: 'Semestral (6 Meses)' },
+                  { value: 'annual', label: 'Anual (Ano)' },
+                  { value: 'custom', label: 'Período Personalizado' },
+                ].map((item) => (
+                  <button
+                    key={item.value}
+                    type="button"
+                    onClick={() => {
+                      setPeriod(item.value as PerformancePeriod);
+                      setIsPeriodMenuOpen(false);
+                    }}
+                    className={`w-full text-left px-4 py-3 text-xs sm:text-sm font-bold flex items-center justify-between transition cursor-pointer ${
+                      period === item.value
+                        ? 'bg-[#D4AF37] text-[#121212]'
+                        : 'text-white hover:bg-white/10'
+                    }`}
+                  >
+                    <span>{item.label}</span>
+                    {period === item.value && <Check className="w-4 h-4 shrink-0" />}
+                  </button>
+                ))}
+              </div>
+            )}
           </div>
 
           {Boolean(!isReadOnly) && (
@@ -841,18 +862,53 @@ export const FiftyThirtyTwentyWidget: React.FC<FiftyThirtyTwentyWidgetProps> = (
           <span className="text-[#D4AF37] font-black text-xs sm:text-sm">{getPeriodLabel(period)}</span>
         </div>
         <div className="flex flex-col sm:flex-row items-start sm:items-center gap-2.5 sm:gap-4 text-xs sm:text-sm font-semibold w-full sm:w-auto">
-          <div className="flex flex-wrap items-center gap-2 w-full sm:w-auto">
+          <div className="relative flex items-center gap-2 w-full sm:w-auto">
             <span className="text-gray-200">Base de Cálculo:</span>
-            <select
-              value={baseMode}
-              onChange={(e) => setBaseMode(e.target.value as any)}
-              className="bg-black/80 text-[#D4AF37] font-extrabold border border-[#D4AF37]/40 rounded-lg px-2 py-1 text-xs focus:outline-none cursor-pointer max-w-full"
+            <button
+              type="button"
+              onClick={() => {
+                setIsBaseModeMenuOpen(!isBaseModeMenuOpen);
+                setIsPeriodMenuOpen(false);
+              }}
+              className="flex items-center gap-2 bg-black/80 text-[#D4AF37] font-extrabold border border-[#D4AF37]/40 rounded-xl px-3 py-1.5 text-xs hover:border-[#D4AF37] transition cursor-pointer"
             >
-              <option value="auto">Automático</option>
-              <option value="income">Receitas ({formatCurrency(periodData.totalIncome)})</option>
-              <option value="expense">Total Saídas ({formatCurrency(periodData.totalExpense)})</option>
-            </select>
+              <span>
+                {baseMode === 'auto'
+                  ? 'Automático'
+                  : baseMode === 'income'
+                  ? `Receitas (${formatCurrency(periodData.totalIncome)})`
+                  : `Total Saídas (${formatCurrency(periodData.totalExpense)})`}
+              </span>
+              <ChevronDown className="w-3.5 h-3.5 shrink-0" />
+            </button>
             <span className="text-white font-black">({formatCurrency(periodData.base)})</span>
+
+            {isBaseModeMenuOpen && (
+              <div className="absolute left-0 sm:left-auto sm:right-0 mt-2 w-72 bg-[#18181B] border border-white/20 rounded-2xl shadow-2xl z-50 overflow-hidden py-1.5">
+                {[
+                  { value: 'auto', label: `Automático (${periodData.effectiveBaseType === 'expense' ? 'Total Saídas' : 'Receitas'})` },
+                  { value: 'income', label: `Receitas (${formatCurrency(periodData.totalIncome)})` },
+                  { value: 'expense', label: `Total Saídas (${formatCurrency(periodData.totalExpense)})` },
+                ].map((item) => (
+                  <button
+                    key={item.value}
+                    type="button"
+                    onClick={() => {
+                      setBaseMode(item.value as any);
+                      setIsBaseModeMenuOpen(false);
+                    }}
+                    className={`w-full text-left px-4 py-3 text-xs font-bold flex items-center justify-between transition cursor-pointer ${
+                      baseMode === item.value
+                        ? 'bg-[#D4AF37] text-[#121212]'
+                        : 'text-white hover:bg-white/10'
+                    }`}
+                  >
+                    <span>{item.label}</span>
+                    {baseMode === item.value && <Check className="w-3.5 h-3.5 shrink-0" />}
+                  </button>
+                ))}
+              </div>
+            )}
           </div>
           <div className="text-gray-200">
             Total Saídas: <strong className="text-white font-extrabold">{formatCurrency(periodData.totalExpense)}</strong>
