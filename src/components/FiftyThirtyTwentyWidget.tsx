@@ -738,7 +738,7 @@ export const FiftyThirtyTwentyWidget: React.FC<FiftyThirtyTwentyWidgetProps> = (
             </button>
 
             {isPeriodMenuOpen && (
-              <div className="absolute right-0 sm:right-auto sm:left-0 mt-2 w-64 max-w-[90vw] bg-[#18181B] border border-white/20 rounded-2xl shadow-2xl z-50 overflow-hidden py-1.5">
+              <div className="absolute left-1/2 -translate-x-1/2 sm:left-0 sm:translate-x-0 mt-2 w-72 max-w-[95vw] bg-[#18181B] border border-white/20 rounded-2xl shadow-2xl z-50 overflow-hidden py-1.5">
                 {[
                   { value: 'monthly', label: 'Mensal (Mês)' },
                   { value: 'quarterly', label: 'Trimestral (3 Meses)' },
@@ -884,7 +884,7 @@ export const FiftyThirtyTwentyWidget: React.FC<FiftyThirtyTwentyWidgetProps> = (
             <span className="text-white font-black">({formatCurrency(periodData.base)})</span>
 
             {isBaseModeMenuOpen && (
-              <div className="absolute left-0 sm:left-auto sm:right-0 mt-2 w-72 max-w-[90vw] bg-[#18181B] border border-white/20 rounded-2xl shadow-2xl z-50 overflow-hidden py-1.5">
+              <div className="absolute left-1/2 -translate-x-1/2 sm:left-auto sm:right-0 sm:translate-x-0 mt-2 w-80 max-w-[95vw] bg-[#18181B] border border-white/20 rounded-2xl shadow-2xl z-50 overflow-hidden py-1.5">
                 {[
                   { value: 'auto', label: `Automático (${periodData.effectiveBaseType === 'expense' ? 'Total Saídas' : 'Receitas'})` },
                   { value: 'income', label: `Receitas (${formatCurrency(periodData.totalIncome)})` },
