@@ -1,0 +1,640 @@
+{
+  "darla.semfiltro@gmail.com": {
+    "accounts": [],
+    "categories": [
+      {
+        "id": "cat_moradia_darla.semfiltro@gmail.com",
+        "userId": "darla.semfiltro@gmail.com",
+        "name": "Moradia",
+        "type": "expense",
+        "ruleGroup": "50_essentials",
+        "color": "#E11D48",
+        "icon": "Home",
+        "subcategories": [
+          {
+            "id": "sub_aluguel",
+            "categoryId": "cat_moradia",
+            "name": "Aluguel / Financiamento",
+            "subcategories": []
+          },
+          {
+            "id": "sub_condominio",
+            "categoryId": "cat_moradia",
+            "name": "Condomínio",
+            "subcategories": []
+          },
+          {
+            "id": "sub_luz",
+            "categoryId": "cat_moradia",
+            "name": "Energia Elétrica",
+            "subcategories": []
+          },
+          {
+            "id": "sub_agua",
+            "categoryId": "cat_moradia",
+            "name": "Água & Gás",
+            "subcategories": []
+          },
+          {
+            "id": "sub_internet",
+            "categoryId": "cat_moradia",
+            "name": "Internet & TV",
+            "subcategories": []
+          },
+          {
+            "id": "sub_manutencao_casa",
+            "categoryId": "cat_moradia",
+            "name": "Manutenção Residencial",
+            "subcategories": []
+          }
+        ],
+        "updatedAt": "2026-10-03T21:36:57.776Z"
+      },
+      {
+        "id": "cat_alimentacao_darla.semfiltro@gmail.com",
+        "userId": "darla.semfiltro@gmail.com",
+        "name": "Alimentação & Feira",
+        "type": "expense",
+        "ruleGroup": "50_essentials",
+        "color": "#F43F5E",
+        "icon": "Utensils",
+        "subcategories": [
+          {
+            "id": "sub_mercado",
+            "categoryId": "cat_alimentacao",
+            "name": "Supermercado",
+            "subcategories": []
+          },
+          {
+            "id": "sub_hortifruti",
+            "categoryId": "cat_alimentacao",
+            "name": "Açougue & Hortifrúti",
+            "subcategories": []
+          },
+          {
+            "id": "sub_padaria",
+            "categoryId": "cat_alimentacao",
+            "name": "Feira Livre & Padaria",
+            "subcategories": []
+          }
+        ],
+        "updatedAt": "2026-10-03T21:36:57.776Z"
+      },
+      {
+        "id": "cat_lazer_darla.semfiltro@gmail.com",
+        "userId": "darla.semfiltro@gmail.com",
+        "name": "Lazer & Gastronomia",
+        "type": "expense",
+        "ruleGroup": "30_lifestyle",
+        "color": "#8B5CF6",
+        "icon": "Sparkles",
+        "subcategories": [
+          {
+            "id": "sub_restaurante",
+            "categoryId": "cat_lazer",
+            "name": "Restaurante & Cafés",
+            "subcategories": []
+          },
+          {
+            "id": "sub_delivery",
+            "categoryId": "cat_lazer",
+            "name": "iFood & Delivery",
+            "subcategories": []
+          },
+          {
+            "id": "sub_cinema",
+            "categoryId": "cat_lazer",
+            "name": "Cinema & Bares",
+            "subcategories": []
+          },
+          {
+            "id": "sub_viagens",
+            "categoryId": "cat_lazer",
+            "name": "Viagens & Passeios",
+            "subcategories": []
+          }
+        ],
+        "updatedAt": "2026-10-03T21:36:57.776Z"
+      },
+      {
+        "id": "cat_renda_darla.semfiltro@gmail.com",
+        "userId": "darla.semfiltro@gmail.com",
+        "name": "Receita Principal",
+        "type": "income",
+        "ruleGroup": "income",
+        "color": "#00C853",
+        "icon": "Wallet",
+        "subcategories": [
+          {
+            "id": "sub_salario",
+            "categoryId": "cat_renda",
+            "name": "Salário / Prolabore",
+            "subcategories": []
+          },
+          {
+            "id": "sub_beneficios",
+            "categoryId": "cat_renda",
+            "name": "Benefícios (VR / VA / VT)",
+            "subcategories": []
+          },
+          {
+            "id": "sub_ferias",
+            "categoryId": "cat_renda",
+            "name": "13º Salário & Férias",
+            "subcategories": []
+          }
+        ],
+        "updatedAt": "2026-10-03T21:36:57.776Z"
+      },
+      {
+        "id": "cat_saude_darla.semfiltro@gmail.com",
+        "userId": "darla.semfiltro@gmail.com",
+        "name": "Saúde & Remédios",
+        "type": "expense",
+        "ruleGroup": "50_essentials",
+        "color": "#EC4899",
+        "icon": "HeartHandshake",
+        "subcategories": [
+          {
+            "id": "sub_plano",
+            "categoryId": "cat_saude",
+            "name": "Plano de Saúde",
+            "subcategories": []
+          },
+          {
+            "id": "sub_farmacia",
+            "categoryId": "cat_saude",
+            "name": "Farmácia & Remédios",
+            "subcategories": []
+          },
+          {
+            "id": "sub_consultas",
+            "categoryId": "cat_saude",
+            "name": "Consultas & Exames",
+            "subcategories": []
+          },
+          {
+            "id": "sub_dentista",
+            "categoryId": "cat_saude",
+            "name": "Dentista",
+            "subcategories": []
+          }
+        ],
+        "updatedAt": "2026-10-03T21:36:57.776Z"
+      },
+      {
+        "id": "cat_transporte_darla.semfiltro@gmail.com",
+        "userId": "darla.semfiltro@gmail.com",
+        "name": "Transporte Essencial",
+        "type": "expense",
+        "ruleGroup": "50_essentials",
+        "color": "#D97706",
+        "icon": "Car",
+        "subcategories": [
+          {
+            "id": "sub_combustivel",
+            "categoryId": "cat_transporte",
+            "name": "Combustível",
+            "subcategories": []
+          },
+          {
+            "id": "sub_uber",
+            "categoryId": "cat_transporte",
+            "name": "Transporte Público & Uber",
+            "subcategories": []
+          },
+          {
+            "id": "sub_manutencao",
+            "categoryId": "cat_transporte",
+            "name": "Manutenção Veicular / IPVA",
+            "subcategories": []
+          }
+        ],
+        "updatedAt": "2026-10-03T21:36:57.776Z"
+      },
+      {
+        "id": "cat_educacao_darla.semfiltro@gmail.com",
+        "userId": "darla.semfiltro@gmail.com",
+        "name": "Educação & Contas Básicas",
+        "type": "expense",
+        "ruleGroup": "50_essentials",
+        "color": "#2563EB",
+        "icon": "BookOpen",
+        "subcategories": [
+          {
+            "id": "sub_escola",
+            "categoryId": "cat_educacao",
+            "name": "Escola / Faculdade",
+            "subcategories": []
+          },
+          {
+            "id": "sub_cursos",
+            "categoryId": "cat_educacao",
+            "name": "Cursos & Treinamentos",
+            "subcategories": []
+          },
+          {
+            "id": "sub_material",
+            "categoryId": "cat_educacao",
+            "name": "Material Escolar & Livros",
+            "subcategories": []
+          }
+        ],
+        "updatedAt": "2026-10-03T21:36:57.776Z"
+      },
+      {
+        "id": "cat_estetica_darla.semfiltro@gmail.com",
+        "userId": "darla.semfiltro@gmail.com",
+        "name": "Cuidados Pessoais & Estética",
+        "type": "expense",
+        "ruleGroup": "30_lifestyle",
+        "color": "#C084FC",
+        "icon": "Smile",
+        "subcategories": [
+          {
+            "id": "sub_salao",
+            "categoryId": "cat_estetica",
+            "name": "Salão, Barbearia & Estética",
+            "subcategories": []
+          },
+          {
+            "id": "sub_skincare",
+            "categoryId": "cat_estetica",
+            "name": "Cosméticos & Skincare",
+            "subcategories": []
+          },
+          {
+            "id": "sub_academia",
+            "categoryId": "cat_estetica",
+            "name": "Academia & Esportes",
+            "subcategories": []
+          }
+        ],
+        "updatedAt": "2026-10-03T21:36:57.776Z"
+      },
+      {
+        "id": "cat_compras_darla.semfiltro@gmail.com",
+        "userId": "darla.semfiltro@gmail.com",
+        "name": "Vestuário & Compras",
+        "type": "expense",
+        "ruleGroup": "30_lifestyle",
+        "color": "#F59E0B",
+        "icon": "ShoppingBag",
+        "subcategories": [
+          {
+            "id": "sub_roupas",
+            "categoryId": "cat_compras",
+            "name": "Roupas & Calçados",
+            "subcategories": []
+          },
+          {
+            "id": "sub_eletronicos",
+            "categoryId": "cat_compras",
+            "name": "Eletrônicos & Acessórios",
+            "subcategories": []
+          },
+          {
+            "id": "sub_presentes",
+            "categoryId": "cat_compras",
+            "name": "Presentes & Mimos",
+            "subcategories": []
+          }
+        ],
+        "updatedAt": "2026-10-03T21:36:57.776Z"
+      },
+      {
+        "id": "cat_assinaturas_darla.semfiltro@gmail.com",
+        "userId": "darla.semfiltro@gmail.com",
+        "name": "Assinaturas & Hobbies",
+        "type": "expense",
+        "ruleGroup": "30_lifestyle",
+        "color": "#6366F1",
+        "icon": "Tv",
+        "subcategories": [
+          {
+            "id": "sub_streaming",
+            "categoryId": "cat_assinaturas",
+            "name": "Streaming (Netflix, Spotify, Prime)",
+            "subcategories": []
+          },
+          {
+            "id": "sub_hobbies",
+            "categoryId": "cat_assinaturas",
+            "name": "Jogos & Hobbies",
+            "subcategories": []
+          }
+        ],
+        "updatedAt": "2026-10-03T21:36:57.776Z"
+      },
+      {
+        "id": "cat_reserva_darla.semfiltro@gmail.com",
+        "userId": "darla.semfiltro@gmail.com",
+        "name": "Reserva de Emergência",
+        "type": "expense",
+        "ruleGroup": "20_investment",
+        "color": "#059669",
+        "icon": "ShieldCheck",
+        "subcategories": [
+          {
+            "id": "sub_tesouro_selic",
+            "categoryId": "cat_reserva",
+            "name": "Tesouro SELIC",
+            "subcategories": []
+          },
+          {
+            "id": "sub_cdb_liquidez",
+            "categoryId": "cat_reserva",
+            "name": "CDB Liquidez Diária",
+            "subcategories": []
+          },
+          {
+            "id": "sub_poupanca",
+            "categoryId": "cat_reserva",
+            "name": "Reserva em Poupança",
+            "subcategories": []
+          }
+        ],
+        "updatedAt": "2026-10-03T21:36:57.776Z"
+      },
+      {
+        "id": "cat_investimentos_darla.semfiltro@gmail.com",
+        "userId": "darla.semfiltro@gmail.com",
+        "name": "Investimentos & Futuro",
+        "type": "expense",
+        "ruleGroup": "20_investment",
+        "color": "#10B981",
+        "icon": "TrendingUp",
+        "subcategories": [
+          {
+            "id": "sub_acoes_fiis",
+            "categoryId": "cat_investimentos",
+            "name": "Ações & FIIs",
+            "subcategories": []
+          },
+          {
+            "id": "sub_tesouro_ipca",
+            "categoryId": "cat_investimentos",
+            "name": "Tesouro Direto / IPCA+",
+            "subcategories": []
+          },
+          {
+            "id": "sub_previdencia",
+            "categoryId": "cat_investimentos",
+            "name": "Previdência Privada",
+            "subcategories": []
+          },
+          {
+            "id": "sub_sonhos",
+            "categoryId": "cat_investimentos",
+            "name": "Aporte para Objetivos & Sonhos",
+            "subcategories": []
+          }
+        ],
+        "updatedAt": "2026-10-03T21:36:57.776Z"
+      },
+      {
+        "id": "cat_renda_extra_darla.semfiltro@gmail.com",
+        "userId": "darla.semfiltro@gmail.com",
+        "name": "Renda Extra & Negócios",
+        "type": "income",
+        "ruleGroup": "income",
+        "color": "#2563EB",
+        "icon": "DollarSign",
+        "subcategories": [
+          {
+            "id": "sub_freelance",
+            "categoryId": "cat_renda_extra",
+            "name": "Projetos & Freelance",
+            "subcategories": []
+          },
+          {
+            "id": "sub_vendas",
+            "categoryId": "cat_renda_extra",
+            "name": "Vendas & Comissões",
+            "subcategories": []
+          },
+          {
+            "id": "sub_consultoria",
+            "categoryId": "cat_renda_extra",
+            "name": "Consultoria & Aulas",
+            "subcategories": []
+          }
+        ],
+        "updatedAt": "2026-10-03T21:36:57.776Z"
+      },
+      {
+        "id": "cat_rendimentos_darla.semfiltro@gmail.com",
+        "userId": "darla.semfiltro@gmail.com",
+        "name": "Rendimentos & Outros",
+        "type": "income",
+        "ruleGroup": "income",
+        "color": "#8B5CF6",
+        "icon": "PiggyBank",
+        "subcategories": [
+          {
+            "id": "sub_dividendos",
+            "categoryId": "cat_rendimentos",
+            "name": "Dividendos & Juros de Investimentos",
+            "subcategories": []
+          },
+          {
+            "id": "sub_reembolso",
+            "categoryId": "cat_rendimentos",
+            "name": "Reembolsos & Cashbacks",
+            "subcategories": []
+          },
+          {
+            "id": "sub_presente",
+            "categoryId": "cat_rendimentos",
+            "name": "Prêmios & Presentes",
+            "subcategories": []
+          }
+        ],
+        "updatedAt": "2026-10-03T21:36:57.776Z"
+      }
+    ],
+    "familyMembers": [
+      {
+        "id": "fam_darla_darla.semfiltro@gmail.com",
+        "userId": "darla.semfiltro@gmail.com",
+        "name": "Titular",
+        "relationship": "Titular",
+        "color": "#E11D48"
+      },
+      {
+        "id": "fam_conjuge_darla.semfiltro@gmail.com",
+        "userId": "darla.semfiltro@gmail.com",
+        "name": "Cônjuge / Marido",
+        "relationship": "Cônjuge",
+        "color": "#0284C7"
+      },
+      {
+        "id": "fam_filhos_darla.semfiltro@gmail.com",
+        "userId": "darla.semfiltro@gmail.com",
+        "name": "Filho(a) / Crianças",
+        "relationship": "Dependente",
+        "color": "#10B981"
+      },
+      {
+        "id": "fam_geral_darla.semfiltro@gmail.com",
+        "userId": "darla.semfiltro@gmail.com",
+        "name": "Geral / Casa & Família",
+        "relationship": "Compartilhado",
+        "color": "#8B5CF6"
+      }
+    ],
+    "transactions": [
+      {
+        "id": "tx_1786814073478_7pkxn",
+        "userId": "darla.semfiltro@gmail.com",
+        "accountId": "acc_1786808185910",
+        "categoryId": "cat_alimentacao_user_1785077250154",
+        "targetAccountId": null,
+        "type": "expense",
+        "amount": 20,
+        "date": "2026-08-15",
+        "description": "Alimentação",
+        "subcategoryId": null,
+        "familyMemberId": null,
+        "familyMemberName": null,
+        "isConsolidated": true,
+        "createdAt": "2026-08-15T17:14:33.478Z",
+        "_synced": true
+      },
+      {
+        "id": "tx_1786819113307_qtbql",
+        "userId": "darla.semfiltro@gmail.com",
+        "accountId": "acc_1786808185910",
+        "categoryId": "cat_alimentacao_user_1785077250154",
+        "targetAccountId": null,
+        "type": "expense",
+        "amount": 50,
+        "date": "2026-08-15",
+        "description": "Alimentação",
+        "subcategoryId": null,
+        "familyMemberId": null,
+        "familyMemberName": null,
+        "isConsolidated": true,
+        "createdAt": "2026-08-15T18:38:33.307Z",
+        "_synced": true
+      }
+    ],
+    "financialGoals": [],
+    "goals": [],
+    "investmentGoals": [],
+    "investorGoals": [],
+    "budgetGoals": {
+      "essentials": 50,
+      "lifestyle": 30,
+      "investment": 20
+    },
+    "member_permissions": {},
+    "deletedIds": [],
+    "updatedAt": "2026-10-03T21:36:57.776Z",
+    "rollover": 0,
+    "accumulatedRollover": 0,
+    "previousBalance": 0,
+    "initialBalance": 0,
+    "carryOver": 0,
+    "monthlyRollovers": {},
+    "monthlyClosings": []
+  },
+  "carvalho.darlla@gmail.com": {
+    "accounts": [],
+    "categories": [
+      {
+        "id": "cat_moradia_carvalho.darlla@gmail.com",
+        "userId": "carvalho.darlla@gmail.com",
+        "name": "Moradia & Contas Fixas",
+        "type": "expense",
+        "ruleGroup": "50_essentials",
+        "color": "#E11D48",
+        "icon": "Home",
+        "subcategories": [
+          {
+            "id": "sub_aluguel_carvalho.darlla@gmail.com",
+            "categoryId": "cat_moradia_carvalho.darlla@gmail.com",
+            "name": "Aluguel / Contas",
+            "subcategories": []
+          }
+        ],
+        "updatedAt": "2026-10-04T00:26:25.771Z"
+      },
+      {
+        "id": "cat_alimentacao_carvalho.darlla@gmail.com",
+        "userId": "carvalho.darlla@gmail.com",
+        "name": "Alimentação & Feira",
+        "type": "expense",
+        "ruleGroup": "50_essentials",
+        "color": "#F43F5E",
+        "icon": "Utensils",
+        "subcategories": [
+          {
+            "id": "sub_mercado_carvalho.darlla@gmail.com",
+            "categoryId": "cat_alimentacao_carvalho.darlla@gmail.com",
+            "name": "Supermercado",
+            "subcategories": []
+          }
+        ],
+        "updatedAt": "2026-10-04T00:26:25.771Z"
+      },
+      {
+        "id": "cat_lazer_carvalho.darlla@gmail.com",
+        "userId": "carvalho.darlla@gmail.com",
+        "name": "Lazer & Estilo de Vida",
+        "type": "expense",
+        "ruleGroup": "30_lifestyle",
+        "color": "#8B5CF6",
+        "icon": "Sparkles",
+        "subcategories": [
+          {
+            "id": "sub_restaurante_carvalho.darlla@gmail.com",
+            "categoryId": "cat_lazer_carvalho.darlla@gmail.com",
+            "name": "Restaurante & Passeios",
+            "subcategories": []
+          }
+        ],
+        "updatedAt": "2026-10-04T00:26:25.771Z"
+      },
+      {
+        "id": "cat_renda_carvalho.darlla@gmail.com",
+        "userId": "carvalho.darlla@gmail.com",
+        "name": "Receita Principal",
+        "type": "income",
+        "ruleGroup": "income",
+        "color": "#00C853",
+        "icon": "Wallet",
+        "subcategories": [
+          {
+            "id": "sub_salario_carvalho.darlla@gmail.com",
+            "categoryId": "cat_renda_carvalho.darlla@gmail.com",
+            "name": "Salário / Entradas",
+            "subcategories": []
+          }
+        ],
+        "updatedAt": "2026-10-04T00:26:25.771Z"
+      }
+    ],
+    "familyMembers": [],
+    "transactions": [],
+    "financialGoals": [],
+    "goals": [],
+    "investmentGoals": [],
+    "investorGoals": [],
+    "budgetGoals": {
+      "essentials": 50,
+      "lifestyle": 30,
+      "investment": 20
+    },
+    "member_permissions": {},
+    "deletedIds": [],
+    "updatedAt": "2026-10-04T00:26:48.133Z",
+    "rollover": 0,
+    "accumulatedRollover": 0,
+    "previousBalance": 0,
+    "initialBalance": 0,
+    "carryOver": 0,
+    "monthlyRollovers": {},
+    "monthlyClosings": []
+  }
+}

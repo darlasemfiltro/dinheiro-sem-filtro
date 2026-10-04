@@ -1,0 +1,6 @@
+{
+  "name": "DINHEIRO SEM FILTRO",
+  "description": "DINHEIRO SEM FILTRO - Gestão Financeira Pessoal, Carteira do Investidor Completa (Ações, FIIs, Stocks, Cripto, Tesouro) com Dicas de IA e Cotações em Tempo Real.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
