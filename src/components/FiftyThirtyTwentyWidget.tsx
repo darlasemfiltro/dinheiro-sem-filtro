@@ -738,31 +738,45 @@ export const FiftyThirtyTwentyWidget: React.FC<FiftyThirtyTwentyWidgetProps> = (
             </button>
 
             {isPeriodMenuOpen && (
-              <div className="absolute left-1/2 -translate-x-1/2 sm:left-0 sm:translate-x-0 mt-2 w-72 max-w-[95vw] bg-[#18181B] border border-white/20 rounded-2xl shadow-2xl z-50 overflow-hidden py-1.5">
-                {[
-                  { value: 'monthly', label: 'Mensal (Mês)' },
-                  { value: 'quarterly', label: 'Trimestral (3 Meses)' },
-                  { value: 'semiannual', label: 'Semestral (6 Meses)' },
-                  { value: 'annual', label: 'Anual (Ano)' },
-                  { value: 'custom', label: 'Período Personalizado' },
-                ].map((item) => (
-                  <button
-                    key={item.value}
-                    type="button"
-                    onClick={() => {
-                      setPeriod(item.value as PerformancePeriod);
-                      setIsPeriodMenuOpen(false);
-                    }}
-                    className={`w-full text-left px-4 py-3 text-xs sm:text-sm font-bold flex items-center justify-between transition cursor-pointer ${
-                      period === item.value
-                        ? 'bg-[#D4AF37] text-[#121212]'
-                        : 'text-white hover:bg-white/10'
-                    }`}
-                  >
-                    <span>{item.label}</span>
-                    {period === item.value && <Check className="w-4 h-4 shrink-0" />}
-                  </button>
-                ))}
+              <div className="fixed inset-0 bg-black/75 backdrop-blur-xs z-50 flex items-end sm:items-center justify-center p-0 sm:p-4">
+                <div className="w-full sm:w-[400px] bg-[#18181B] border border-white/20 rounded-t-3xl sm:rounded-2xl shadow-2xl overflow-hidden p-5 space-y-4">
+                  <div className="flex items-center justify-between border-b border-white/10 pb-3">
+                    <h3 className="text-sm font-extrabold text-[#D4AF37] uppercase tracking-wider">Selecionar Período</h3>
+                    <button
+                      type="button"
+                      onClick={() => setIsPeriodMenuOpen(false)}
+                      className="p-1 rounded-xl bg-white/10 text-white hover:bg-white/20 transition cursor-pointer"
+                    >
+                      <X className="w-4 h-4" />
+                    </button>
+                  </div>
+                  <div className="space-y-1.5 py-1">
+                    {[
+                      { value: 'monthly', label: 'Mensal (Mês)' },
+                      { value: 'quarterly', label: 'Trimestral (3 Meses)' },
+                      { value: 'semiannual', label: 'Semestral (6 Meses)' },
+                      { value: 'annual', label: 'Anual (Ano)' },
+                      { value: 'custom', label: 'Período Personalizado' },
+                    ].map((item) => (
+                      <button
+                        key={item.value}
+                        type="button"
+                        onClick={() => {
+                          setPeriod(item.value as PerformancePeriod);
+                          setIsPeriodMenuOpen(false);
+                        }}
+                        className={`w-full text-left px-4 py-3.5 text-sm font-bold rounded-xl flex items-center justify-between transition cursor-pointer ${
+                          period === item.value
+                            ? 'bg-[#D4AF37] text-[#121212]'
+                            : 'bg-white/5 text-white hover:bg-white/10'
+                        }`}
+                      >
+                        <span>{item.label}</span>
+                        {period === item.value && <Check className="w-5 h-5 shrink-0" />}
+                      </button>
+                    ))}
+                  </div>
+                </div>
               </div>
             )}
           </div>
@@ -884,29 +898,43 @@ export const FiftyThirtyTwentyWidget: React.FC<FiftyThirtyTwentyWidgetProps> = (
             <span className="text-white font-black">({formatCurrency(periodData.base)})</span>
 
             {isBaseModeMenuOpen && (
-              <div className="absolute left-1/2 -translate-x-1/2 sm:left-auto sm:right-0 sm:translate-x-0 mt-2 w-80 max-w-[95vw] bg-[#18181B] border border-white/20 rounded-2xl shadow-2xl z-50 overflow-hidden py-1.5">
-                {[
-                  { value: 'auto', label: `Automático (${periodData.effectiveBaseType === 'expense' ? 'Total Saídas' : 'Receitas'})` },
-                  { value: 'income', label: `Receitas (${formatCurrency(periodData.totalIncome)})` },
-                  { value: 'expense', label: `Total Saídas (${formatCurrency(periodData.totalExpense)})` },
-                ].map((item) => (
-                  <button
-                    key={item.value}
-                    type="button"
-                    onClick={() => {
-                      setBaseMode(item.value as any);
-                      setIsBaseModeMenuOpen(false);
-                    }}
-                    className={`w-full text-left px-4 py-3 text-xs font-bold flex items-center justify-between transition cursor-pointer ${
-                      baseMode === item.value
-                        ? 'bg-[#D4AF37] text-[#121212]'
-                        : 'text-white hover:bg-white/10'
-                    }`}
-                  >
-                    <span>{item.label}</span>
-                    {baseMode === item.value && <Check className="w-3.5 h-3.5 shrink-0" />}
-                  </button>
-                ))}
+              <div className="fixed inset-0 bg-black/75 backdrop-blur-xs z-50 flex items-end sm:items-center justify-center p-0 sm:p-4">
+                <div className="w-full sm:w-[420px] bg-[#18181B] border border-white/20 rounded-t-3xl sm:rounded-2xl shadow-2xl overflow-hidden p-5 space-y-4">
+                  <div className="flex items-center justify-between border-b border-white/10 pb-3">
+                    <h3 className="text-sm font-extrabold text-[#D4AF37] uppercase tracking-wider">Selecionar Base de Cálculo</h3>
+                    <button
+                      type="button"
+                      onClick={() => setIsBaseModeMenuOpen(false)}
+                      className="p-1 rounded-xl bg-white/10 text-white hover:bg-white/20 transition cursor-pointer"
+                    >
+                      <X className="w-4 h-4" />
+                    </button>
+                  </div>
+                  <div className="space-y-1.5 py-1">
+                    {[
+                      { value: 'auto', label: `Automático (${periodData.effectiveBaseType === 'expense' ? 'Total Saídas' : 'Receitas'})` },
+                      { value: 'income', label: `Receitas (${formatCurrency(periodData.totalIncome)})` },
+                      { value: 'expense', label: `Total Saídas (${formatCurrency(periodData.totalExpense)})` },
+                    ].map((item) => (
+                      <button
+                        key={item.value}
+                        type="button"
+                        onClick={() => {
+                          setBaseMode(item.value as any);
+                          setIsBaseModeMenuOpen(false);
+                        }}
+                        className={`w-full text-left px-4 py-3.5 text-xs sm:text-sm font-bold rounded-xl flex items-center justify-between transition cursor-pointer ${
+                          baseMode === item.value
+                            ? 'bg-[#D4AF37] text-[#121212]'
+                            : 'bg-white/5 text-white hover:bg-white/10'
+                        }`}
+                      >
+                        <span>{item.label}</span>
+                        {baseMode === item.value && <Check className="w-4 h-4 shrink-0" />}
+                      </button>
+                    ))}
+                  </div>
+                </div>
               </div>
             )}
           </div>
