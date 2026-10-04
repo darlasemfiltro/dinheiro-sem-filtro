@@ -781,6 +781,69 @@ export const FiftyThirtyTwentyWidget: React.FC<FiftyThirtyTwentyWidgetProps> = (
             )}
           </div>
 
+          {/* Base de Cálculo Custom Button */}
+          <div className="relative">
+            <button
+              type="button"
+              onClick={() => {
+                setIsBaseModeMenuOpen(!isBaseModeMenuOpen);
+                setIsPeriodMenuOpen(false);
+              }}
+              className="flex items-center gap-2 bg-[#121212] border border-white/20 hover:border-[#D4AF37]/60 rounded-xl px-3.5 py-2.5 text-xs sm:text-sm text-white font-extrabold transition cursor-pointer shadow-sm"
+            >
+              <span className="text-gray-400 font-semibold">Base:</span>
+              <span className="text-[#D4AF37]">
+                {baseMode === 'auto'
+                  ? 'Automático'
+                  : baseMode === 'income'
+                  ? 'Receitas'
+                  : 'Total Saídas'}
+              </span>
+              <ChevronDown className="w-4 h-4 text-gray-400 shrink-0" />
+            </button>
+
+            {isBaseModeMenuOpen && (
+              <div className="fixed inset-0 bg-black/75 backdrop-blur-xs z-50 flex items-end sm:items-center justify-center p-0 sm:p-4">
+                <div className="w-full sm:w-[420px] bg-[#18181B] border border-white/20 rounded-t-3xl sm:rounded-2xl shadow-2xl overflow-hidden p-5 space-y-4">
+                  <div className="flex items-center justify-between border-b border-white/10 pb-3">
+                    <h3 className="text-sm font-extrabold text-[#D4AF37] uppercase tracking-wider">Selecionar Base de Cálculo</h3>
+                    <button
+                      type="button"
+                      onClick={() => setIsBaseModeMenuOpen(false)}
+                      className="p-1 rounded-xl bg-white/10 text-white hover:bg-white/20 transition cursor-pointer"
+                    >
+                      <X className="w-4 h-4" />
+                    </button>
+                  </div>
+                  <div className="space-y-1.5 py-1">
+                    {[
+                      { value: 'auto', label: `Automático (${periodData.effectiveBaseType === 'expense' ? 'Total Saídas' : 'Receitas'})` },
+                      { value: 'income', label: `Receitas (${formatCurrency(periodData.totalIncome)})` },
+                      { value: 'expense', label: `Total Saídas (${formatCurrency(periodData.totalExpense)})` },
+                    ].map((item) => (
+                      <button
+                        key={item.value}
+                        type="button"
+                        onClick={() => {
+                          setBaseMode(item.value as any);
+                          setIsBaseModeMenuOpen(false);
+                        }}
+                        className={`w-full text-left px-4 py-3.5 text-xs sm:text-sm font-bold rounded-xl flex items-center justify-between transition cursor-pointer ${
+                          baseMode === item.value
+                            ? 'bg-[#D4AF37] text-[#121212]'
+                            : 'bg-white/5 text-white hover:bg-white/10'
+                        }`}
+                      >
+                        <span>{item.label}</span>
+                        {baseMode === item.value && <Check className="w-4 h-4 shrink-0" />}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            )}
+          </div>
+
           {Boolean(!isReadOnly) && (
             <button
               type="button"
@@ -869,80 +932,7 @@ export const FiftyThirtyTwentyWidget: React.FC<FiftyThirtyTwentyWidgetProps> = (
         </div>
       )}
 
-      {/* Baseline Info Badge */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between text-xs sm:text-sm bg-[#121212] p-3.5 rounded-xl border border-white/20 gap-3 w-full box-border overflow-hidden">
-        <div className="flex items-center justify-between sm:justify-start gap-2 w-full sm:w-auto">
-          <span className="text-gray-300 font-extrabold text-xs sm:text-sm">Filtro Ativo:</span>
-          <span className="text-[#D4AF37] font-black text-xs sm:text-sm">{getPeriodLabel(period)}</span>
-        </div>
-        <div className="flex flex-col sm:flex-row items-start sm:items-center gap-2.5 sm:gap-4 text-xs sm:text-sm font-semibold w-full sm:w-auto">
-          <div className="relative flex items-center gap-2 w-full sm:w-auto">
-            <span className="text-gray-200">Base de Cálculo:</span>
-            <button
-              type="button"
-              onClick={() => {
-                setIsBaseModeMenuOpen(!isBaseModeMenuOpen);
-                setIsPeriodMenuOpen(false);
-              }}
-              className="flex items-center gap-2 bg-black/80 text-[#D4AF37] font-extrabold border border-[#D4AF37]/40 rounded-xl px-3 py-1.5 text-xs hover:border-[#D4AF37] transition cursor-pointer"
-            >
-              <span>
-                {baseMode === 'auto'
-                  ? 'Automático'
-                  : baseMode === 'income'
-                  ? `Receitas (${formatCurrency(periodData.totalIncome)})`
-                  : `Total Saídas (${formatCurrency(periodData.totalExpense)})`}
-              </span>
-              <ChevronDown className="w-3.5 h-3.5 shrink-0" />
-            </button>
-            <span className="text-white font-black">({formatCurrency(periodData.base)})</span>
 
-            {isBaseModeMenuOpen && (
-              <div className="fixed inset-0 bg-black/75 backdrop-blur-xs z-50 flex items-end sm:items-center justify-center p-0 sm:p-4">
-                <div className="w-full sm:w-[420px] bg-[#18181B] border border-white/20 rounded-t-3xl sm:rounded-2xl shadow-2xl overflow-hidden p-5 space-y-4">
-                  <div className="flex items-center justify-between border-b border-white/10 pb-3">
-                    <h3 className="text-sm font-extrabold text-[#D4AF37] uppercase tracking-wider">Selecionar Base de Cálculo</h3>
-                    <button
-                      type="button"
-                      onClick={() => setIsBaseModeMenuOpen(false)}
-                      className="p-1 rounded-xl bg-white/10 text-white hover:bg-white/20 transition cursor-pointer"
-                    >
-                      <X className="w-4 h-4" />
-                    </button>
-                  </div>
-                  <div className="space-y-1.5 py-1">
-                    {[
-                      { value: 'auto', label: `Automático (${periodData.effectiveBaseType === 'expense' ? 'Total Saídas' : 'Receitas'})` },
-                      { value: 'income', label: `Receitas (${formatCurrency(periodData.totalIncome)})` },
-                      { value: 'expense', label: `Total Saídas (${formatCurrency(periodData.totalExpense)})` },
-                    ].map((item) => (
-                      <button
-                        key={item.value}
-                        type="button"
-                        onClick={() => {
-                          setBaseMode(item.value as any);
-                          setIsBaseModeMenuOpen(false);
-                        }}
-                        className={`w-full text-left px-4 py-3.5 text-xs sm:text-sm font-bold rounded-xl flex items-center justify-between transition cursor-pointer ${
-                          baseMode === item.value
-                            ? 'bg-[#D4AF37] text-[#121212]'
-                            : 'bg-white/5 text-white hover:bg-white/10'
-                        }`}
-                      >
-                        <span>{item.label}</span>
-                        {baseMode === item.value && <Check className="w-4 h-4 shrink-0" />}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-              </div>
-            )}
-          </div>
-          <div className="text-gray-200">
-            Total Saídas: <strong className="text-white font-extrabold">{formatCurrency(periodData.totalExpense)}</strong>
-          </div>
-        </div>
-      </div>
 
       {/* 50 / 30 / 20 Pillars Grid */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-3.5 w-full max-w-full box-border">
