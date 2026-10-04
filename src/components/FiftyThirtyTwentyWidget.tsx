@@ -835,28 +835,28 @@ export const FiftyThirtyTwentyWidget: React.FC<FiftyThirtyTwentyWidgetProps> = (
       )}
 
       {/* Baseline Info Badge */}
-      <div className="flex flex-wrap items-center justify-between text-xs sm:text-sm bg-[#121212] p-3.5 rounded-xl border border-white/20 gap-3">
-        <div className="flex items-center gap-2">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between text-xs sm:text-sm bg-[#121212] p-3.5 rounded-xl border border-white/20 gap-3 w-full box-border overflow-hidden">
+        <div className="flex items-center justify-between sm:justify-start gap-2 w-full sm:w-auto">
           <span className="text-gray-300 font-extrabold text-xs sm:text-sm">Filtro Ativo:</span>
           <span className="text-[#D4AF37] font-black text-xs sm:text-sm">{getPeriodLabel(period)}</span>
         </div>
-        <div className="flex flex-wrap items-center gap-4 text-xs sm:text-sm font-semibold">
-          <span className="text-gray-200 flex items-center gap-2">
-            Base de Cálculo:
+        <div className="flex flex-col sm:flex-row items-start sm:items-center gap-2.5 sm:gap-4 text-xs sm:text-sm font-semibold w-full sm:w-auto">
+          <div className="flex flex-wrap items-center gap-2 w-full sm:w-auto">
+            <span className="text-gray-200">Base de Cálculo:</span>
             <select
               value={baseMode}
               onChange={(e) => setBaseMode(e.target.value as any)}
-              className="bg-black/80 text-[#D4AF37] font-extrabold border border-[#D4AF37]/40 rounded-lg px-2.5 py-1 text-xs focus:outline-none cursor-pointer"
+              className="bg-black/80 text-[#D4AF37] font-extrabold border border-[#D4AF37]/40 rounded-lg px-2 py-1 text-xs focus:outline-none cursor-pointer max-w-full"
             >
-              <option value="auto">Automático ({periodData.effectiveBaseType === 'expense' ? 'Total Saídas' : 'Receitas'})</option>
+              <option value="auto">Automático</option>
               <option value="income">Receitas ({formatCurrency(periodData.totalIncome)})</option>
               <option value="expense">Total Saídas ({formatCurrency(periodData.totalExpense)})</option>
             </select>
-            (<strong className="text-white font-black">{formatCurrency(periodData.base)}</strong>)
-          </span>
-          <span className="text-gray-200">
+            <span className="text-white font-black">({formatCurrency(periodData.base)})</span>
+          </div>
+          <div className="text-gray-200">
             Total Saídas: <strong className="text-white font-extrabold">{formatCurrency(periodData.totalExpense)}</strong>
-          </span>
+          </div>
         </div>
       </div>
 
