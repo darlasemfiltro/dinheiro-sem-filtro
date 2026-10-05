@@ -1889,7 +1889,7 @@ export default function App() {
 
       if (remoteUpdateDebounceTimer) clearTimeout(remoteUpdateDebounceTimer);
       remoteUpdateDebounceTimer = setTimeout(() => {
-        refreshData(currentUser, false);
+        refreshData(currentUser, true);
       }, debounceTime);
     }, [currentUser, refreshData, setCategories]);
 
