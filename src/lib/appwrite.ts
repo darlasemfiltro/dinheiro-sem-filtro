@@ -478,30 +478,32 @@ export function subscribeToAppwriteRealtime(userId: string, onUpdate: (remoteDat
   const databaseId = '6a83aa8d0038331e040f';
   const collectionId = 'user_financials';
   const cleanTargetUserId = (userId || '').trim().toLowerCase();
-  const docId = cleanTargetUserId ? cleanTargetUserId.replace(/@/g, '.').replace(/[^a-zA-Z0-9._-]/g, '_').slice(0, 36) : '';
+  const email = cleanTargetUserId.startsWith('user_') ? cleanTargetUserId.slice(5).replace(/_/g, '@') : cleanTargetUserId;
+  const docIdSafe = email.replace(/@/g, '.').replace(/[^a-zA-Z0-9._-]/g, '_');
+  const canonicalDocId = `user_${docIdSafe}`.slice(0, 36);
+  const legacyDocId = cleanTargetUserId.replace(/@/g, '.').replace(/[^a-zA-Z0-9._-]/g, '_').slice(0, 36);
   
-  // Only subscribe to the specific user/budget channels, NEVER to the global hardcoded 6a849358002db9e638ce!
   const channels = [
     `databases.${databaseId}.collections.${collectionId}.documents`,
-    docId ? `databases.${databaseId}.collections.${collectionId}.documents.${docId}` : '',
-    cleanTargetUserId && cleanTargetUserId !== docId ? `databases.${databaseId}.collections.${collectionId}.documents.${cleanTargetUserId}` : ''
+    canonicalDocId ? `databases.${databaseId}.collections.${collectionId}.documents.${canonicalDocId}` : '',
+    legacyDocId && legacyDocId !== canonicalDocId ? `databases.${databaseId}.collections.${collectionId}.documents.${legacyDocId}` : '',
+    cleanTargetUserId ? `databases.${databaseId}.collections.${collectionId}.documents.${cleanTargetUserId}` : ''
   ].filter(Boolean);
 
   try {
     unsubscribe = appwriteClient.subscribe(channels, (response) => {
       const payload: any = response.payload;
       if (payload) {
-        // STRICT FILTER: Validate that this payload actually belongs to the current target user/budget!
         const payloadUserId = String(payload.userId || '').trim().toLowerCase();
         const payloadDocId = String(payload.$id || '').trim().toLowerCase();
         
         const isMatch = 
           (cleanTargetUserId && payloadUserId === cleanTargetUserId) ||
-          (docId && payloadDocId === docId.toLowerCase()) ||
+          (canonicalDocId && payloadDocId === canonicalDocId.toLowerCase()) ||
+          (legacyDocId && payloadDocId === legacyDocId.toLowerCase()) ||
           (cleanTargetUserId && payloadDocId === cleanTargetUserId);
 
         if (!isMatch) {
-          // Payload belongs to another user/budget - IGNORE to prevent cross-account loops!
           return;
         }
 
