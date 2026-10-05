@@ -1,0 +1,18 @@
+[
+  {
+    "budgetId": "darla.semfiltro@gmail.com",
+    "ownerId": "darla.semfiltro@gmail.com",
+    "ownerName": "darla.semfiltro",
+    "ownerEmail": "darla.semfiltro@gmail.com",
+    "code": "BUDGET_DARLA_SEMFILTRO_GMAIL_COM",
+    "collaborators": []
+  },
+  {
+    "budgetId": "carvalho.darlla@gmail.com",
+    "ownerId": "carvalho.darlla@gmail.com",
+    "ownerName": "Darla Carvalho",
+    "ownerEmail": "carvalho.darlla@gmail.com",
+    "code": "budget_carvalho_darlla_gmail_com",
+    "collaborators": []
+  }
+]
