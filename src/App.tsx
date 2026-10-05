@@ -1700,6 +1700,26 @@ export default function App() {
 
 
 
+  const forceInstantSync = useCallback(async (budgetId: string) => {
+    if (!budgetId) return;
+    try {
+      await StorageService.syncUserDataWithRemote(budgetId);
+      const freshAccounts = StorageService.getAccounts(budgetId);
+      const freshCategories = StorageService.getCategories(budgetId);
+      const freshTransactions = StorageService.getTransactions(budgetId);
+      const freshGoals = StorageService.getGoals(budgetId);
+      const freshFamily = StorageService.getFamilyMembers(budgetId);
+
+      setAccounts(prev => JSON.stringify(prev) === JSON.stringify(freshAccounts) ? prev : freshAccounts);
+      setCategories(prev => JSON.stringify(prev) === JSON.stringify(freshCategories) ? prev : freshCategories);
+      setTransactions(prev => JSON.stringify(prev) === JSON.stringify(freshTransactions) ? prev : freshTransactions);
+      setGoals(prev => JSON.stringify(prev) === JSON.stringify(freshGoals) ? prev : freshGoals);
+      setFamilyMembers(prev => JSON.stringify(prev) === JSON.stringify(freshFamily) ? prev : freshFamily);
+    } catch (e) {
+      console.warn('[Instant Sync Error]', e);
+    }
+  }, []);
+
   const syncFn = useCallback(async () => {
     // Use ref to check ID instead of currentUser object reference
     if (!currentUser || isSyncingRemoteRef.current) return;
@@ -1842,10 +1862,11 @@ export default function App() {
     });
 
     const pollInterval = setInterval(() => {
-      if (currentUser && Date.now() - lastLocalMutationTimeRef.current > 5000 && !isFetchingRef.current) {
-        refreshData(currentUser, true);
+      if (currentUser && Date.now() - lastLocalMutationTimeRef.current > 4000) {
+        const bId = StorageService.getEffectiveBudgetId(currentUser);
+        forceInstantSync(bId);
       }
-    }, 8000);
+    }, 6000);
 
     return () => {
       if (unsubscribeAppwrite) unsubscribeAppwrite();
@@ -1889,8 +1910,8 @@ export default function App() {
 
       if (remoteUpdateDebounceTimer) clearTimeout(remoteUpdateDebounceTimer);
       remoteUpdateDebounceTimer = setTimeout(() => {
-        refreshData(currentUser, true);
-      }, debounceTime);
+        forceInstantSync(curBudgetId);
+      }, 300);
     }, [currentUser, refreshData, setCategories]);
 
     const handleSharedBudgetUpdated = useCallback(async (evt?: any) => {
