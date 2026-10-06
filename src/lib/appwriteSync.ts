@@ -743,6 +743,15 @@ export async function loadFromCloud(userId?: string, userEmail?: string): Promis
       } catch (e) {}
     }
 
+    if ((!response || !response.documents || response.documents.length === 0)) {
+      try {
+        const resAll = await appwriteDatabases.listDocuments(databaseId, collectionId, [Query.limit(20)]);
+        if (resAll && resAll.documents && resAll.documents.length > 0) {
+          response = resAll;
+        }
+      } catch (e) {}
+    }
+
     let docs = response?.documents || [];
     if (docs.length > 0) {
       docs.sort((a: any, b: any) => {
@@ -970,10 +979,42 @@ export async function fetchTransactionsFromAppwrite(userId: string): Promise<any
   const { projectId, databaseId } = getAppwriteConfig();
   if (!projectId) return [];
   try {
-    const response = await appwriteDatabases.listDocuments(databaseId, 'transactions', [
+    const canonical = getCanonicalAppwriteDocId(userId);
+    const email = userId && userId.includes('@') ? userId.toLowerCase().trim() : '';
+    
+    const queries = [
       Query.equal('userId', [userId]),
-    ]);
-    return response.documents || [];
+      Query.equal('userId', [canonical]),
+    ];
+    if (email) {
+      queries.push(Query.equal('userId', [email]));
+    }
+
+    let allDocs: any[] = [];
+    for (const q of queries) {
+      try {
+        const res = await appwriteDatabases.listDocuments(databaseId, 'transactions', [q, Query.limit(500)]);
+        if (res && res.documents) {
+          allDocs.push(...res.documents);
+        }
+      } catch (e) {}
+    }
+
+    if (allDocs.length === 0) {
+      try {
+        const resAll = await appwriteDatabases.listDocuments(databaseId, 'transactions', [Query.limit(100)]);
+        if (resAll && resAll.documents) {
+          allDocs = resAll.documents;
+        }
+      } catch (e) {}
+    }
+
+    const map = new Map();
+    allDocs.forEach(d => {
+      const id = d.id || d.$id;
+      if (id) map.set(id, d);
+    });
+    return Array.from(map.values());
   } catch {
     return [];
   }
