@@ -1845,10 +1845,15 @@ export class StorageService {
         monthlyClosings
       };
 
-      // Save directly to Cloud Appwrite & Firestore
+      // Save directly to Cloud Appwrite, Firestore, & Node Server API
       await Promise.allSettled([
         syncUserDataWithAppwrite(canonicalId, fullState),
-        saveUserDataToFirestore(canonicalId, fullState)
+        saveUserDataToFirestore(canonicalId, fullState),
+        fetch('/api/data/sync', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ userId: canonicalId, ...fullState }),
+        })
       ]);
 
       // Notify other devices via WebSocket
