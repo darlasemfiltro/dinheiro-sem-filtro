@@ -468,7 +468,7 @@ export async function appwriteGoogleOAuthLogin(successUrl?: string, failureUrl?:
 /**
  * Subscribes to real-time changes in Appwrite user financials collection with reconnection support
  */
-export function subscribeToAppwriteRealtime(userId: string, onUpdate: (remoteData?: any) => void): () => void {
+export function subscribeToAppwriteRealtime(userIdOrEmail: string, onUpdate: (remoteData?: any) => void): () => void {
   const cfg = getAppwriteConfig();
   if (!cfg.projectId || cfg.projectId === 'default-placeholder') {
     return () => {};
@@ -477,7 +477,7 @@ export function subscribeToAppwriteRealtime(userId: string, onUpdate: (remoteDat
   let unsubscribe: (() => void) | null = null;
   const databaseId = '6a83aa8d0038331e040f';
   const collectionId = 'user_financials';
-  const cleanTargetUserId = (userId || '').trim().toLowerCase();
+  const cleanTarget = (userIdOrEmail || '').trim().toLowerCase();
   
   const channels = [
     `databases.${databaseId}.collections.${collectionId}.documents`
@@ -490,18 +490,15 @@ export function subscribeToAppwriteRealtime(userId: string, onUpdate: (remoteDat
         const payloadUserId = String(payload.userId || '').trim().toLowerCase();
         const payloadDocId = String(payload.$id || '').trim().toLowerCase();
         
-        const knownFamily = [
-          'carvalho.darlla@gmail.com',
-          'darla.semfiltro@gmail.com',
-          'danilujb@gmail.com'
-        ];
-
+        // Exact match by email or canonical user ID
         const isMatch = 
+          !cleanTarget ||
           !payloadUserId ||
-          payloadDocId === '6abf0fa0002f7fa3ada6' ||
-          knownFamily.includes(payloadUserId) ||
-          (cleanTargetUserId && payloadUserId === cleanTargetUserId) ||
-          (cleanTargetUserId && (payloadUserId.includes(cleanTargetUserId) || cleanTargetUserId.includes(payloadUserId)));
+          payloadUserId === cleanTarget ||
+          payloadDocId === cleanTarget ||
+          (cleanTarget.includes('@') && payloadUserId === cleanTarget) ||
+          cleanTarget.includes(payloadUserId) ||
+          payloadUserId.includes(cleanTarget);
 
         if (!isMatch) {
           return;

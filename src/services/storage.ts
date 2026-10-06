@@ -4806,15 +4806,8 @@ export class StorageService {
   static getAccounts(budgetId: string): Account[] {
     this.initialize();
     const canonicalId = getCanonicalUserId(budgetId || 'default');
-    const candidateIds = new Set<string>([canonicalId, 'default']);
-    try {
-      const sharedStr = localStorage.getItem(STORAGE_KEYS.SHARED_BUDGETS) || '[]';
-      const sharedBudgets = JSON.parse(sharedStr);
-      sharedBudgets.forEach((b: any) => {
-        if (b.budgetId) candidateIds.add(getCanonicalUserId(b.budgetId));
-        if (b.ownerEmail) candidateIds.add(getCanonicalUserId(b.ownerEmail));
-      });
-    } catch (e) {}
+    const candidateIds = new Set<string>([canonicalId]);
+    if (budgetId) candidateIds.add(budgetId);
 
     const map = new Map<string, Account>();
     candidateIds.forEach(id => {
@@ -5072,15 +5065,8 @@ export class StorageService {
     this.purgeDeletedItems(canonicalId);
     const deletedIds = this.getDeletedIds(canonicalId);
     
-    const candidateIds = new Set<string>([canonicalId, 'default']);
-    try {
-      const sharedStr = localStorage.getItem(STORAGE_KEYS.SHARED_BUDGETS) || '[]';
-      const sharedBudgets = JSON.parse(sharedStr);
-      sharedBudgets.forEach((b: any) => {
-        if (b.budgetId) candidateIds.add(getCanonicalUserId(b.budgetId));
-        if (b.ownerEmail) candidateIds.add(getCanonicalUserId(b.ownerEmail));
-      });
-    } catch (e) {}
+    const candidateIds = new Set<string>([canonicalId]);
+    if (budgetId) candidateIds.add(budgetId);
 
     const map = new Map<string, Transaction>();
     candidateIds.forEach(id => {

@@ -1780,9 +1780,10 @@ export default function App() {
     syncFn();
 
     const activeBudgetId = StorageService.getEffectiveBudgetId(currentUser);
+    const syncTarget = currentUser?.email || activeBudgetId;
     // Setup connections
     realtimeSync.connect(currentUser.email, activeBudgetId);
-    const unsubscribeAppwrite = subscribeToAppwriteRealtime(activeBudgetId, (remoteData) => {
+    const unsubscribeAppwrite = subscribeToAppwriteRealtime(syncTarget, (remoteData) => {
       if (Date.now() - lastLocalMutationTimeRef.current < 3000) {
         return;
       }
