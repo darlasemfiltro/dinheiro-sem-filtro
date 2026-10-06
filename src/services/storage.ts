@@ -4806,23 +4806,39 @@ export class StorageService {
   static getAccounts(budgetId: string): Account[] {
     this.initialize();
     const canonicalId = getCanonicalUserId(budgetId || 'default');
-    const accountsKey = `darla_accounts_${canonicalId}`;
+    const candidateIds = new Set<string>([canonicalId, 'default']);
     try {
-      const raw = localStorage.getItem(accountsKey);
-      if (raw) {
-        const parsed = JSON.parse(raw);
-        if (Array.isArray(parsed) && parsed.length >= 0) {
-          return parsed.map((a: any) => ({ ...a, userId: canonicalId }));
-        }
-      }
+      const sharedStr = localStorage.getItem(STORAGE_KEYS.SHARED_BUDGETS) || '[]';
+      const sharedBudgets = JSON.parse(sharedStr);
+      sharedBudgets.forEach((b: any) => {
+        if (b.budgetId) candidateIds.add(getCanonicalUserId(b.budgetId));
+        if (b.ownerEmail) candidateIds.add(getCanonicalUserId(b.ownerEmail));
+      });
     } catch (e) {}
 
-    const fallback = _inMemoryStore.accounts.filter((a) => getCanonicalUserId(a.userId) === canonicalId);
-    if (fallback.length > 0) {
-      return fallback.map((a: any) => ({ ...a, userId: canonicalId }));
-    }
+    const map = new Map<string, Account>();
+    candidateIds.forEach(id => {
+      const key = `darla_accounts_${id}`;
+      try {
+        const raw = localStorage.getItem(key);
+        if (raw) {
+          const parsed = JSON.parse(raw);
+          if (Array.isArray(parsed)) {
+            parsed.forEach((a: any) => {
+              if (a && a.id) map.set(a.id, { ...a, userId: canonicalId });
+            });
+          }
+        }
+      } catch (e) {}
+    });
 
-    return [];
+    _inMemoryStore.accounts.forEach((a: any) => {
+      if (a && a.id) {
+        map.set(a.id, { ...a, userId: canonicalId });
+      }
+    });
+
+    return Array.from(map.values());
   }
 
   static saveAccount(account: Account, budgetId?: string): Account {
@@ -5055,25 +5071,46 @@ export class StorageService {
     const canonicalId = getCanonicalUserId(budgetId || 'default');
     this.purgeDeletedItems(canonicalId);
     const deletedIds = this.getDeletedIds(canonicalId);
-    const key = `darla_transactions_${canonicalId}`;
-    let transactions: Transaction[] = [];
+    
+    const candidateIds = new Set<string>([canonicalId, 'default']);
     try {
-      const raw = localStorage.getItem(key);
-      if (raw) {
-        const parsed = JSON.parse(raw);
-        if (Array.isArray(parsed)) {
-          transactions = parsed.map((t: any) => ({ ...t, userId: canonicalId }));
-        }
-      }
+      const sharedStr = localStorage.getItem(STORAGE_KEYS.SHARED_BUDGETS) || '[]';
+      const sharedBudgets = JSON.parse(sharedStr);
+      sharedBudgets.forEach((b: any) => {
+        if (b.budgetId) candidateIds.add(getCanonicalUserId(b.budgetId));
+        if (b.ownerEmail) candidateIds.add(getCanonicalUserId(b.ownerEmail));
+      });
     } catch (e) {}
 
-    if (transactions.length === 0) {
-      const fallback = _inMemoryStore.transactions.filter((t) => getCanonicalUserId(t.userId) === canonicalId);
-      if (fallback.length > 0) {
-        transactions = fallback.map((t: any) => ({ ...t, userId: canonicalId }));
-      }
-    }
+    const map = new Map<string, Transaction>();
+    candidateIds.forEach(id => {
+      const key = `darla_transactions_${id}`;
+      try {
+        const raw = localStorage.getItem(key);
+        if (raw) {
+          const parsed = JSON.parse(raw);
+          if (Array.isArray(parsed)) {
+            parsed.forEach((t: any) => {
+              if (t && t.id && !deletedIds.has(t.id)) {
+                map.set(t.id, { ...t, userId: canonicalId });
+              }
+            });
+          }
+        }
+      } catch (e) {}
+    });
 
+    _inMemoryStore.transactions.forEach((t: any) => {
+      if (t && t.id && !deletedIds.has(t.id)) {
+        const tUser = getCanonicalUserId(t.userId);
+        if (candidateIds.has(tUser) || candidateIds.has(canonicalId)) {
+          map.set(t.id, { ...t, userId: canonicalId });
+        }
+      }
+    });
+
+    const transactions = Array.from(map.values());
+    transactions.sort((a, b) => new Date(b.date || b.createdAt || 0).getTime() - new Date(a.date || a.createdAt || 0).getTime());
     return transactions.filter((t) => t && t.id && !deletedIds.has(t.id));
   }
 
