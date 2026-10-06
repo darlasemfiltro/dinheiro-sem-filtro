@@ -477,6 +477,7 @@ export function subscribeToAppwriteRealtime(userId: string, onUpdate: (remoteDat
   let unsubscribe: (() => void) | null = null;
   const databaseId = '6a83aa8d0038331e040f';
   const collectionId = 'user_financials';
+  const txCollectionId = 'transactions';
   const cleanTargetUserId = (userId || '').trim().toLowerCase();
   const email = cleanTargetUserId.startsWith('user_') ? cleanTargetUserId.slice(5).replace(/_/g, '@') : cleanTargetUserId;
   const docIdSafe = email.replace(/@/g, '.').replace(/[^a-zA-Z0-9._-]/g, '_');
@@ -487,7 +488,8 @@ export function subscribeToAppwriteRealtime(userId: string, onUpdate: (remoteDat
     `databases.${databaseId}.collections.${collectionId}.documents`,
     canonicalDocId ? `databases.${databaseId}.collections.${collectionId}.documents.${canonicalDocId}` : '',
     legacyDocId && legacyDocId !== canonicalDocId ? `databases.${databaseId}.collections.${collectionId}.documents.${legacyDocId}` : '',
-    cleanTargetUserId ? `databases.${databaseId}.collections.${collectionId}.documents.${cleanTargetUserId}` : ''
+    cleanTargetUserId ? `databases.${databaseId}.collections.${collectionId}.documents.${cleanTargetUserId}` : '',
+    `databases.${databaseId}.collections.${txCollectionId}.documents`
   ].filter(Boolean);
 
   try {
@@ -498,6 +500,7 @@ export function subscribeToAppwriteRealtime(userId: string, onUpdate: (remoteDat
         const payloadDocId = String(payload.$id || '').trim().toLowerCase();
         
         const isMatch = 
+          !payloadUserId ||
           (cleanTargetUserId && payloadUserId === cleanTargetUserId) ||
           (canonicalDocId && payloadDocId === canonicalDocId.toLowerCase()) ||
           (legacyDocId && payloadDocId === legacyDocId.toLowerCase()) ||
@@ -507,7 +510,7 @@ export function subscribeToAppwriteRealtime(userId: string, onUpdate: (remoteDat
           return;
         }
 
-        if (response.events.some((e) => e.includes('.create') || e.includes('.update'))) {
+        if (response.events.some((e) => e.includes('.create') || e.includes('.update') || e.includes('.delete'))) {
           const raw = payload.data;
           let parsed = null;
           if (raw) {
@@ -515,9 +518,7 @@ export function subscribeToAppwriteRealtime(userId: string, onUpdate: (remoteDat
               parsed = typeof raw === 'string' ? JSON.parse(raw) : raw;
             } catch (e) {}
           }
-          if (parsed) {
-            onUpdate(parsed);
-          }
+          onUpdate(parsed);
         }
       }
     });

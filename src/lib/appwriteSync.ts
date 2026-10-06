@@ -542,20 +542,34 @@ export const saveAppDataDirect = async (targetUserOrBudgetId: string, fullDataPa
       currentDataObj = realDoc.data || {};
     }
 
-    // SAFETY GUARD: Prevent empty local payload from wiping out existing remote transactions/accounts
-    console.log('[Appwrite Sync Debug] Incoming:', { transactions: fullDataPayload.transactions?.length, accounts: fullDataPayload.accounts?.length });
+    // SMART MERGE: Combine remote and incoming transactions & accounts without data loss
     const incomingTxs = Array.isArray(fullDataPayload.transactions) ? fullDataPayload.transactions : [];
     const remoteTxs = Array.isArray(currentDataObj.transactions) ? currentDataObj.transactions : [];
-    if (remoteTxs.length > 0 && incomingTxs.length === 0) {
-      console.warn('[Appwrite Sync Safety] Bloqueado: Tentativa de sobrescrever transações existentes na nuvem com payload vazio.');
-      fullDataPayload.transactions = remoteTxs;
-    }
+    const txMap = new Map();
+    remoteTxs.forEach((t: any) => { if (t && t.id) txMap.set(t.id, t); });
+    incomingTxs.forEach((t: any) => {
+      if (t && t.id) {
+        const existing = txMap.get(t.id);
+        if (!existing || new Date(t.updatedAt || t.createdAt || 0).getTime() >= new Date(existing.updatedAt || existing.createdAt || 0).getTime()) {
+          txMap.set(t.id, t);
+        }
+      }
+    });
+    fullDataPayload.transactions = Array.from(txMap.values());
 
     const incomingAccs = Array.isArray(fullDataPayload.accounts) ? fullDataPayload.accounts : [];
     const remoteAccs = Array.isArray(currentDataObj.accounts) ? currentDataObj.accounts : [];
-    if (remoteAccs.length > 0 && incomingAccs.length <= 1 && incomingAccs[0]?.initialBalance === 0) {
-      fullDataPayload.accounts = remoteAccs;
-    }
+    const accMap = new Map();
+    remoteAccs.forEach((a: any) => { if (a && a.id) accMap.set(a.id, a); });
+    incomingAccs.forEach((a: any) => {
+      if (a && a.id) {
+        const existing = accMap.get(a.id);
+        if (!existing || new Date(a.updatedAt || 0).getTime() >= new Date(existing.updatedAt || 0).getTime()) {
+          accMap.set(a.id, a);
+        }
+      }
+    });
+    fullDataPayload.accounts = Array.from(accMap.values());
 
     const nextState = {
       ...currentDataObj,

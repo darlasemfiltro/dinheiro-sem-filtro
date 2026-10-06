@@ -1783,7 +1783,7 @@ export default function App() {
     // Setup connections
     realtimeSync.connect(currentUser.email, activeBudgetId);
     const unsubscribeAppwrite = subscribeToAppwriteRealtime(activeBudgetId, (remoteData) => {
-      if (Date.now() - lastLocalMutationTimeRef.current < 4000) {
+      if (Date.now() - lastLocalMutationTimeRef.current < 3000) {
         return;
       }
       if (remoteData) {
@@ -1858,15 +1858,16 @@ export default function App() {
         }
       }
       
+      forceInstantSync(activeBudgetId);
       window.dispatchEvent(new Event('portfolio_updated'));
     });
 
     const pollInterval = setInterval(() => {
-      if (currentUser && Date.now() - lastLocalMutationTimeRef.current > 4000) {
+      if (currentUser && Date.now() - lastLocalMutationTimeRef.current > 3000) {
         const bId = StorageService.getEffectiveBudgetId(currentUser);
         forceInstantSync(bId);
       }
-    }, 6000);
+    }, 3000);
 
     return () => {
       if (unsubscribeAppwrite) unsubscribeAppwrite();
