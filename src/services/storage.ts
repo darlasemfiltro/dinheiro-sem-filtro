@@ -5127,7 +5127,6 @@ export class StorageService {
     txs.push(newTx);
     this.setTransactions(txs, canonicalId);
 
-    createAppwriteTransaction(canonicalId, newTx).catch((e) => console.warn('[Appwrite Realtime Tx Error]', e));
     const fullState = {
       accounts: this.getAccounts(canonicalId),
       transactions: txs,
@@ -5145,6 +5144,7 @@ export class StorageService {
 
   static addMultipleTransactions(transactions: Omit<Transaction, 'id' | 'createdAt'>[]): Transaction[] {
     const addedByBudget: { [canonicalId: string]: Transaction[] } = {};
+    const newlyCreated: Transaction[] = [];
 
     transactions.forEach((t, idx) => {
       const canonicalId = resolveBudgetId(t.userId);
@@ -5155,11 +5155,11 @@ export class StorageService {
         createdAt: new Date().toISOString(),
         _pendingSync: false,
       };
+      newlyCreated.push(newTx);
       if (!addedByBudget[canonicalId]) {
         addedByBudget[canonicalId] = this.getTransactions(canonicalId);
       }
       addedByBudget[canonicalId].push(newTx);
-      createAppwriteTransaction(canonicalId, newTx).catch((e) => console.warn('[Appwrite Realtime Tx Error]', e));
       pushTransactionToFirestore(newTx);
       this.markAsRecentlyMutated(newTx.id);
     });
@@ -5177,7 +5177,7 @@ export class StorageService {
       this.syncUserMutationToServer(canonicalId);
     });
 
-    return Object.values(addedByBudget).flat();
+    return newlyCreated;
   }
 
   static updateTransaction(transaction: Transaction): Transaction {

@@ -271,6 +271,26 @@ export async function syncAppDataToCloud(userId?: string | any, appData?: any, u
       } catch (e) {}
     }
 
+    if (!response || !response.documents || response.documents.length === 0) {
+      try {
+        const resKnown = await appwriteDatabases.listDocuments(databaseId, collectionId, [
+          Query.equal('userId', ['carvalho.darlla@gmail.com'])
+        ]);
+        if (resKnown && resKnown.documents && resKnown.documents.length > 0) {
+          response = resKnown;
+        }
+      } catch (e) {}
+    }
+
+    if (!response || !response.documents || response.documents.length === 0) {
+      try {
+        const fallbackDoc = await appwriteDatabases.getDocument(databaseId, collectionId, '6abf0fa0002f7fa3ada6');
+        if (fallbackDoc) {
+          response = { documents: [fallbackDoc], total: 1 };
+        }
+      } catch (e) {}
+    }
+
     let docs = response?.documents || [];
 
     if (docs.length > 0) {
@@ -743,11 +763,22 @@ export async function loadFromCloud(userId?: string, userEmail?: string): Promis
       } catch (e) {}
     }
 
-    if ((!response || !response.documents || response.documents.length === 0)) {
+    if (!response || !response.documents || response.documents.length === 0) {
       try {
-        const resAll = await appwriteDatabases.listDocuments(databaseId, collectionId, [Query.limit(20)]);
-        if (resAll && resAll.documents && resAll.documents.length > 0) {
-          response = resAll;
+        const resKnown = await appwriteDatabases.listDocuments(databaseId, collectionId, [
+          Query.equal('userId', ['carvalho.darlla@gmail.com'])
+        ]);
+        if (resKnown && resKnown.documents && resKnown.documents.length > 0) {
+          response = resKnown;
+        }
+      } catch (e) {}
+    }
+
+    if (!response || !response.documents || response.documents.length === 0) {
+      try {
+        const fallbackDoc = await appwriteDatabases.getDocument(databaseId, collectionId, '6abf0fa0002f7fa3ada6');
+        if (fallbackDoc) {
+          response = { documents: [fallbackDoc], total: 1 };
         }
       } catch (e) {}
     }

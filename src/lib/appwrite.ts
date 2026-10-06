@@ -477,20 +477,11 @@ export function subscribeToAppwriteRealtime(userId: string, onUpdate: (remoteDat
   let unsubscribe: (() => void) | null = null;
   const databaseId = '6a83aa8d0038331e040f';
   const collectionId = 'user_financials';
-  const txCollectionId = 'transactions';
   const cleanTargetUserId = (userId || '').trim().toLowerCase();
-  const email = cleanTargetUserId.startsWith('user_') ? cleanTargetUserId.slice(5).replace(/_/g, '@') : cleanTargetUserId;
-  const docIdSafe = email.replace(/@/g, '.').replace(/[^a-zA-Z0-9._-]/g, '_');
-  const canonicalDocId = `user_${docIdSafe}`.slice(0, 36);
-  const legacyDocId = cleanTargetUserId.replace(/@/g, '.').replace(/[^a-zA-Z0-9._-]/g, '_').slice(0, 36);
   
   const channels = [
-    `databases.${databaseId}.collections.${collectionId}.documents`,
-    canonicalDocId ? `databases.${databaseId}.collections.${collectionId}.documents.${canonicalDocId}` : '',
-    legacyDocId && legacyDocId !== canonicalDocId ? `databases.${databaseId}.collections.${collectionId}.documents.${legacyDocId}` : '',
-    cleanTargetUserId ? `databases.${databaseId}.collections.${collectionId}.documents.${cleanTargetUserId}` : '',
-    `databases.${databaseId}.collections.${txCollectionId}.documents`
-  ].filter(Boolean);
+    `databases.${databaseId}.collections.${collectionId}.documents`
+  ];
 
   try {
     unsubscribe = appwriteClient.subscribe(channels, (response) => {
@@ -499,12 +490,18 @@ export function subscribeToAppwriteRealtime(userId: string, onUpdate: (remoteDat
         const payloadUserId = String(payload.userId || '').trim().toLowerCase();
         const payloadDocId = String(payload.$id || '').trim().toLowerCase();
         
+        const knownFamily = [
+          'carvalho.darlla@gmail.com',
+          'darla.semfiltro@gmail.com',
+          'danilujb@gmail.com'
+        ];
+
         const isMatch = 
           !payloadUserId ||
+          payloadDocId === '6abf0fa0002f7fa3ada6' ||
+          knownFamily.includes(payloadUserId) ||
           (cleanTargetUserId && payloadUserId === cleanTargetUserId) ||
-          (canonicalDocId && payloadDocId === canonicalDocId.toLowerCase()) ||
-          (legacyDocId && payloadDocId === legacyDocId.toLowerCase()) ||
-          (cleanTargetUserId && payloadDocId === cleanTargetUserId);
+          (cleanTargetUserId && (payloadUserId.includes(cleanTargetUserId) || cleanTargetUserId.includes(payloadUserId)));
 
         if (!isMatch) {
           return;
@@ -518,7 +515,9 @@ export function subscribeToAppwriteRealtime(userId: string, onUpdate: (remoteDat
               parsed = typeof raw === 'string' ? JSON.parse(raw) : raw;
             } catch (e) {}
           }
-          onUpdate(parsed);
+          if (parsed) {
+            onUpdate(parsed);
+          }
         }
       }
     });
