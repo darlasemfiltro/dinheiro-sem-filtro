@@ -152,8 +152,7 @@ export function getCanonicalUserId(idOrEmail: string): string {
     clean === 'user_carvalho.darlla_gmail_com' ||
     clean === 'user_carvalhodarlla_gmail_com' ||
     clean === 'carvalhodarlla@gmail.com' ||
-    clean === 'darlla-5921' ||
-    clean === 'darlla-8704'
+    clean === 'darlla-5921'
   ) {
     return 'carvalho.darlla@gmail.com';
   }
@@ -163,9 +162,11 @@ export function getCanonicalUserId(idOrEmail: string): string {
     clean === 'user_darla.semfiltro.gmail.com' ||
     clean === 'user_darla.semfiltro_gmail_com' ||
     clean === 'user_darlasemfiltro_gmail_com' ||
-    clean === 'darlasemfiltro@gmail.com'
+    clean === 'darlasemfiltro@gmail.com' ||
+    clean === 'darla.semfiltro@gmail.com' ||
+    clean === 'darla-8704'
   ) {
-    return 'suporte.dinheirosemfiltro@gmail.com';
+    return 'darla.semfiltro@gmail.com';
   }
 
   if (
@@ -1686,6 +1687,7 @@ export class StorageService {
         ],
         transactions: [
           ...(Array.isArray(serverData?.transactions) ? serverData.transactions : []),
+          ...(Array.isArray(appwriteConnData?.transactions) ? appwriteConnData.transactions : []),
           ...(Array.isArray(remoteTransactions) ? remoteTransactions : []),
           ...(Array.isArray(firestoreData?.transactions) ? firestoreData.transactions : [])
         ],
@@ -4827,7 +4829,10 @@ export class StorageService {
 
     _inMemoryStore.accounts.forEach((a: any) => {
       if (a && a.id) {
-        map.set(a.id, { ...a, userId: canonicalId });
+        const aUser = getCanonicalUserId(a.userId);
+        if (candidateIds.has(aUser)) {
+          map.set(a.id, { ...a, userId: canonicalId });
+        }
       }
     });
 
@@ -5089,7 +5094,7 @@ export class StorageService {
     _inMemoryStore.transactions.forEach((t: any) => {
       if (t && t.id && !deletedIds.has(t.id)) {
         const tUser = getCanonicalUserId(t.userId);
-        if (candidateIds.has(tUser) || candidateIds.has(canonicalId)) {
+        if (candidateIds.has(tUser)) {
           map.set(t.id, { ...t, userId: canonicalId });
         }
       }
@@ -5178,6 +5183,15 @@ export class StorageService {
     }
     this.setTransactions(txs, canonicalId);
 
+    const fullState = {
+      accounts: this.getAccounts(canonicalId),
+      transactions: txs,
+      categories: this.getCategories(canonicalId),
+      goals: this.getGoals(canonicalId),
+      familyMembers: this.getFamilyMembers(canonicalId),
+    };
+    syncUserDataWithAppwrite(canonicalId, fullState).catch((e) => console.warn('[Appwrite State Error]', e));
+
     updateAppwriteTransaction(canonicalId, updatedTx).catch(() => {});
     pushTransactionToFirestore(updatedTx);
     this.markAsRecentlyMutated(updatedTx.id);
@@ -5199,6 +5213,15 @@ export class StorageService {
       }
       this.setTransactions(txs, canonicalId);
       this.markAsRecentlyMutated(tx.id);
+
+      const fullState = {
+        accounts: this.getAccounts(canonicalId),
+        transactions: txs,
+        categories: this.getCategories(canonicalId),
+        goals: this.getGoals(canonicalId),
+        familyMembers: this.getFamilyMembers(canonicalId),
+      };
+      syncUserDataWithAppwrite(canonicalId, fullState).catch((e) => console.warn('[Appwrite State Error]', e));
 
       updateAppwriteTransaction(tx.userId, tx).catch(() => {});
       pushTransactionToFirestore(tx);
@@ -5225,6 +5248,15 @@ export class StorageService {
     // 3. Get filtered transactions for canonicalId and update storage
     const txs = this.getTransactions(canonicalId).filter((t) => t.id !== transactionId);
     this.setTransactions(txs, canonicalId);
+
+    const fullState = {
+      accounts: this.getAccounts(canonicalId),
+      transactions: txs,
+      categories: this.getCategories(canonicalId),
+      goals: this.getGoals(canonicalId),
+      familyMembers: this.getFamilyMembers(canonicalId),
+    };
+    syncUserDataWithAppwrite(canonicalId, fullState).catch((e) => console.warn('[Appwrite State Error]', e));
 
     // 4. Force cloud deletion and await fully
     try {

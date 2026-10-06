@@ -1246,6 +1246,23 @@ export default function App() {
             window.dispatchEvent(new CustomEvent('budget_goals_updated', { detail: { budgetGoals: mergedBudgetGoals } }));
           }
           window.dispatchEvent(new Event('portfolio_updated'));
+        } else {
+          // Fallback to server backend API if Appwrite was unreachable
+          try {
+            const sRes = await fetch(`/api/data/load?userId=${encodeURIComponent(effectiveBudgetId)}`);
+            if (sRes.ok) {
+              const sJson = await sRes.json();
+              if (sJson?.success && sJson.data) {
+                StorageService.handleRemoteStateUpdate(sJson.data, effectiveBudgetId);
+                const finalTxs = StorageService.getTransactions(effectiveBudgetId);
+                setTransactions(prev => JSON.stringify(prev) === JSON.stringify(finalTxs) ? prev : finalTxs);
+                const finalAccs = StorageService.getAccounts(effectiveBudgetId);
+                if (finalAccs.length > 0) {
+                  setAccounts(prev => JSON.stringify(prev) === JSON.stringify(finalAccs) ? prev : finalAccs);
+                }
+              }
+            }
+          } catch (e) {}
         }
       } catch (err: any) {
         const isNetworkError = err?.message?.includes('Failed to fetch') || err?.name === 'TypeError';
@@ -1780,10 +1797,15 @@ export default function App() {
     syncFn();
 
     const activeBudgetId = StorageService.getEffectiveBudgetId(currentUser);
-    const syncTarget = currentUser?.email || activeBudgetId;
+    const syncTargets = [
+      currentUser?.email,
+      activeBudgetId,
+      StorageService.getCanonicalUserId(currentUser?.email || ''),
+      StorageService.getCanonicalUserId(activeBudgetId || '')
+    ].filter(Boolean) as string[];
     // Setup connections
     realtimeSync.connect(currentUser.email, activeBudgetId);
-    const unsubscribeAppwrite = subscribeToAppwriteRealtime(syncTarget, (remoteData) => {
+    const unsubscribeAppwrite = subscribeToAppwriteRealtime(syncTargets, (remoteData) => {
       if (Date.now() - lastLocalMutationTimeRef.current < 3000) {
         return;
       }
@@ -1885,11 +1907,35 @@ export default function App() {
       if (detail && (detail.userId || detail.budgetId)) {
         const target = String(detail.userId || detail.budgetId || '').toLowerCase();
         const curTarget = curBudgetId.toLowerCase();
+        const myEmail = String(currentUser?.email || '').toLowerCase();
         const canonicalTarget = StorageService.getCanonicalUserId(target);
         const canonicalCur = StorageService.getCanonicalUserId(curTarget);
-        if (target !== curTarget && canonicalTarget !== canonicalCur) {
+        const canonicalMyEmail = StorageService.getCanonicalUserId(myEmail);
+        const isMatch = target === curTarget || target === myEmail || canonicalTarget === canonicalCur || canonicalTarget === canonicalMyEmail;
+        if (!isMatch) {
           return;
         }
+      }
+
+      // If transactions are included directly in remote payload, update local cache and React state immediately
+      if (detail?.transactions && Array.isArray(detail.transactions)) {
+        const canonicalCur = StorageService.getCanonicalUserId(curBudgetId);
+        StorageService.setTransactions(detail.transactions, canonicalCur);
+        setTransactions(detail.transactions);
+      }
+
+      // If accounts are included directly in remote payload, update local cache and React state immediately
+      if (detail?.accounts && Array.isArray(detail.accounts) && detail.accounts.length > 0) {
+        const canonicalCur = StorageService.getCanonicalUserId(curBudgetId);
+        StorageService.setAccounts(detail.accounts, canonicalCur);
+        setAccounts(detail.accounts);
+      }
+
+      // If familyMembers are included directly in remote payload, update local cache and React state immediately
+      if (detail?.familyMembers && Array.isArray(detail.familyMembers)) {
+        const canonicalCur = StorageService.getCanonicalUserId(curBudgetId);
+        StorageService.setFamilyMembers(detail.familyMembers, canonicalCur);
+        setFamilyMembers(detail.familyMembers);
       }
 
       // If categories are included directly in remote payload, update local cache and React state immediately

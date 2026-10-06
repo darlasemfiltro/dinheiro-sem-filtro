@@ -465,10 +465,73 @@ export async function appwriteGoogleOAuthLogin(successUrl?: string, failureUrl?:
   throw new Error('Google OAuth requires active Appwrite project configuration.');
 }
 
+function uint8ArrayToBase64(bytes: Uint8Array): string {
+  let binary = '';
+  const len = bytes.byteLength;
+  const chunkSize = 16384;
+  for (let i = 0; i < len; i += chunkSize) {
+    const chunk = bytes.subarray(i, Math.min(i + chunkSize, len));
+    binary += String.fromCharCode.apply(null, chunk as any);
+  }
+  return btoa(binary);
+}
+
+function base64ToUint8Array(base64: string): Uint8Array {
+  const binary = atob(base64);
+  const len = binary.length;
+  const bytes = new Uint8Array(len);
+  for (let i = 0; i < len; i++) {
+    bytes[i] = binary.charCodeAt(i);
+  }
+  return bytes;
+}
+
+export async function serializePayloadForAppwrite(dataObj: any): Promise<string> {
+  const jsonStr = JSON.stringify(dataObj);
+  if (jsonStr.length < 45000) {
+    return jsonStr;
+  }
+  try {
+    if (typeof CompressionStream !== 'undefined') {
+      const stream = new Blob([jsonStr]).stream().pipeThrough(new CompressionStream('deflate'));
+      const buffer = await new Response(stream).arrayBuffer();
+      const base64 = uint8ArrayToBase64(new Uint8Array(buffer));
+      return 'COMPRESSED:' + base64;
+    }
+  } catch (e) {
+    console.warn('[Compression notice, falling back to JSON]', e);
+  }
+  return jsonStr;
+}
+
+export async function parsePayloadFromAppwrite(rawData: any): Promise<any> {
+  if (!rawData) return {};
+  if (typeof rawData !== 'string') return rawData;
+  if (rawData.startsWith('COMPRESSED:')) {
+    try {
+      const base64 = rawData.slice('COMPRESSED:'.length);
+      const bytes = base64ToUint8Array(base64);
+      if (typeof DecompressionStream !== 'undefined') {
+        const stream = new Blob([bytes]).stream().pipeThrough(new DecompressionStream('deflate'));
+        const text = await new Response(stream).text();
+        return JSON.parse(text);
+      }
+    } catch (e) {
+      console.error('[Appwrite decompression error]', e);
+      return {};
+    }
+  }
+  try {
+    return JSON.parse(rawData);
+  } catch (e) {
+    return {};
+  }
+}
+
 /**
  * Subscribes to real-time changes in Appwrite user financials collection with reconnection support
  */
-export function subscribeToAppwriteRealtime(userIdOrEmail: string, onUpdate: (remoteData?: any) => void): () => void {
+export function subscribeToAppwriteRealtime(userIdOrEmail: string | string[], onUpdate: (remoteData?: any) => void): () => void {
   const cfg = getAppwriteConfig();
   if (!cfg.projectId || cfg.projectId === 'default-placeholder') {
     return () => {};
@@ -477,28 +540,37 @@ export function subscribeToAppwriteRealtime(userIdOrEmail: string, onUpdate: (re
   let unsubscribe: (() => void) | null = null;
   const databaseId = '6a83aa8d0038331e040f';
   const collectionId = 'user_financials';
-  const cleanTarget = (userIdOrEmail || '').trim().toLowerCase();
   
+  const rawTargets = Array.isArray(userIdOrEmail) ? userIdOrEmail : [userIdOrEmail];
+  const targetSet = new Set(rawTargets.filter(Boolean).map((t) => String(t).trim().toLowerCase()));
+
   const channels = [
     `databases.${databaseId}.collections.${collectionId}.documents`
   ];
 
   try {
-    unsubscribe = appwriteClient.subscribe(channels, (response) => {
+    unsubscribe = appwriteClient.subscribe(channels, async (response) => {
       const payload: any = response.payload;
       if (payload) {
         const payloadUserId = String(payload.userId || '').trim().toLowerCase();
         const payloadDocId = String(payload.$id || '').trim().toLowerCase();
         
-        // Exact match by email or canonical user ID
-        const isMatch = 
-          !cleanTarget ||
-          !payloadUserId ||
-          payloadUserId === cleanTarget ||
-          payloadDocId === cleanTarget ||
-          (cleanTarget.includes('@') && payloadUserId === cleanTarget) ||
-          cleanTarget.includes(payloadUserId) ||
-          payloadUserId.includes(cleanTarget);
+        let isMatch = targetSet.size === 0;
+        if (!isMatch) {
+          for (const target of targetSet) {
+            if (
+              !target ||
+              payloadUserId === target ||
+              payloadDocId === target ||
+              (target.includes('@') && payloadUserId === target) ||
+              target.includes(payloadUserId) ||
+              payloadUserId.includes(target)
+            ) {
+              isMatch = true;
+              break;
+            }
+          }
+        }
 
         if (!isMatch) {
           return;
@@ -506,15 +578,13 @@ export function subscribeToAppwriteRealtime(userIdOrEmail: string, onUpdate: (re
 
         if (response.events.some((e) => e.includes('.create') || e.includes('.update') || e.includes('.delete'))) {
           const raw = payload.data;
-          let parsed = null;
+          let parsed: any = null;
           if (raw) {
             try {
-              parsed = typeof raw === 'string' ? JSON.parse(raw) : raw;
+              parsed = await parsePayloadFromAppwrite(raw);
             } catch (e) {}
           }
-          if (parsed) {
-            onUpdate(parsed);
-          }
+          onUpdate(parsed || undefined);
         }
       }
     });

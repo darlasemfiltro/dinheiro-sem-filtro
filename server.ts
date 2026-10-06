@@ -77,8 +77,7 @@ function getCanonicalUserIdServer(idOrEmail: string): string {
     clean === 'user_carvalho.darlla_gmail_com' ||
     clean === 'user_carvalhodarlla_gmail_com' ||
     clean === 'carvalhodarlla@gmail.com' ||
-    clean === 'darlla-5921' ||
-    clean === 'darlla-8704'
+    clean === 'darlla-5921'
   ) {
     return 'carvalho.darlla@gmail.com';
   }
@@ -88,9 +87,11 @@ function getCanonicalUserIdServer(idOrEmail: string): string {
     clean === 'user_darla.semfiltro.gmail.com' ||
     clean === 'user_darla.semfiltro_gmail_com' ||
     clean === 'user_darlasemfiltro_gmail_com' ||
-    clean === 'darlasemfiltro@gmail.com'
+    clean === 'darlasemfiltro@gmail.com' ||
+    clean === 'darla.semfiltro@gmail.com' ||
+    clean === 'darla-8704'
   ) {
-    return 'suporte.dinheirosemfiltro@gmail.com';
+    return 'darla.semfiltro@gmail.com';
   }
 
   if (
@@ -891,21 +892,9 @@ function loadServerFinancials(): Record<string, {
     }
   });
 
-  // Sanitize and isolate user records strictly
+  // Ensure default categories exist if missing
   for (const [canonicalId, record] of Object.entries(financials)) {
     if (record && typeof record === 'object') {
-      ['accounts', 'categories', 'familyMembers', 'transactions', 'goals'].forEach((key) => {
-        if (Array.isArray(record[key])) {
-          const originalLen = record[key].length;
-          record[key] = record[key].filter((item: any) => {
-            if (!item) return false;
-            const itemUser = item.userId ? getCanonicalUserIdServer(item.userId) : canonicalId;
-            return itemUser === canonicalId || itemUser === 'default' || !item.userId;
-          });
-          if (record[key].length !== originalLen) modified = true;
-        }
-      });
-
       if (!Array.isArray(record.categories) || record.categories.length === 0) {
         record.categories = getDarlaFinancialDataset(canonicalId).categories;
         modified = true;
@@ -2364,12 +2353,18 @@ async function startServer() {
 
       const deletedSet = new Set<string>(existing.deletedIds);
 
-      // SMART AUTHORITATIVE MERGE SO CLIENT DELETIONS ARE INSTANTLY REFLECTED ON SERVER
+      // SMART MERGE: Retain existing records not in deletedSet and merge incoming updates without data loss
       const mergeRecords = (existingList: any[] = [], incomingList: any[] = []) => {
         const map = new Map<string, any>();
-        const incomingIds = new Set((incomingList || []).map((item: any) => item?.id).filter(Boolean));
 
-        // 1. Process incomingList as the authoritative active client state
+        // 1. Keep existing records that are not in deletedSet
+        (existingList || []).forEach((item: any) => {
+          if (item && item.id && !deletedSet.has(item.id)) {
+            map.set(item.id, { ...item, userId: canonicalId });
+          }
+        });
+
+        // 2. Incoming items update or add to existing records
         (incomingList || []).forEach((item: any) => {
           if (item && item.id && !deletedSet.has(item.id)) {
             const sanitized = { ...item, userId: canonicalId };
@@ -2379,13 +2374,13 @@ async function startServer() {
                 ? sanitized.initialBalance
                 : (parseFloat(String(sanitized.initialBalance).replace(',', '.')) || 0);
             }
-            map.set(item.id, sanitized);
+            const existing = map.get(item.id);
+            if (!existing || new Date(sanitized.updatedAt || sanitized.createdAt || 0).getTime() >= new Date(existing.updatedAt || existing.createdAt || 0).getTime()) {
+              map.set(item.id, sanitized);
+            }
           }
         });
 
-        // 2. Check existingList: any item in existingList that is NOT in incomingIds 
-        // and NOT explicitly deleted was removed by the client. We drop it.
-        // We only retain existing items if they are in incomingIds and not in deletedSet.
         return Array.from(map.values());
       };
 
@@ -2459,6 +2454,7 @@ async function startServer() {
       broadcastRealtime('DATA_UPDATED', {
         userId: canonicalId,
         rawUserId: userId,
+        transactions: syncedData.transactions,
         categories: syncedData.categories,
         familyMembers: syncedData.familyMembers,
         accounts: syncedData.accounts,

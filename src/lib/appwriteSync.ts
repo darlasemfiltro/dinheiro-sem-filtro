@@ -1,4 +1,5 @@
-import { appwriteDatabases, checkAppwriteConnection, AppwriteStatus, getAppwriteConfig, appwriteAccount, appwriteClient } from './appwrite';
+import { appwriteDatabases, checkAppwriteConnection, AppwriteStatus, getAppwriteConfig, appwriteAccount, appwriteClient, serializePayloadForAppwrite, parsePayloadFromAppwrite } from './appwrite';
+export { serializePayloadForAppwrite, parsePayloadFromAppwrite };
 import { Query, ID, Permission, Role } from 'appwrite';
 
 export async function getAppwriteStatus(): Promise<AppwriteStatus> {
@@ -154,9 +155,13 @@ export async function executeAppwriteDocumentUpdate(targetDocId: string, updated
     }
 
     const profileVals = getUserProfilePayloadValues(updatedDataState, currentDoc, targetDocId);
+    const serializedData = typeof updatedDataState === 'string' && updatedDataState.startsWith('COMPRESSED:')
+      ? updatedDataState
+      : await serializePayloadForAppwrite(typeof updatedDataState === 'string' ? JSON.parse(updatedDataState) : updatedDataState);
+
     const safePayload: Record<string, any> = {
       userId: currentDoc?.userId || targetDocId || '',
-      data: typeof updatedDataState === 'string' ? updatedDataState : JSON.stringify(updatedDataState),
+      data: serializedData,
       estado: profileVals.estado,
       cidade: profileVals.cidade,
       data_nascimento: profileVals.data_nascimento,
@@ -174,7 +179,7 @@ export async function executeAppwriteDocumentUpdate(targetDocId: string, updated
         console.warn('[Appwrite Universal Update] Atributo desconhecido detectado, atualizando apenas userId e data...');
         await appwriteDatabases.updateDocument(databaseId, collectionId, docIdToUpdate, {
           userId: currentDoc?.userId || targetDocId || '',
-          data: typeof updatedDataState === 'string' ? updatedDataState : JSON.stringify(updatedDataState)
+          data: serializedData
         });
       } else {
         throw updateErr;
@@ -271,26 +276,6 @@ export async function syncAppDataToCloud(userId?: string | any, appData?: any, u
       } catch (e) {}
     }
 
-    if (!response || !response.documents || response.documents.length === 0) {
-      try {
-        const resKnown = await appwriteDatabases.listDocuments(databaseId, collectionId, [
-          Query.equal('userId', ['carvalho.darlla@gmail.com'])
-        ]);
-        if (resKnown && resKnown.documents && resKnown.documents.length > 0) {
-          response = resKnown;
-        }
-      } catch (e) {}
-    }
-
-    if (!response || !response.documents || response.documents.length === 0) {
-      try {
-        const fallbackDoc = await appwriteDatabases.getDocument(databaseId, collectionId, '6abf0fa0002f7fa3ada6');
-        if (fallbackDoc) {
-          response = { documents: [fallbackDoc], total: 1 };
-        }
-      } catch (e) {}
-    }
-
     let docs = response?.documents || [];
 
     if (docs.length > 0) {
@@ -308,14 +293,14 @@ export async function syncAppDataToCloud(userId?: string | any, appData?: any, u
       try {
         const freshDoc = await appwriteDatabases.getDocument(databaseId, collectionId, latestDoc.$id);
         if (freshDoc && freshDoc.data) {
-          jsonDoBanco = typeof freshDoc.data === 'string' ? JSON.parse(freshDoc.data) : freshDoc.data;
+          jsonDoBanco = await parsePayloadFromAppwrite(freshDoc.data);
         } else if (latestDoc.data) {
-          jsonDoBanco = typeof latestDoc.data === 'string' ? JSON.parse(latestDoc.data) : latestDoc.data;
+          jsonDoBanco = await parsePayloadFromAppwrite(latestDoc.data);
         }
       } catch (e) {
         try {
           if (latestDoc.data) {
-            jsonDoBanco = typeof latestDoc.data === 'string' ? JSON.parse(latestDoc.data) : latestDoc.data;
+            jsonDoBanco = await parsePayloadFromAppwrite(latestDoc.data);
           }
         } catch (err2) {}
       }
@@ -380,9 +365,10 @@ export async function syncAppDataToCloud(userId?: string | any, appData?: any, u
       };
 
       const docProfileVals = getUserProfilePayloadValues(actualData, latestDoc, currentUserId);
+      const serializedMerged = await serializePayloadForAppwrite(mergedPayloadData);
       const finalPayload = {
         userId: emailSanitizado || currentUserId,
-        data: JSON.stringify(mergedPayloadData),
+        data: serializedMerged,
         estado: docProfileVals.estado,
         cidade: docProfileVals.cidade,
         data_nascimento: docProfileVals.data_nascimento,
@@ -409,9 +395,10 @@ export async function syncAppDataToCloud(userId?: string | any, appData?: any, u
     } else {
       const targetDocId = getCanonicalAppwriteDocId(emailSanitizado || currentUserId);
       const newDocProfileVals = getUserProfilePayloadValues(actualData, null, emailSanitizado || currentUserId);
+      const serializedNew = await serializePayloadForAppwrite(payloadData);
       const createPayload = {
         userId: emailSanitizado || currentUserId,
-        data: JSON.stringify(payloadData),
+        data: serializedNew,
         estado: newDocProfileVals.estado,
         cidade: newDocProfileVals.cidade,
         data_nascimento: newDocProfileVals.data_nascimento,
@@ -488,11 +475,13 @@ export const saveAppDataDirect = async (targetUserOrBudgetId: string, fullDataPa
       } catch (dErr) {}
     }
 
-    // Fallback de contingência: primeiro documento da coleção acessível
     if (!realDoc) {
-      const fallbackList = await appwriteDatabases.listDocuments(DATABASE_ID, COLLECTION_ID, [Query.limit(5)]);
-      if (fallbackList.documents && fallbackList.documents.length > 0) {
-        realDoc = fallbackList.documents[0];
+      if (targetUserOrBudgetId === 'darla.semfiltro@gmail.com') {
+        try { realDoc = await appwriteDatabases.getDocument(DATABASE_ID, COLLECTION_ID, '6ac451cb021c6a999e84'); } catch (e) {}
+      } else if (targetUserOrBudgetId === 'carvalho.darlla@gmail.com') {
+        try { realDoc = await appwriteDatabases.getDocument(DATABASE_ID, COLLECTION_ID, '6abf0fa0002f7fa3ada6'); } catch (e) {}
+      } else if (targetUserOrBudgetId === 'danilujb@gmail.com') {
+        try { realDoc = await appwriteDatabases.getDocument(DATABASE_ID, COLLECTION_ID, '6ac455a500247de9bcb9'); } catch (e) {}
       }
     }
 
@@ -515,9 +504,11 @@ export const saveAppDataDirect = async (targetUserOrBudgetId: string, fullDataPa
       fullDataPayload.user.consent_lgpd = profileVals.consent_lgpd;
       fullDataPayload.user.consent_date = profileVals.consent_date;
 
+      const serializedCreate = await serializePayloadForAppwrite(fullDataPayload);
+
       const createPayload = {
         userId: targetUserOrBudgetId,
-        data: JSON.stringify(fullDataPayload),
+        data: serializedCreate,
         cidade: profileVals.cidade,
         estado: profileVals.estado,
         data_nascimento: profileVals.data_nascimento,
@@ -556,10 +547,8 @@ export const saveAppDataDirect = async (targetUserOrBudgetId: string, fullDataPa
 
     // 2. Extrai dados anteriores e faz o merge seguro no campo data
     let currentDataObj: any = {};
-    if (typeof realDoc.data === 'string') {
-      try { currentDataObj = JSON.parse(realDoc.data); } catch(e) { currentDataObj = {}; }
-    } else {
-      currentDataObj = realDoc.data || {};
+    if (realDoc.data) {
+      currentDataObj = await parsePayloadFromAppwrite(realDoc.data);
     }
 
     // SMART MERGE: Combine remote and incoming transactions & accounts without data loss
@@ -647,9 +636,11 @@ export const saveAppDataDirect = async (targetUserOrBudgetId: string, fullDataPa
     nextState.user.consent_lgpd = profileVals.consent_lgpd;
     nextState.user.consent_date = profileVals.consent_date;
 
+    const serializedNextState = await serializePayloadForAppwrite(nextState);
+
     const fullPayload: Record<string, any> = {
       userId: realDoc.userId,
-      data: JSON.stringify(nextState),
+      data: serializedNextState,
       cidade: profileVals.cidade,
       estado: profileVals.estado,
       data_nascimento: profileVals.data_nascimento,
@@ -765,22 +756,31 @@ export async function loadFromCloud(userId?: string, userEmail?: string): Promis
 
     if (!response || !response.documents || response.documents.length === 0) {
       try {
-        const resKnown = await appwriteDatabases.listDocuments(databaseId, collectionId, [
-          Query.equal('userId', ['carvalho.darlla@gmail.com'])
-        ]);
-        if (resKnown && resKnown.documents && resKnown.documents.length > 0) {
-          response = resKnown;
+        const canonicalDocId = getCanonicalAppwriteDocId(emailSanitizado || currentUserId);
+        const directDoc = await appwriteDatabases.getDocument(databaseId, collectionId, canonicalDocId);
+        if (directDoc) {
+          response = { documents: [directDoc], total: 1 };
         }
       } catch (e) {}
     }
 
     if (!response || !response.documents || response.documents.length === 0) {
-      try {
-        const fallbackDoc = await appwriteDatabases.getDocument(databaseId, collectionId, '6abf0fa0002f7fa3ada6');
-        if (fallbackDoc) {
-          response = { documents: [fallbackDoc], total: 1 };
-        }
-      } catch (e) {}
+      if (emailSanitizado === 'darla.semfiltro@gmail.com' || currentUserId === 'darla.semfiltro@gmail.com') {
+        try {
+          const directDoc = await appwriteDatabases.getDocument(databaseId, collectionId, '6ac451cb021c6a999e84');
+          if (directDoc) response = { documents: [directDoc], total: 1 };
+        } catch (e) {}
+      } else if (emailSanitizado === 'carvalho.darlla@gmail.com' || currentUserId === 'carvalho.darlla@gmail.com') {
+        try {
+          const directDoc = await appwriteDatabases.getDocument(databaseId, collectionId, '6abf0fa0002f7fa3ada6');
+          if (directDoc) response = { documents: [directDoc], total: 1 };
+        } catch (e) {}
+      } else if (emailSanitizado === 'danilujb@gmail.com' || currentUserId === 'danilujb@gmail.com') {
+        try {
+          const directDoc = await appwriteDatabases.getDocument(databaseId, collectionId, '6ac455a500247de9bcb9');
+          if (directDoc) response = { documents: [directDoc], total: 1 };
+        } catch (e) {}
+      }
     }
 
     let docs = response?.documents || [];
@@ -803,7 +803,7 @@ export async function loadFromCloud(userId?: string, userEmail?: string): Promis
       }
 
       if (doc && doc.data && doc.data !== '{}' && doc.data !== 'null') {
-        const parsed = typeof doc.data === 'string' ? JSON.parse(doc.data) : doc.data;
+        const parsed = await parsePayloadFromAppwrite(doc.data);
         console.log('[Appwrite Load Success] Dados carregados da nuvem para usuário:', emailSanitizado || currentUserId);
         
         if (doc) {
@@ -1027,15 +1027,6 @@ export async function fetchTransactionsFromAppwrite(userId: string): Promise<any
         const res = await appwriteDatabases.listDocuments(databaseId, 'transactions', [q, Query.limit(500)]);
         if (res && res.documents) {
           allDocs.push(...res.documents);
-        }
-      } catch (e) {}
-    }
-
-    if (allDocs.length === 0) {
-      try {
-        const resAll = await appwriteDatabases.listDocuments(databaseId, 'transactions', [Query.limit(100)]);
-        if (resAll && resAll.documents) {
-          allDocs = resAll.documents;
         }
       } catch (e) {}
     }
@@ -1921,7 +1912,7 @@ export async function getAppwriteRealDocument(databaseId: string, collectionId: 
       const doc = docs[0];
       let parsedData = {};
       try {
-        parsedData = doc.data ? (typeof doc.data === 'string' ? JSON.parse(doc.data) : doc.data) : {};
+        parsedData = await parsePayloadFromAppwrite(doc.data);
       } catch (e) {}
       return { $id: doc.$id, data: parsedData };
     }
@@ -1933,7 +1924,7 @@ export async function getAppwriteRealDocument(databaseId: string, collectionId: 
       if (doc) {
         let parsedData = {};
         try {
-          parsedData = doc.data ? (typeof doc.data === 'string' ? JSON.parse(doc.data) : doc.data) : {};
+          parsedData = await parsePayloadFromAppwrite(doc.data);
         } catch (e) {}
         return { $id: doc.$id, data: parsedData };
       }
