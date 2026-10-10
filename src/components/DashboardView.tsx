@@ -635,13 +635,15 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
         const totalExpenses = liveExpenses > 0 ? liveExpenses : (summary.totalExpenses || 0);
         const totalIncome = liveIncome > 0 ? liveIncome : (summary.totalIncome || 0);
 
-        // Calculate user's income commitment percentage in real time
-        // If it's a shared budget, only use budgetUser.monthlyIncome if we actually found the owner's metadata.
-        // Otherwise, fallback to totalIncome from transactions to ensure consistency between titular and member.
-        const useOwnerMonthlyIncome = isOwnBudget || foundOwnerMeta;
-        const userMonthlyIncome = (useOwnerMonthlyIncome && budgetUser?.monthlyIncome && budgetUser.monthlyIncome > 0)
-          ? budgetUser.monthlyIncome
-          : (totalIncome > 0 ? totalIncome : (summary.totalIncome > 0 ? summary.totalIncome : 0));
+        // Use the shared budget's actual month income as the universal income base
+        // so that titular and member always get the exact same percentage across devices.
+        const userMonthlyIncome = totalIncome > 0 
+          ? totalIncome 
+          : (summary.totalIncome > 0 
+            ? summary.totalIncome 
+            : (summary.consolidatedIncome > 0 
+              ? summary.consolidatedIncome 
+              : (budgetUser?.monthlyIncome && budgetUser.monthlyIncome > 0 ? budgetUser.monthlyIncome : 1)));
 
         const percentualUsuario = userMonthlyIncome > 0
           ? Math.round((totalExpenses / userMonthlyIncome) * 100)
