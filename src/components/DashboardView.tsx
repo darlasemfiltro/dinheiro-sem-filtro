@@ -586,12 +586,16 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
         const isOwnBudget = effectiveBudgetId === personalBudgetId;
 
         let budgetUser = user;
+        let foundOwnerMeta = false;
         if (!isOwnBudget && effectiveBudgetId !== 'default') {
           const ownerMetaStr = localStorage.getItem(`dsf_budget_owner_metadata_${effectiveBudgetId}`);
           if (ownerMetaStr) {
             try {
               const parsed = JSON.parse(ownerMetaStr);
-              if (parsed && parsed.email) budgetUser = parsed;
+              if (parsed && parsed.email) {
+                budgetUser = parsed;
+                foundOwnerMeta = true;
+              }
             } catch (e) {}
           }
         }
@@ -619,11 +623,14 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
         const totalExpenses = liveExpenses > 0 ? liveExpenses : (summary.totalExpenses || 0);
         const totalIncome = liveIncome > 0 ? liveIncome : (summary.totalIncome || 0);
 
-        const userMonthlyIncome = budgetUser?.monthlyIncome && budgetUser.monthlyIncome > 0
+        // Calculate user's income commitment percentage in real time
+        // If it's a shared budget, only use budgetUser.monthlyIncome if we actually found the owner's metadata.
+        // Otherwise, fallback to totalIncome from transactions to ensure consistency between titular and member.
+        const useOwnerMonthlyIncome = isOwnBudget || foundOwnerMeta;
+        const userMonthlyIncome = (useOwnerMonthlyIncome && budgetUser?.monthlyIncome && budgetUser.monthlyIncome > 0)
           ? budgetUser.monthlyIncome
           : (totalIncome > 0 ? totalIncome : (summary.totalIncome > 0 ? summary.totalIncome : 0));
 
-        // Calculate user's income commitment percentage in real time
         const percentualUsuario = userMonthlyIncome > 0
           ? Math.round((totalExpenses / userMonthlyIncome) * 100)
           : (totalIncome > 0 ? Math.round((totalExpenses / totalIncome) * 100) : (totalExpenses > 0 ? 100 : 0));
