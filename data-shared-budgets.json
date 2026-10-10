@@ -1,0 +1,56 @@
+[
+  {
+    "budgetId": "suporte.dinheirosemfiltro@gmail.com",
+    "ownerId": "suporte.dinheirosemfiltro@gmail.com",
+    "ownerName": "Darla Carvalho",
+    "ownerEmail": "suporte.dinheirosemfiltro@gmail.com",
+    "code": "DARLA-8704",
+    "collaborators": [
+      {
+        "email": "carvalho.darlla@gmail.com",
+        "name": "Darla Carvalho",
+        "role": "collaborator",
+        "accessMode": "edit",
+        "addedAt": "2026-10-06T01:44:08.501Z"
+      },
+      {
+        "email": "danilujb@gmail.com",
+        "name": "Danilo Barros",
+        "role": "collaborator",
+        "accessMode": "edit",
+        "addedAt": "2026-10-06T01:44:08.501Z"
+      }
+    ]
+  },
+  {
+    "budgetId": "carvalho.darlla@gmail.com",
+    "ownerId": "carvalho.darlla@gmail.com",
+    "ownerName": "Darla Carvalho",
+    "ownerEmail": "carvalho.darlla@gmail.com",
+    "code": "BUDGET_CARVALHO_DARLLA_GMAIL_COM",
+    "collaborators": [
+      {
+        "email": "danilujb@gmail.com",
+        "name": "danilujb",
+        "role": "collaborator",
+        "accessMode": "edit",
+        "addedAt": "2026-10-06T23:34:59.767Z"
+      },
+      {
+        "email": "suporte.dinheirosemfiltro@gmail.com",
+        "name": "darla.semfiltro",
+        "role": "collaborator",
+        "accessMode": "edit",
+        "addedAt": "2026-10-06T23:34:59.767Z"
+      }
+    ]
+  },
+  {
+    "budgetId": "danilujb@gmail.com",
+    "ownerId": "danilujb@gmail.com",
+    "ownerName": "Danilo Barros",
+    "ownerEmail": "danilujb@gmail.com",
+    "code": "BUDGET_DANILUJB_GMAIL_COM",
+    "collaborators": []
+  }
+]

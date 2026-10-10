@@ -1,0 +1,169 @@
+{
+  "schema": {
+    "users": {
+      "id": "string",
+      "name": "string",
+      "email": "string",
+      "avatarUrl": "string?",
+      "isPro": "boolean?",
+      "plan": "string?",
+      "subscriptionStatus": "string?",
+      "lastSessionId": "string?",
+      "lastSessionCreatedAt": "string?",
+      "createdAt": "string"
+    },
+    "accounts": {
+      "id": "string",
+      "userId": "string",
+      "name": "string",
+      "type": "string",
+      "initialBalance": "number",
+      "color": "string?",
+      "icon": "string?",
+      "isDefault": "boolean?",
+      "createdAt": "string?"
+    },
+    "categories": {
+      "id": "string",
+      "userId": "string",
+      "name": "string",
+      "type": "string",
+      "color": "string?",
+      "icon": "string?",
+      "subcategories": "array?",
+      "createdAt": "string?"
+    },
+    "family_members": {
+      "id": "string",
+      "userId": "string",
+      "name": "string",
+      "relationship": "string?",
+      "color": "string?",
+      "avatarUrl": "string?",
+      "createdAt": "string?"
+    },
+    "transactions": {
+      "id": "string",
+      "userId": "string",
+      "accountId": "string",
+      "targetAccountId": "string?",
+      "type": "string",
+      "amount": "number",
+      "date": "string",
+      "description": "string",
+      "categoryId": "string",
+      "subcategoryId": "string?",
+      "familyMemberId": "string?",
+      "familyMemberName": "string?",
+      "isConsolidated": "boolean?",
+      "installmentIndex": "number?",
+      "installmentTotal": "number?",
+      "installmentParentId": "string?",
+      "notes": "string?",
+      "createdAt": "string?"
+    },
+    "goals": {
+      "id": "string",
+      "userId": "string",
+      "title": "string",
+      "targetAmount": "number",
+      "currentAmount": "number",
+      "targetDate": "string?",
+      "category": "string?",
+      "color": "string?",
+      "icon": "string?",
+      "notes": "string?",
+      "yieldRate": "number?",
+      "yieldPeriod": "string?",
+      "createdAt": "string?"
+    },
+    "shared_budgets": {
+      "budgetId": "string",
+      "ownerId": "string",
+      "ownerName": "string",
+      "ownerEmail": "string",
+      "code": "string",
+      "collaborators": "array?",
+      "createdAt": "string?"
+    },
+    "budget_shares": {
+      "id": "string",
+      "ownerUserId": "string",
+      "sharedWithEmail": "string",
+      "permission": "string?",
+      "status": "string?",
+      "createdAt": "string?"
+    },
+    "portfolio_assets": {
+      "id": "string",
+      "userId": "string",
+      "ticker": "string",
+      "name": "string",
+      "category": "string",
+      "quantity": "number",
+      "averagePrice": "number",
+      "currentPrice": "number?",
+      "currency": "string?",
+      "returnPct": "number?",
+      "notes": "string?",
+      "createdAt": "string?",
+      "updatedAt": "string?"
+    },
+    "portfolio_transactions": {
+      "id": "string",
+      "userId": "string",
+      "assetTicker": "string",
+      "assetCategory": "string",
+      "type": "string",
+      "quantity": "number",
+      "unitPrice": "number",
+      "broker": "string?",
+      "date": "string",
+      "notes": "string?",
+      "createdAt": "string?",
+      "updatedAt": "string?"
+    },
+    "portfolio_dividends": {
+      "id": "string",
+      "userId": "string",
+      "assetTicker": "string",
+      "amount": "number",
+      "currency": "string?",
+      "paymentDate": "string",
+      "status": "string",
+      "createdAt": "string?",
+      "updatedAt": "string?"
+    },
+    "portfolio_goals": {
+      "id": "string",
+      "userId": "string",
+      "title": "string",
+      "targetAmount": "number",
+      "targetDate": "string",
+      "startDate": "string",
+      "category": "string?",
+      "createdAt": "string?",
+      "updatedAt": "string?"
+    },
+    "gamification": {
+      "id": "string",
+      "userId": "string",
+      "points": "number?",
+      "streak": "number?",
+      "achievements": "array?",
+      "lastCheckIn": "string?",
+      "createdAt": "string?",
+      "updatedAt": "string?"
+    },
+    "notifications": {
+      "id": "string",
+      "userEmail": "string",
+      "budgetCode": "string?",
+      "title": "string",
+      "message": "string",
+      "type": "string?",
+      "isRead": "boolean?",
+      "createdAt": "string?"
+    }
+  }
+}

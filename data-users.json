@@ -1,0 +1,40 @@
+[
+  {
+    "id": "carvalho.darlla@gmail.com",
+    "name": "Darla Carvalho",
+    "email": "carvalho.darlla@gmail.com",
+    "password": "mypassword123",
+    "authProvider": "email",
+    "avatarUrl": "https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150",
+    "createdAt": "2026-08-12T10:00:00.000Z",
+    "isPro": true,
+    "plan": "lifetime",
+    "subscriptionStatus": "active",
+    "sharedBudgetCode": "DARLLA-5921",
+    "systemRole": "user"
+  },
+  {
+    "id": "suporte.dinheirosemfiltro@gmail.com",
+    "name": "Darla Carvalho",
+    "email": "suporte.dinheirosemfiltro@gmail.com",
+    "authProvider": "google",
+    "avatarUrl": "https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150",
+    "createdAt": "2026-08-12T10:00:00.000Z",
+    "isPro": true,
+    "plan": "lifetime",
+    "subscriptionStatus": "active",
+    "sharedBudgetCode": "DARLA-8704",
+    "systemRole": "admin"
+  },
+  {
+    "id": "danilujb@gmail.com",
+    "name": "danilujb",
+    "email": "danilujb@gmail.com",
+    "authProvider": "google",
+    "avatarUrl": "https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150",
+    "createdAt": "2026-10-06T01:57:57.962+00:00",
+    "isPro": false,
+    "plan": "free",
+    "subscriptionStatus": "trial"
+  }
+]

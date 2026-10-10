@@ -1,0 +1,71 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Helper function to check if user is authenticated
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+
+    // Rules for all financial application collections
+    match /users/{userId} {
+      allow read, write: if true;
+    }
+
+    match /accounts/{accountId} {
+      allow read, write: if true;
+    }
+
+    match /categories/{categoryId} {
+      allow read, write: if true;
+    }
+
+    match /family_members/{memberId} {
+      allow read, write: if true;
+    }
+
+    match /transactions/{transactionId} {
+      allow read, write: if true;
+    }
+
+    match /goals/{goalId} {
+      allow read, write: if true;
+    }
+
+    match /shared_budgets/{budgetId} {
+      allow read, write: if true;
+    }
+
+    match /budget_shares/{shareId} {
+      allow read, write: if true;
+    }
+
+    match /portfolio_assets/{assetId} {
+      allow read, write: if true;
+    }
+
+    match /portfolio_transactions/{txId} {
+      allow read, write: if true;
+    }
+
+    match /portfolio_dividends/{dividendId} {
+      allow read, write: if true;
+    }
+
+    match /portfolio_goals/{goalId} {
+      allow read, write: if true;
+    }
+
+    match /gamification/{gamificationId} {
+      allow read, write: if true;
+    }
+
+    match /notifications/{notificationId} {
+      allow read, write: if true;
+    }
+
+    // Default fallback
+    match /{document=**} {
+      allow read, write: if true;
+    }
+  }
+}
