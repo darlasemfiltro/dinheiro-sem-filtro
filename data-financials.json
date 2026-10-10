@@ -4624,7 +4624,7 @@
             "subcategories": []
           }
         ],
-        "updatedAt": "2026-10-10T18:02:40.378Z"
+        "updatedAt": "2026-10-10T18:08:00.569Z"
       },
       {
         "id": "cat_alimentacao_default",
@@ -4642,7 +4642,7 @@
             "subcategories": []
           }
         ],
-        "updatedAt": "2026-10-10T18:02:40.378Z"
+        "updatedAt": "2026-10-10T18:08:00.569Z"
       },
       {
         "id": "cat_lazer_default",
@@ -4660,7 +4660,7 @@
             "subcategories": []
           }
         ],
-        "updatedAt": "2026-10-10T18:02:40.378Z"
+        "updatedAt": "2026-10-10T18:08:00.569Z"
       },
       {
         "id": "cat_renda_default",
@@ -4678,7 +4678,7 @@
             "subcategories": []
           }
         ],
-        "updatedAt": "2026-10-10T18:02:40.378Z"
+        "updatedAt": "2026-10-10T18:08:00.569Z"
       },
       {
         "id": "cat_saude_default",
@@ -4714,7 +4714,7 @@
             "subcategories": []
           }
         ],
-        "updatedAt": "2026-10-10T18:02:40.378Z"
+        "updatedAt": "2026-10-10T18:08:00.569Z"
       },
       {
         "id": "cat_transporte_default",
@@ -4744,7 +4744,7 @@
             "subcategories": []
           }
         ],
-        "updatedAt": "2026-10-10T18:02:40.378Z"
+        "updatedAt": "2026-10-10T18:08:00.569Z"
       },
       {
         "id": "cat_educacao_default",
@@ -4774,7 +4774,7 @@
             "subcategories": []
           }
         ],
-        "updatedAt": "2026-10-10T18:02:40.378Z"
+        "updatedAt": "2026-10-10T18:08:00.569Z"
       },
       {
         "id": "cat_estetica_default",
@@ -4804,7 +4804,7 @@
             "subcategories": []
           }
         ],
-        "updatedAt": "2026-10-10T18:02:40.378Z"
+        "updatedAt": "2026-10-10T18:08:00.569Z"
       },
       {
         "id": "cat_compras_default",
@@ -4834,7 +4834,7 @@
             "subcategories": []
           }
         ],
-        "updatedAt": "2026-10-10T18:02:40.378Z"
+        "updatedAt": "2026-10-10T18:08:00.569Z"
       },
       {
         "id": "cat_assinaturas_default",
@@ -4858,7 +4858,7 @@
             "subcategories": []
           }
         ],
-        "updatedAt": "2026-10-10T18:02:40.378Z"
+        "updatedAt": "2026-10-10T18:08:00.569Z"
       },
       {
         "id": "cat_reserva_default",
@@ -4888,7 +4888,7 @@
             "subcategories": []
           }
         ],
-        "updatedAt": "2026-10-10T18:02:40.378Z"
+        "updatedAt": "2026-10-10T18:08:00.569Z"
       },
       {
         "id": "cat_investimentos_default",
@@ -4924,7 +4924,7 @@
             "subcategories": []
           }
         ],
-        "updatedAt": "2026-10-10T18:02:40.378Z"
+        "updatedAt": "2026-10-10T18:08:00.569Z"
       },
       {
         "id": "cat_renda_extra_default",
@@ -4954,7 +4954,7 @@
             "subcategories": []
           }
         ],
-        "updatedAt": "2026-10-10T18:02:40.378Z"
+        "updatedAt": "2026-10-10T18:08:00.569Z"
       },
       {
         "id": "cat_rendimentos_default",
@@ -4984,7 +4984,7 @@
             "subcategories": []
           }
         ],
-        "updatedAt": "2026-10-10T18:02:40.378Z"
+        "updatedAt": "2026-10-10T18:08:00.569Z"
       }
     ],
     "familyMembers": [
@@ -5029,7 +5029,7 @@
     },
     "member_permissions": {},
     "deletedIds": [],
-    "updatedAt": "2026-10-10T18:02:40.378Z",
+    "updatedAt": "2026-10-10T18:08:00.570Z",
     "rollover": 0,
     "accumulatedRollover": 0,
     "previousBalance": 0,

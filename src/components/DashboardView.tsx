@@ -598,6 +598,18 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
               }
             } catch (e) {}
           }
+
+          if (!foundOwnerMeta) {
+            budgetUser = {
+              id: effectiveBudgetId,
+              name: 'Titular',
+              email: effectiveBudgetId,
+              createdAt: '',
+              monthlyIncome: 0,
+              state: 'MG',
+              city: 'Belo Horizonte',
+            };
+          }
         }
 
         const liveTxs = transactions.filter((t) => {
